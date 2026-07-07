@@ -1,1 +1,293 @@
+# ==============================================================================
+# 项目专属忽略规则
+# ==============================================================================
+
+# 本地文档、知识库与 Agent 技能目录。
+# Wiki repository clones
 /wiki/
+/badminton-mes.wiki/
+
+# Local diagram, MCP and root Node package files
+/Picture/
+/.mcp.json
+/DRAWIO_MCP.md
+/package.json
+/package-lock.json
+
+# Java / Maven build output
+target/
+backend-java/target/
+
+# IDE project files
+.idea/
+*.iml
+
+# Local AI assistant workspace files
+/.claude/
+/.codex/
+/.cursor/
+/badminton-mes-springboot/
+/java-dev-manual-huangshan/
+
+# Logs and local runtime files
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+/.agents/
+
+# ==============================================================================
+# 操作系统与文件管理器生成文件
+# ==============================================================================
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100/
+.Trashes/
+.fseventsd/
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+desktop.ini
+$RECYCLE.BIN/
+
+# ==============================================================================
+# 编辑器、IDE 与本地工作区配置
+# ==============================================================================
+
+# IntelliJ IDEA / WebStorm
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Eclipse / Spring Tools Suite
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache/
+
+# VS Code / Cursor：保留可共享配置，忽略个人化配置。
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+
+# ==============================================================================
+# AI 编程工具本地状态（Codex / Cursor / Claude Code）
+# ==============================================================================
+
+# 不忽略 AGENTS.md、CLAUDE.md、.cursor/rules/ 等可共享规范文件。
+.codex/sessions/
+.codex/cache/
+.codex/logs/
+.codex/tmp/
+.codex/*.local.*
+.codex/config.local.*
+
+.cursor/index/
+.cursor/cache/
+.cursor/logs/
+.cursor/sessions/
+.cursor/tmp/
+.cursor/memory/
+.cursor/mcp.json
+.cursor/*.local.*
+
+.claude/settings.local.json
+.claude/**/settings.local.json
+.claude/cache/
+.claude/logs/
+.claude/tmp/
+.claude/sessions/
+
+# ==============================================================================
+# Java / Spring Boot / Maven / Gradle 构建产物
+# ==============================================================================
+
+target/
+build/
+bin/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# 保留构建工具 Wrapper，保证不同机器构建版本一致。
+!.mvn/wrapper/maven-wrapper.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.properties.bak
+.gradle/
+gradle-app.setting
+
+# JVM 崩溃、诊断与临时文件。
+hs_err_pid*
+replay_pid*
+*.hprof
+*.jfr
+
+# ==============================================================================
+# 前端 Vue 3 / Vite / Node.js 构建产物
+# ==============================================================================
+
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.vitepress/cache/
+.output/
+.nuxt/
+.cache/
+.parcel-cache/
+
+# 包管理器缓存与调试日志。
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 前端检查、测试与覆盖率产物。
+coverage/
+.nyc_output/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# ==============================================================================
+# 环境变量、本地配置与敏感信息
+# ==============================================================================
+
+# 示例配置可以提交，真实环境配置不要提交。
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.*.example
+
+**/application-local.properties
+**/application-local.yml
+**/application-local.yaml
+**/application-*.local.properties
+**/application-*.local.yml
+**/application-*.local.yaml
+
+# 密钥、证书与令牌文件。
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt.local
+*.token
+credentials.json
+service-account.json
+
+# ==============================================================================
+# Docker / Docker Compose / MySQL 本地运行数据
+# ==============================================================================
+
+# 保留 Dockerfile、docker-compose.yml 等基础编排文件，忽略个人覆盖文件。
+docker-compose.override.yml
+compose.override.yml
+**/docker-compose.override.yml
+**/compose.override.yml
+
+# 容器挂载的数据卷、数据库文件和本地运行目录。
+.docker/
+docker-data/
+mysql-data/
+postgres-data/
+redis-data/
+data/mysql/
+data/redis/
+docker/mysql/data/
+docker/mysql/logs/
+docker/redis/data/
+volumes/
+
+# MySQL / 数据库导出备份。正式初始化脚本请放入可追踪目录并显式提交。
+*.dump
+*.dmp
+*.bak
+*.backup
+*.sql.gz
+*.sql.zip
+*.sqlite
+*.sqlite3
+*.db
+
+# ==============================================================================
+# 日志、运行时文件、上传文件与临时目录
+# ==============================================================================
+
+logs/
+**/logs/
+*.log
+*.log.*
+*.pid
+*.pid.lock
+*.seed
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Spring Boot 或本地联调产生的上传、导出、缓存文件。
+uploads/
+upload/
+downloads/
+download/
+exports/
+storage/
+file-storage/
+minio-data/
+
+# ==============================================================================
+# 测试、报告与质量工具产物
+# ==============================================================================
+
+jacoco.exec
+*.exec
+allure-results/
+allure-report/
+test-results/
+playwright-report/
+blob-report/
+test-output/
+
+# ==============================================================================
+# 临时备份与压缩包
+# ==============================================================================
+
+*.tmp
+*.temp
+*.swp
+*.swo
+*.orig
+*.rej
+*.bak.*
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
