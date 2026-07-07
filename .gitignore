@@ -3,40 +3,19 @@
 # ==============================================================================
 
 # 本地文档、知识库与 Agent 技能目录。
-# Wiki repository clones
 /wiki/
 /badminton-mes.wiki/
-
-# Local diagram, MCP and root Node package files
 /Picture/
 /.mcp.json
 /DRAWIO_MCP.md
 /package.json
 /package-lock.json
-
-# Java / Maven build output
-target/
-backend-java/target/
-
-# IDE project files
-.idea/
-*.iml
-
-# Local AI assistant workspace files
+/.agents/
 /.claude/
 /.codex/
 /.cursor/
 /badminton-mes-springboot/
 /java-dev-manual-huangshan/
-
-# Logs and local runtime files
-*.log
-
-# OS-generated files
-.DS_Store
-Thumbs.db
-Desktop.ini
-/.agents/
 
 # ==============================================================================
 # 操作系统与文件管理器生成文件
