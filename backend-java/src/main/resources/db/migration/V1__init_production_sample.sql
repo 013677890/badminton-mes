@@ -2,9 +2,8 @@
 -- V1 生产工单样例切片：车间、产品、生产工单三张表 + 联调种子数据
 --
 -- 完整库表结构见 wiki/database/mes_schema.sql。本迁移只建样例接口涉及的表；
--- 指向未建表(base_unit/base_bom/craft_routing/base_customer/sys_user)的外键
--- 暂缓，待对应模块的迁移脚本补充。项目约定：外键可用、索引必建、
--- 唯一约束优先在数据库层兜底(SQL-004/项目库表规范)。
+-- 业务关系由 Service 校验与应用层约束处理；
+-- 唯一约束和查询索引仍在数据库层兜底。
 -- ----------------------------------------------------------------------------
 
 -- 车间表
@@ -74,9 +73,7 @@ CREATE TABLE `prod_work_order` (
   UNIQUE KEY `uk_source_order` (`source_type`, `source_order_no`(32)) COMMENT '外部单号防重复生成(ERP/API)',
   KEY `idx_product_id` (`product_id`) COMMENT '按产品查工单',
   KEY `idx_workshop_status` (`workshop_id`, `order_status`, `plan_end_time`) COMMENT '车间+状态+交期(等值在前排序在后INDEX-005)',
-  KEY `idx_batch_no` (`batch_no`(20)) COMMENT '批次追溯反查工单',
-  CONSTRAINT `fk_prod_work_order_product_id` FOREIGN KEY (`product_id`) REFERENCES `base_product` (`id`),
-  CONSTRAINT `fk_prod_work_order_workshop_id` FOREIGN KEY (`workshop_id`) REFERENCES `base_workshop` (`id`)
+  KEY `idx_batch_no` (`batch_no`(20)) COMMENT '批次追溯反查工单'
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 DEFAULT CHARSET = utf8mb4 COMMENT = '生产工单主表';
 
 -- 联调种子数据(unit_id 暂以 1 占位，计量单位表建设后修正)

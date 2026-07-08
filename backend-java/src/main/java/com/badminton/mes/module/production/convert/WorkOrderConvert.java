@@ -4,10 +4,10 @@ import java.util.List;
 
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
-import com.badminton.mes.module.production.dal.dataobject.WorkOrderDO;
+import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
 
 /**
- * 生产工单 VO 与 DO 的转换器。
+ * 生产工单 VO 与实体的转换器。
  *
  * <p>采用显式逐字段赋值：字段对应关系一目了然，编译期即可发现改名遗漏，
  * 也避免反射拷贝的性能损耗与浅拷贝陷阱(MISC-002 禁用 Apache BeanUtils)。
@@ -18,16 +18,16 @@ import com.badminton.mes.module.production.dal.dataobject.WorkOrderDO;
 public final class WorkOrderConvert {
 
     /**
-     * 保存请求 VO 转 DO，创建与修改共用。
+     * 保存请求 VO 转实体，创建与修改共用。
      *
      * <p>只搬运计划字段。工单号、来源、状态、创建人与产品冗余字段
      * (productName/spec/unitId)由 Service 按业务规则另行设置。
      *
      * @param reqVO 保存请求 VO
-     * @return 工单 DO
+     * @return 工单实体
      */
-    public static WorkOrderDO toDO(WorkOrderSaveReqVO reqVO) {
-        WorkOrderDO workOrder = new WorkOrderDO();
+    public static WorkOrderEntity toEntity(WorkOrderSaveReqVO reqVO) {
+        WorkOrderEntity workOrder = new WorkOrderEntity();
         workOrder.setProductId(reqVO.getProductId());
         workOrder.setBatchNo(reqVO.getBatchNo());
         workOrder.setBomId(reqVO.getBomId());
@@ -43,12 +43,12 @@ public final class WorkOrderConvert {
     }
 
     /**
-     * DO 转响应 VO。
+     * 实体转响应 VO。
      *
-     * @param workOrder 工单 DO
+     * @param workOrder 工单实体
      * @return 响应 VO
      */
-    public static WorkOrderRespVO toRespVO(WorkOrderDO workOrder) {
+    public static WorkOrderRespVO toRespVO(WorkOrderEntity workOrder) {
         WorkOrderRespVO respVO = new WorkOrderRespVO();
         respVO.setId(workOrder.getId());
         respVO.setWorkOrderNo(workOrder.getWorkOrderNo());
@@ -81,12 +81,12 @@ public final class WorkOrderConvert {
     }
 
     /**
-     * DO 列表转响应 VO 列表。
+     * 实体列表转响应 VO 列表。
      *
-     * @param list 工单 DO 列表
+     * @param list 工单实体列表
      * @return 响应 VO 列表；入参为空集合时返回空集合
      */
-    public static List<WorkOrderRespVO> toRespVOList(List<WorkOrderDO> list) {
+    public static List<WorkOrderRespVO> toRespVOList(List<WorkOrderEntity> list) {
         return list.stream().map(WorkOrderConvert::toRespVO).toList();
     }
 

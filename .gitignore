@@ -105,6 +105,7 @@ bin/
 # 保留构建工具 Wrapper，保证不同机器构建版本一致。
 !.mvn/wrapper/maven-wrapper.jar
 !gradle/wrapper/gradle-wrapper.jar
+!**/gradle/wrapper/gradle-wrapper.jar
 
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.properties.bak

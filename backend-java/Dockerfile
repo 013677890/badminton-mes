@@ -3,26 +3,25 @@
 # 羽毛球 MES 后端镜像(多阶段构建)
 #
 # 构建：docker build -t badminton-mes/backend:dev .
-# 说明：构建阶段使用官方 maven 镜像直接调 mvn，不用仓库内 mvnw——
-#       Windows 开发机检出的 mvnw 可能带 CRLF 换行，在 Linux 容器内无法执行。
+# 说明：构建阶段使用官方 Gradle 镜像，项目已迁移为 Gradle + JPA。
 # ----------------------------------------------------------------------------
 
 # ---------- 构建阶段：编译并按 Spring Boot 分层拆解 fat jar ----------
-# 版本与仓库 Maven Wrapper(3.9.16)对齐，保证容器内外构建工具一致
-FROM maven:3.9.16-eclipse-temurin-21 AS builder
+# 使用 Gradle Wrapper 同版本 + JDK 21，与本地构建保持一致
+FROM gradle:9.3.1-jdk21 AS builder
 WORKDIR /workspace
 
-# 先只复制 pom 预拉依赖：pom 未变时命中缓存层，源码改动不触发依赖下载
-COPY pom.xml ./
-RUN --mount=type=cache,target=/root/.m2 mvn -q -B dependency:go-offline
+# 先复制 Gradle 配置预拉依赖：构建文件未变时命中缓存层，源码改动不触发依赖下载
+COPY settings.gradle build.gradle ./
+RUN --mount=type=cache,target=/home/gradle/.gradle gradle --no-daemon dependencies
 
 COPY src ./src
 # 镜像构建阶段跳过测试，单测在 CI 阶段独立执行并作为准入(TEST-006)
-RUN --mount=type=cache,target=/root/.m2 mvn -q -B package -DskipTests
+RUN --mount=type=cache,target=/home/gradle/.gradle gradle --no-daemon bootJar -x test
 
 # Boot 4 tools 模式分层解包：dependencies(变动最少) → loader → snapshot → application(变动最多)，
 # 运行阶段按此顺序 COPY，业务代码改动只重建最薄的应用层
-RUN java -Djarmode=tools -jar target/*.jar extract --layers --launcher --destination extracted
+RUN java -Djarmode=tools -jar build/libs/*.jar extract --layers --launcher --destination extracted
 
 # ---------- 运行阶段：仅含 JRE 与应用分层 ----------
 FROM eclipse-temurin:21-jre AS runtime

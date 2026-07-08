@@ -1,21 +1,19 @@
-package com.badminton.mes.module.production.constants;
+package com.badminton.mes.module.production.dal.redis;
 
 import java.time.Duration;
 
 /**
- * 生产订单模块 Redis Key 常量，集中管理 Key 格式与 TTL，避免魔法字符串散落。
- *
- * <p>Key 命名遵循 {@code mes:<module>:<resource>:<id>} 模式，格式稳定、可搜索。
+ * 生产模块 Redis Key 常量，集中管理 Key 格式与 TTL。
  *
  * @author 张竹灏
- * @date 2026/07/07
+ * @date 2026/07/08
  */
 public final class ProductionRedisKeyConstants {
 
     /** 工单详情缓存 Key 模板，参数为工单主键 id */
     public static final String WORK_ORDER_DETAIL = "mes:production:work_order:%d";
 
-    /** 工单详情缓存 TTL；写操作删除缓存失败时也由 TTL 兜底过期 */
+    /** 工单详情缓存 TTL */
     public static final Duration WORK_ORDER_DETAIL_TTL = Duration.ofMinutes(30);
 
     /** 工单号当日流水自增 Key 模板，参数为 yyyyMMdd 日期串 */

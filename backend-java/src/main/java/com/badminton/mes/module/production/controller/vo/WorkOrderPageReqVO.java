@@ -16,8 +16,8 @@ import lombok.EqualsAndHashCode;
 /**
  * 生产工单分页查询请求 VO，继承 {@link PageParam} 获得分页参数与入参保护。
  *
- * <p>筛选条件与 WorkOrderMapper.xml 的 pageWhere 片段一一对应：
- * 工单号右模糊(INDEX-004 严禁左模糊)，车间+状态+交期可命中组合索引 idx_workshop_status。
+ * <p>筛选条件与 {@code WorkOrderSpecifications} 一一对应：工单号右模糊，
+ * 车间+状态+交期可命中组合索引 idx_workshop_status。
  *
  * @author 张竹灏
  * @date 2026/07/07
