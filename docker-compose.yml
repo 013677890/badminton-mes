@@ -1,0 +1,78 @@
+# ----------------------------------------------------------------------------
+# 羽毛球 MES 本地/测试环境编排：MySQL 8.4 + Redis + 后端应用
+#
+# 使用：
+#   1. cp .env.example .env 并填写密码(.env 已被 .gitignore 忽略，不入库)
+#   2. docker compose up -d --build
+#   3. 应用地址 http://localhost:8080，Flyway 启动时自动建表并写入种子数据
+# ----------------------------------------------------------------------------
+
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: mes-mysql
+    environment:
+      # 与应用容器同时区，保证 NOW() 写入的业务时间一致
+      TZ: Asia/Shanghai
+      MYSQL_DATABASE: badminton_mes
+      # :? 强制从 .env 提供，杜绝默认密码入库(安全规约：敏感信息禁止明文存储)
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      # 应用专用账号，容器初始化时自动创建并授予 badminton_mes 库全部权限
+      MYSQL_USER: ${MES_DB_USERNAME:-mes}
+      MYSQL_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # 首次初始化建库耗时较长，给足启动宽限期
+      start_period: 60s
+    # 默认不向宿主机暴露端口，避免与本机 MySQL 冲突；需要客户端直连调试时再放开
+    # ports:
+    #   - "13306:3306"
+
+  redis:
+    image: redis:8.0-alpine
+    container_name: mes-redis
+    # 开启 AOF 持久化：工单号当日流水计数存于 Redis，重启不丢、单号不重复
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    # 需要客户端直连调试时再放开
+    # ports:
+    #   - "16379:6379"
+
+  backend:
+    build:
+      context: ./backend-java
+    image: badminton-mes/backend:dev
+    container_name: mes-backend
+    environment:
+      TZ: Asia/Shanghai
+      # 服务间通过 compose 网络别名互访，主机名即服务名
+      MES_DB_URL: jdbc:mariadb://mysql:3306/badminton_mes
+      MES_DB_USERNAME: ${MES_DB_USERNAME:-mes}
+      MES_DB_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
+      MES_REDIS_HOST: redis
+      MES_REDIS_PORT: "6379"
+    ports:
+      - "8080:8080"
+    depends_on:
+      # 等依赖健康后再启动，避免 Flyway 建表时连不上数据库反复重启
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:

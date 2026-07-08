@@ -1,0 +1,27 @@
+# 羽毛球 MES 后端配置(样例)
+# 敏感信息通过环境变量注入，配置文件不落明文密码(安全规约：敏感数据禁止明文存储)
+spring:
+  application:
+    name: badminton-mes
+  datasource:
+    # MySQL 8.4 LTS，驱动使用 MariaDB Connector/J(pom 中 mariadb-java-client)
+    # 容器/多环境部署时通过 MES_DB_URL 覆盖主机名，见 docker-compose.yml
+    url: ${MES_DB_URL:jdbc:mariadb://localhost:3306/badminton_mes}
+    username: ${MES_DB_USERNAME:root}
+    password: ${MES_DB_PASSWORD:root}
+    driver-class-name: org.mariadb.jdbc.Driver
+  data:
+    redis:
+      # 工单详情缓存与工单号流水生成使用，见 ProductionRedisKeyConstants
+      host: ${MES_REDIS_HOST:localhost}
+      port: ${MES_REDIS_PORT:6379}
+  flyway:
+    # 数据库结构统一由 Flyway 迁移脚本管理，禁止手工改库
+    locations: classpath:db/migration
+
+mybatis:
+  # SQL 统一在 XML 中维护，列与属性的映射见各 Mapper 的显式 resultMap(ORM-003)
+  mapper-locations: classpath:mapper/*.xml
+
+server:
+  port: 8080

@@ -1,0 +1,21 @@
+# 构建产物与本地工件不进入构建上下文，加速构建并避免污染镜像
+target/
+logs/
+*.log
+
+# IDE 与本地配置
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# 版本控制与文档
+.git/
+.gitignore
+README.md
+
+# Docker 自身
+Dockerfile
+.dockerignore

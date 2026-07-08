@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.badminton.mes.module.production.dal.mapper.ProductMapper">
+
+    <!-- 显式 resultMap，不依赖自动映射(ORM-003)；仅映射工单业务用到的列(ORM-001) -->
+    <resultMap id="ProductResultMap" type="com.badminton.mes.module.production.dal.dataobject.ProductDO">
+        <id column="id" property="id"/>
+        <result column="product_code" property="productCode"/>
+        <result column="product_name" property="productName"/>
+        <result column="spec" property="spec"/>
+        <result column="unit_id" property="unitId"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <!-- 状态过滤放在 Service 层判断，便于区分"不存在"与"已停用"给出不同提示 -->
+    <select id="selectById" resultMap="ProductResultMap">
+        SELECT id, product_code, product_name, spec, unit_id, status
+        FROM base_product
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+</mapper>
