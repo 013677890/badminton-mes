@@ -7,6 +7,8 @@ import java.util.Optional;
 
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.LoginUser;
+import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
@@ -35,6 +37,7 @@ import com.badminton.mes.module.production.enums.WorkOrderChangeTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderSourceTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -83,6 +86,9 @@ class WorkOrderServiceImplTest {
     /** 测试用物料 id */
     private static final Long MATERIAL_ID = 50L;
 
+    /** 测试用登录用户 id，工单 create_by / operate_by 应取该值 */
+    private static final Long OPERATOR_ID = 9L;
+
     @Mock
     private WorkOrderRepository workOrderRepository;
 
@@ -120,6 +126,16 @@ class WorkOrderServiceImplTest {
         workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository, workshopRepository,
                 bomRepository, bomDetailRepository, materialRepository, workOrderMaterialRepository,
                 workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
+        // Service 从登录上下文取操作人，单测手工构造上下文并在用后清理
+        LoginUser loginUser = new LoginUser();
+        loginUser.setUserId(OPERATOR_ID);
+        loginUser.setUserNo("tester");
+        SecurityContextHolder.set("unit-test-token", loginUser);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clear();
     }
 
     @Test
@@ -146,6 +162,8 @@ class WorkOrderServiceImplTest {
         assertThat(inserted.getOrderStatus()).isEqualTo(WorkOrderStatusEnum.CREATED.getStatus());
         assertThat(inserted.getProductName()).isEqualTo("比赛级羽毛球");
         assertThat(inserted.getUnitId()).isEqualTo(1L);
+        // 操作人取自登录上下文，不再是占位常量
+        assertThat(inserted.getCreateBy()).isEqualTo(OPERATOR_ID);
     }
 
     @Test

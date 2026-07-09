@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
@@ -72,9 +73,6 @@ import org.springframework.util.StringUtils;
 public class WorkOrderServiceImpl implements WorkOrderService {
 
     private static final Logger logger = LoggerFactory.getLogger(WorkOrderServiceImpl.class);
-
-    /** TODO(张竹灏, 2026/07/07): 认证模块建设后，改为从登录上下文获取当前用户 id */
-    private static final Long DEFAULT_OPERATOR_ID = 1L;
 
     private final WorkOrderRepository workOrderRepository;
 
@@ -144,7 +142,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         workOrder.setUnitId(product.getUnitId());
         workOrder.setSourceType(WorkOrderSourceTypeEnum.MANUAL.getType());
         workOrder.setOrderStatus(WorkOrderStatusEnum.CREATED.getStatus());
-        workOrder.setCreateBy(DEFAULT_OPERATOR_ID);
+        workOrder.setCreateBy(SecurityContextHolder.getRequiredLoginUserId());
         try {
             workOrderRepository.saveAndFlush(workOrder);
         } catch (DataIntegrityViolationException e) {
@@ -632,7 +630,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         statusLog.setToStatus(toStatus);
         statusLog.setChangeType(changeType.getType());
         statusLog.setChangeReason(reason);
-        statusLog.setOperateBy(DEFAULT_OPERATOR_ID);
+        statusLog.setOperateBy(SecurityContextHolder.getRequiredLoginUserId());
         statusLog.setOperateTime(LocalDateTime.now());
         workOrderStatusLogRepository.save(statusLog);
     }

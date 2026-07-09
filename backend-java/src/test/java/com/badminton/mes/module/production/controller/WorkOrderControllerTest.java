@@ -4,12 +4,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.AuthInterceptor;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
 import com.badminton.mes.module.production.service.WorkOrderService;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +49,15 @@ class WorkOrderControllerTest {
 
     @MockitoBean
     private WorkOrderService workOrderService;
+
+    /** Mock 掉登录鉴权拦截器：Web 切片无 Redis 会话依赖，鉴权逻辑由拦截器自身测试覆盖 */
+    @MockitoBean
+    private AuthInterceptor authInterceptor;
+
+    @BeforeEach
+    void permitAllRequests() throws Exception {
+        when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("创建工单：合法请求返回 00000 与新工单 id")
