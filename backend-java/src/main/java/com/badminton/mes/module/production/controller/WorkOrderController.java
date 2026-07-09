@@ -1,10 +1,15 @@
 package com.badminton.mes.module.production.controller;
 
+import java.util.List;
+
 import com.badminton.mes.common.core.CommonResult;
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderReasonReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
 import com.badminton.mes.module.production.service.WorkOrderService;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -87,7 +92,7 @@ public class WorkOrderController {
     }
 
     /**
-     * 下达生产工单：已创建 → 已下达。
+     * 下达生产工单：已创建 → 已下达，并按 BOM 生成工单物料需求。
      *
      * @param id 工单主键
      * @return 空数据成功响应
@@ -96,6 +101,94 @@ public class WorkOrderController {
     public CommonResult<Void> releaseWorkOrder(@PathVariable("id") @Positive Long id) {
         workOrderService.releaseWorkOrder(id);
         return CommonResult.success(null);
+    }
+
+    /**
+     * 暂停生产工单：已下达/生产中 → 暂停，原因必填。
+     *
+     * @param id    工单主键
+     * @param reqVO 暂停原因
+     * @return 空数据成功响应
+     */
+    @PutMapping("/{id}/pause")
+    public CommonResult<Void> pauseWorkOrder(@PathVariable("id") @Positive Long id,
+                                             @Valid @RequestBody WorkOrderReasonReqVO reqVO) {
+        workOrderService.pauseWorkOrder(id, reqVO.getReason());
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 恢复生产工单：暂停 → 暂停前状态。
+     *
+     * @param id 工单主键
+     * @return 空数据成功响应
+     */
+    @PutMapping("/{id}/resume")
+    public CommonResult<Void> resumeWorkOrder(@PathVariable("id") @Positive Long id) {
+        workOrderService.resumeWorkOrder(id);
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 完工生产工单：已下达/生产中 → 已完工。
+     *
+     * @param id 工单主键
+     * @return 空数据成功响应
+     */
+    @PutMapping("/{id}/finish")
+    public CommonResult<Void> finishWorkOrder(@PathVariable("id") @Positive Long id) {
+        workOrderService.finishWorkOrder(id);
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 关闭生产工单：已完工 → 已关闭。
+     *
+     * @param id 工单主键
+     * @return 空数据成功响应
+     */
+    @PutMapping("/{id}/close")
+    public CommonResult<Void> closeWorkOrder(@PathVariable("id") @Positive Long id) {
+        workOrderService.closeWorkOrder(id);
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 作废生产工单：已创建/已下达 → 已作废，原因必填。
+     *
+     * @param id    工单主键
+     * @param reqVO 作废原因
+     * @return 空数据成功响应
+     */
+    @PutMapping("/{id}/cancel")
+    public CommonResult<Void> cancelWorkOrder(@PathVariable("id") @Positive Long id,
+                                              @Valid @RequestBody WorkOrderReasonReqVO reqVO) {
+        workOrderService.cancelWorkOrder(id, reqVO.getReason());
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 查询工单物料需求明细。
+     *
+     * @param id 工单主键
+     * @return 物料需求列表，未下达时为空集合(API-002)
+     */
+    @GetMapping("/{id}/materials")
+    public CommonResult<List<WorkOrderMaterialRespVO>> getWorkOrderMaterials(
+            @PathVariable("id") @Positive Long id) {
+        return CommonResult.success(workOrderService.getWorkOrderMaterials(id));
+    }
+
+    /**
+     * 查询工单状态日志，最新在前。
+     *
+     * @param id 工单主键
+     * @return 状态日志列表，无数据时为空集合(API-002)
+     */
+    @GetMapping("/{id}/status_logs")
+    public CommonResult<List<WorkOrderStatusLogRespVO>> getWorkOrderStatusLogs(
+            @PathVariable("id") @Positive Long id) {
+        return CommonResult.success(workOrderService.getWorkOrderStatusLogs(id));
     }
 
     /**

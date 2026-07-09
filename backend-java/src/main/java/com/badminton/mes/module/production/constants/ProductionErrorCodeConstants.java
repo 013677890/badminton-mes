@@ -50,6 +50,50 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode WORKSHOP_NOT_EXISTS =
             new ErrorCode("A0402", "车间不存在或已停用", "所选车间不可用，请重新选择");
 
+    /** 非"已下达/生产中"状态的工单不允许暂停 */
+    public static final ErrorCode WORK_ORDER_STATUS_NOT_ALLOW_PAUSE =
+            new ErrorCode("A0440", "当前工单状态不允许暂停", "只有已下达或生产中的工单才能暂停");
+
+    /** 非"暂停"状态的工单不允许恢复 */
+    public static final ErrorCode WORK_ORDER_STATUS_NOT_ALLOW_RESUME =
+            new ErrorCode("A0440", "当前工单状态不允许恢复", "只有暂停中的工单才能恢复");
+
+    /** 非"已下达/生产中"状态的工单不允许完工 */
+    public static final ErrorCode WORK_ORDER_STATUS_NOT_ALLOW_FINISH =
+            new ErrorCode("A0440", "当前工单状态不允许完工", "只有已下达或生产中的工单才能完工");
+
+    /** 非"已完工"状态的工单不允许关闭 */
+    public static final ErrorCode WORK_ORDER_STATUS_NOT_ALLOW_CLOSE =
+            new ErrorCode("A0440", "当前工单状态不允许关闭", "只有已完工的工单才能关闭");
+
+    /** 非"已创建/已下达"状态的工单不允许作废 */
+    public static final ErrorCode WORK_ORDER_STATUS_NOT_ALLOW_CANCEL =
+            new ErrorCode("A0440", "当前工单状态不允许作废", "只有已创建或已下达的工单才能作废");
+
+    /** BOM 不存在、已删除或未生效 */
+    public static final ErrorCode BOM_NOT_AVAILABLE =
+            new ErrorCode("A0402", "BOM 不存在或未生效", "所选 BOM 不可用，请重新维护");
+
+    /** BOM 未维护明细，无法生成物料需求 */
+    public static final ErrorCode BOM_DETAIL_EMPTY =
+            new ErrorCode("A0440", "BOM 未维护明细", "请先维护 BOM 物料明细再下达工单");
+
+    /** 已下达工单修改计划必须填写变更原因(业务规则：见 01-生产订单需求分析) */
+    public static final ErrorCode WORK_ORDER_CHANGE_REASON_REQUIRED =
+            new ErrorCode("A0402", "修改已下达工单必须填写变更原因", "请填写变更原因后重试");
+
+    /** 计划数量不能低于已派工数量 */
+    public static final ErrorCode WORK_ORDER_PLAN_LESS_THAN_DISPATCHED =
+            new ErrorCode("A0420", "计划数量不能低于已派工数量", "请检查计划数量与已派工数量");
+
+    /** 完工数量超过计划数量与允许超产比例的上限 */
+    public static final ErrorCode WORK_ORDER_FINISH_EXCEED_LIMIT =
+            new ErrorCode("A0420", "完工数量超过允许超产上限", "完工数量超出计划数量与超产比例限制，请核对报工数据");
+
+    /** 计划变更后物料需求数量低于已领数量 */
+    public static final ErrorCode WORK_ORDER_MATERIAL_ISSUED_EXCEED =
+            new ErrorCode("A0420", "物料需求数量不能低于已领数量", "计划数量下调后物料需求低于已领数量，请先处理领料再变更计划");
+
     private ProductionErrorCodeConstants() {
     }
 }
