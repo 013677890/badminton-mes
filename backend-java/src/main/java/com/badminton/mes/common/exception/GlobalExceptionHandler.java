@@ -22,7 +22,8 @@ import jakarta.validation.ConstraintViolationException;
  * 全局异常处理器，把各类异常统一转换为 {@link CommonResult} 响应。
  *
  * <p>HTTP 状态码按错误码来源映射(API-003)：A 类用户端错误返回 400，
- * B 类系统错误返回 500，C 类第三方错误返回 502。
+ * B 类系统错误返回 500，C 类第三方错误返回 502；
+ * 登录失效 A0230 与权限不足 A0301 例外，分别映射 401/403。
  *
  * <p>日志级别按黄山版日志规约区分：用户输入类错误记 warn(LOG-012)，
  * 系统未知异常记 error 并带堆栈(LOG-009)；出错详情不回传数据库等内部信息。
@@ -110,19 +111,29 @@ public class GlobalExceptionHandler {
     /**
      * 按错误码来源映射 HTTP 状态码并组装响应体。
      *
+     * <p>登录失效与权限不足先按语义化状态码特判(401/403)，
+     * 供前端区分"引导重新登录"与"提示无权限"两类处理。
+     *
      * @param errorCode 错误码对象
      * @param message   具体错误描述
      * @return 带 HTTP 状态码的统一响应
      */
     private ResponseEntity<CommonResult<Void>> buildResponse(ErrorCode errorCode, String message) {
-        HttpStatus status = switch (errorCode.code().charAt(0)) {
-            // A 类：用户端错误
-            case 'A' -> HttpStatus.BAD_REQUEST;
-            // C 类：第三方服务出错
-            case 'C' -> HttpStatus.BAD_GATEWAY;
-            // B 类及其他：系统内部错误
-            default -> HttpStatus.INTERNAL_SERVER_ERROR;
-        };
+        HttpStatus status;
+        if (GlobalErrorCodeConstants.UNAUTHORIZED.code().equals(errorCode.code())) {
+            status = HttpStatus.UNAUTHORIZED;
+        } else if (GlobalErrorCodeConstants.FORBIDDEN.code().equals(errorCode.code())) {
+            status = HttpStatus.FORBIDDEN;
+        } else {
+            status = switch (errorCode.code().charAt(0)) {
+                // A 类：用户端错误
+                case 'A' -> HttpStatus.BAD_REQUEST;
+                // C 类：第三方服务出错
+                case 'C' -> HttpStatus.BAD_GATEWAY;
+                // B 类及其他：系统内部错误
+                default -> HttpStatus.INTERNAL_SERVER_ERROR;
+            };
+        }
         return ResponseEntity.status(status).body(CommonResult.error(errorCode, message));
     }
 }

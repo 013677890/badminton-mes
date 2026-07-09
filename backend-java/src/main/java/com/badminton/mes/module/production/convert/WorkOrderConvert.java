@@ -1,10 +1,16 @@
 package com.badminton.mes.module.production.convert;
 
 import java.util.List;
+import java.util.Map;
 
+import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
+import com.badminton.mes.module.production.dal.entity.MaterialEntity;
 import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
+import com.badminton.mes.module.production.dal.entity.WorkOrderMaterialEntity;
+import com.badminton.mes.module.production.dal.entity.WorkOrderStatusLogEntity;
 
 /**
  * 生产工单 VO 与实体的转换器。
@@ -88,6 +94,52 @@ public final class WorkOrderConvert {
      */
     public static List<WorkOrderRespVO> toRespVOList(List<WorkOrderEntity> list) {
         return list.stream().map(WorkOrderConvert::toRespVO).toList();
+    }
+
+    /**
+     * 物料需求实体列表转响应 VO 列表，物料编码/名称按物料档案回填。
+     *
+     * @param list        物料需求实体列表
+     * @param materialMap 物料档案，key 为物料 id；档案缺失时编码/名称为 null
+     * @return 响应 VO 列表；入参为空集合时返回空集合
+     */
+    public static List<WorkOrderMaterialRespVO> toMaterialRespVOList(List<WorkOrderMaterialEntity> list,
+                                                                     Map<Long, MaterialEntity> materialMap) {
+        return list.stream().map(entity -> {
+            WorkOrderMaterialRespVO respVO = new WorkOrderMaterialRespVO();
+            respVO.setId(entity.getId());
+            respVO.setWorkOrderId(entity.getWorkOrderId());
+            respVO.setMaterialId(entity.getMaterialId());
+            respVO.setRequireQuantity(entity.getRequireQuantity());
+            respVO.setIssuedQuantity(entity.getIssuedQuantity());
+            MaterialEntity material = materialMap.get(entity.getMaterialId());
+            if (material != null) {
+                respVO.setMaterialCode(material.getMaterialCode());
+                respVO.setMaterialName(material.getMaterialName());
+            }
+            return respVO;
+        }).toList();
+    }
+
+    /**
+     * 状态日志实体列表转响应 VO 列表。
+     *
+     * @param list 状态日志实体列表
+     * @return 响应 VO 列表；入参为空集合时返回空集合
+     */
+    public static List<WorkOrderStatusLogRespVO> toStatusLogRespVOList(List<WorkOrderStatusLogEntity> list) {
+        return list.stream().map(entity -> {
+            WorkOrderStatusLogRespVO respVO = new WorkOrderStatusLogRespVO();
+            respVO.setId(entity.getId());
+            respVO.setWorkOrderId(entity.getWorkOrderId());
+            respVO.setFromStatus(entity.getFromStatus());
+            respVO.setToStatus(entity.getToStatus());
+            respVO.setChangeType(entity.getChangeType());
+            respVO.setChangeReason(entity.getChangeReason());
+            respVO.setOperateBy(entity.getOperateBy());
+            respVO.setOperateTime(entity.getOperateTime());
+            return respVO;
+        }).toList();
     }
 
     private WorkOrderConvert() {

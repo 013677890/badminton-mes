@@ -2,6 +2,7 @@ package com.badminton.mes.module.production.dal.repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.Optional;
 
 import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
@@ -102,6 +103,79 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
     int updateToReleased(@Param("id") Long id,
                          @Param("createdStatus") Integer createdStatus,
                          @Param("releasedStatus") Integer releasedStatus);
+
+    /**
+     * 通用状态流转 CAS：仅当当前状态在允许的前置状态集合内才更新。
+     * 用于暂停、恢复、完工、关闭、作废等流转。
+     *
+     * @param id           工单主键
+     * @param fromStatuses 允许的前置状态集合
+     * @param toStatus     目标状态
+     * @return 影响行数；1 成功，0 表示工单不存在、已删除或状态不满足
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.orderStatus = :toStatus,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.orderStatus IN :fromStatuses
+              AND workOrder.deleted = false
+            """)
+    int updateStatus(@Param("id") Long id,
+                     @Param("fromStatuses") Collection<Integer> fromStatuses,
+                     @Param("toStatus") Integer toStatus);
+
+    /**
+     * 完工流转 CAS：状态与"完工数量不超过 计划数量×(1+超产比例) 向下取整"在同一条
+     * UPDATE 内原子校验，消除先读后写的检查-执行竞态(并发报工顶高完工数量的场景)。
+     *
+     * <p>单一前置状态入参：命中即可确定真实的变更前状态，供状态日志留痕。
+     *
+     * @param id             工单主键
+     * @param fromStatus     前置状态(已下达或生产中，由调用方逐个尝试)
+     * @param finishedStatus 已完工状态值
+     * @return 影响行数；1 成功，0 表示工单不存在、状态不满足或完工数量超上限
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.orderStatus = :finishedStatus,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.orderStatus = :fromStatus
+              AND workOrder.deleted = false
+              AND (workOrder.finishQuantity IS NULL
+                   OR workOrder.finishQuantity <= FLOOR(workOrder.planQuantity
+                        * (1 + COALESCE(workOrder.overRatio, 0) / 100)))
+            """)
+    int updateToFinished(@Param("id") Long id,
+                         @Param("fromStatus") Integer fromStatus,
+                         @Param("finishedStatus") Integer finishedStatus);
+
+    /**
+     * 已下达后的计划变更：仅允许修改计划数量与计划时间，且计划数量不能低于已派工数量。
+     * 变更原因由 Service 记入状态日志。
+     *
+     * @return 影响行数；0 表示工单不存在、状态不允许或计划数量低于已派工数量
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.planQuantity = :planQuantity,
+                workOrder.planStartTime = :planStartTime,
+                workOrder.planEndTime = :planEndTime,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.orderStatus = :releasedStatus
+              AND workOrder.deleted = false
+              AND workOrder.dispatchedQuantity <= :planQuantity
+            """)
+    int updateReleasedPlan(@Param("id") Long id,
+                           @Param("planQuantity") Integer planQuantity,
+                           @Param("planStartTime") LocalDateTime planStartTime,
+                           @Param("planEndTime") LocalDateTime planEndTime,
+                           @Param("releasedStatus") Integer releasedStatus);
 
     /**
      * 逻辑删除工单，仅已创建状态允许删除。
