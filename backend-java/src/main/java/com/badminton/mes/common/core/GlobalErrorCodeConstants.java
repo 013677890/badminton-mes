@@ -22,6 +22,14 @@ public final class GlobalErrorCodeConstants {
     public static final ErrorCode JSON_PARSE_ERROR =
             new ErrorCode("A0427", "请求 JSON 解析失败", "请求格式错误，请检查提交内容");
 
+    /** 用户登录已过期(附表 3 A0230)：未携带 token 或会话失效，HTTP 映射 401 */
+    public static final ErrorCode UNAUTHORIZED =
+            new ErrorCode("A0230", "用户登录已过期", "登录状态已失效，请重新登录");
+
+    /** 访问未授权(附表 3 A0301)：登录用户角色不满足接口要求，HTTP 映射 403 */
+    public static final ErrorCode FORBIDDEN =
+            new ErrorCode("A0301", "访问未授权", "当前账号没有该操作权限");
+
     /** 系统执行出错(附表 3 一级宏观错误码 B0001)，未知异常兜底使用 */
     public static final ErrorCode SYSTEM_ERROR =
             new ErrorCode("B0001", "系统执行出错", "系统繁忙，请稍后重试");

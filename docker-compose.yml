@@ -58,7 +58,7 @@ services:
     environment:
       TZ: Asia/Shanghai
       # 服务间通过 compose 网络别名互访，主机名即服务名
-      MES_DB_URL: jdbc:mariadb://mysql:3306/badminton_mes
+      MES_DB_URL: jdbc:mariadb://mysql:3306/badminton_mes?allowPublicKeyRetrieval=true&useSSL=false
       MES_DB_USERNAME: ${MES_DB_USERNAME:-mes}
       MES_DB_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
       MES_REDIS_HOST: redis

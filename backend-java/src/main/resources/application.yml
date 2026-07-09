@@ -6,7 +6,8 @@ spring:
   datasource:
     # MySQL 8.4 LTS，驱动使用 MariaDB Connector/J
     # 容器/多环境部署时通过 MES_DB_URL 覆盖主机名，见 docker-compose.yml
-    url: ${MES_DB_URL:jdbc:mariadb://localhost:3306/badminton_mes}
+    # allowPublicKeyRetrieval=true: 允许从服务器获取RSA公钥，解决MySQL 8.x caching_sha2_password认证问题
+    url: ${MES_DB_URL:jdbc:mariadb://localhost:3306/badminton_mes?allowPublicKeyRetrieval=true&useSSL=false}
     username: ${MES_DB_USERNAME:root}
     password: ${MES_DB_PASSWORD:root}
     driver-class-name: org.mariadb.jdbc.Driver

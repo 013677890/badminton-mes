@@ -56,6 +56,7 @@ out/
 
 # VS Code / Cursor：保留可共享配置，忽略个人化配置。
 .vscode/*
+.vscode/
 !.vscode/settings.json
 !.vscode/extensions.json
 !.vscode/tasks.json

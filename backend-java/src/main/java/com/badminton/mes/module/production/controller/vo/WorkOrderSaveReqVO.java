@@ -82,4 +82,8 @@ public class WorkOrderSaveReqVO {
     @NotNull(message = "计划完成时间不能为空")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime planEndTime;
+
+    /** 变更原因：已下达工单修改计划数量或交期时必填，已创建状态修改可空 */
+    @Size(max = 255, message = "变更原因长度不能超过 255")
+    private String changeReason;
 }

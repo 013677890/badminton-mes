@@ -1,13 +1,17 @@
 package com.badminton.mes.module.production.controller;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.AuthInterceptor;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
 import com.badminton.mes.module.production.service.WorkOrderService;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,10 +21,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +49,15 @@ class WorkOrderControllerTest {
 
     @MockitoBean
     private WorkOrderService workOrderService;
+
+    /** Mock 掉登录鉴权拦截器：Web 切片无 Redis 会话依赖，鉴权逻辑由拦截器自身测试覆盖 */
+    @MockitoBean
+    private AuthInterceptor authInterceptor;
+
+    @BeforeEach
+    void permitAllRequests() throws Exception {
+        when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);
+    }
 
     @Test
     @DisplayName("创建工单：合法请求返回 00000 与新工单 id")
@@ -125,5 +142,105 @@ class WorkOrderControllerTest {
         mockMvc.perform(delete("/api/production/work_orders/-1"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("A0400"));
+    }
+
+    @Test
+    @DisplayName("暂停工单：合法请求转发原因给 Service 并返回 00000")
+    void pauseWorkOrderForwardsReason() throws Exception {
+        mockMvc.perform(put("/api/production/work_orders/100/pause")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "羽片缺料"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"));
+
+        verify(workOrderService).pauseWorkOrder(100L, "羽片缺料");
+    }
+
+    @Test
+    @DisplayName("暂停工单：原因为空白返回 A0400 且不调用 Service")
+    void pauseWorkOrderRejectsBlankReason() throws Exception {
+        mockMvc.perform(put("/api/production/work_orders/100/pause")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason": "  "}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+
+        verify(workOrderService, never()).pauseWorkOrder(any(), any());
+    }
+
+    @Test
+    @DisplayName("恢复工单：转发 Service 并返回 00000")
+    void resumeWorkOrderReturnsSuccess() throws Exception {
+        mockMvc.perform(put("/api/production/work_orders/100/resume"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"));
+
+        verify(workOrderService).resumeWorkOrder(100L);
+    }
+
+    @Test
+    @DisplayName("完工工单：Service 抛超限异常时返回 400 与 A0420")
+    void finishWorkOrderReturnsBusinessError() throws Exception {
+        doThrow(new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_FINISH_EXCEED_LIMIT))
+                .when(workOrderService).finishWorkOrder(100L);
+
+        mockMvc.perform(put("/api/production/work_orders/100/finish"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0420"))
+                .andExpect(jsonPath("$.userTip").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("关闭工单：转发 Service 并返回 00000")
+    void closeWorkOrderReturnsSuccess() throws Exception {
+        mockMvc.perform(put("/api/production/work_orders/100/close"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"));
+
+        verify(workOrderService).closeWorkOrder(100L);
+    }
+
+    @Test
+    @DisplayName("作废工单：缺少请求体返回 A0427 解析失败且不调用 Service")
+    void cancelWorkOrderRejectsMissingBody() throws Exception {
+        mockMvc.perform(put("/api/production/work_orders/100/cancel")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0427"));
+
+        verify(workOrderService, never()).cancelWorkOrder(any(), any());
+    }
+
+    @Test
+    @DisplayName("查询物料需求：返回列表数据")
+    void getWorkOrderMaterialsReturnsList() throws Exception {
+        when(workOrderService.getWorkOrderMaterials(100L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/production/work_orders/100/materials"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data").isArray());
+    }
+
+    @Test
+    @DisplayName("查询状态日志：操作时间按 yyyy-MM-dd HH:mm:ss 输出(API-013)")
+    void getWorkOrderStatusLogsFormatsDateTime() throws Exception {
+        WorkOrderStatusLogRespVO statusLog = new WorkOrderStatusLogRespVO();
+        statusLog.setId(1L);
+        statusLog.setWorkOrderId(100L);
+        statusLog.setFromStatus(0);
+        statusLog.setToStatus(1);
+        statusLog.setChangeType(1);
+        statusLog.setOperateTime(LocalDateTime.of(2026, 7, 10, 8, 0, 0));
+        when(workOrderService.getWorkOrderStatusLogs(100L)).thenReturn(List.of(statusLog));
+
+        mockMvc.perform(get("/api/production/work_orders/100/status_logs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data[0].operateTime").value("2026-07-10 08:00:00"));
     }
 }
