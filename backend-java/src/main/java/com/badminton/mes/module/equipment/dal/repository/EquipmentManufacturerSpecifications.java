@@ -3,8 +3,8 @@ package com.badminton.mes.module.equipment.dal.repository;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryPageReqVO;
-import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
+import com.badminton.mes.module.equipment.controller.vo.EquipmentManufacturerPageReqVO;
+import com.badminton.mes.module.equipment.dal.entity.EquipmentManufacturerEntity;
 
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -12,12 +12,12 @@ import org.springframework.util.StringUtils;
 import jakarta.persistence.criteria.Predicate;
 
 /**
- * 设备类别动态查询条件。
+ * 设备制造商动态查询条件。
  *
  * @author 角色C
  * @date 2026/07/09
  */
-public final class EquipmentCategorySpecifications {
+public final class EquipmentManufacturerSpecifications {
 
     /**
      * 构造分页筛选条件。
@@ -25,7 +25,7 @@ public final class EquipmentCategorySpecifications {
      * @param reqVO 分页请求
      * @return JPA Specification
      */
-    public static Specification<EquipmentCategoryEntity> page(EquipmentCategoryPageReqVO reqVO) {
+    public static Specification<EquipmentManufacturerEntity> page(EquipmentManufacturerPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
@@ -33,13 +33,9 @@ public final class EquipmentCategorySpecifications {
             if (StringUtils.hasText(reqVO.getKeyword())) {
                 String escapedKeyword = escapeWildcards(reqVO.getKeyword());
                 String pattern = "%" + escapedKeyword + "%";
-                Predicate codeLike = criteriaBuilder.like(root.get("categoryCode"), pattern);
-                Predicate nameLike = criteriaBuilder.like(root.get("categoryName"), pattern);
+                Predicate codeLike = criteriaBuilder.like(root.get("manufacturerCode"), pattern);
+                Predicate nameLike = criteriaBuilder.like(root.get("manufacturerName"), pattern);
                 predicates.add(criteriaBuilder.or(codeLike, nameLike));
-            }
-
-            if (reqVO.getParentId() != null) {
-                predicates.add(criteriaBuilder.equal(root.get("parentId"), reqVO.getParentId()));
             }
 
             if (reqVO.getStatus() != null) {
@@ -65,6 +61,6 @@ public final class EquipmentCategorySpecifications {
                     .replace("_", "\\_");
     }
 
-    private EquipmentCategorySpecifications() {
+    private EquipmentManufacturerSpecifications() {
     }
 }

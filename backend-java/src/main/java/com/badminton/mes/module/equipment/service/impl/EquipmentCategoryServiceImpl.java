@@ -60,12 +60,21 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
         EquipmentCategoryEntity category = EquipmentCategoryConvert.toEntity(reqVO);
         category.setCreateBy(DEFAULT_OPERATOR_ID);
+        // 设置状态默认值为启用
+        if (category.getStatus() == null) {
+            category.setStatus(1);
+        }
 
         try {
             categoryRepository.saveAndFlush(category);
         } catch (DataIntegrityViolationException e) {
-            // 并发创建穿透应用层查重时，由唯一索引 uk_category_code 兜底，转成业务错误提示
-            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_CODE_DUPLICATE);
+            // 并发创建穿透应用层查重时，由唯一索引 uk_category_code 兜底
+            // 精确匹配唯一索引冲突，避免误判其他约束（如外键）
+            if (e.getMessage() != null && e.getMessage().contains("uk_category_code")) {
+                throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_CODE_DUPLICATE);
+            }
+            // 其他数据库约束冲突不应吞噬，向上抛出
+            throw e;
         }
 
         logger.info("[创建设备类别] id: {}, categoryCode: {}", category.getId(), category.getCategoryCode());
@@ -87,7 +96,10 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         existing.setParentId(reqVO.getParentId());
         existing.setSortOrder(reqVO.getSortOrder());
         existing.setRemark(reqVO.getRemark());
-        existing.setStatus(reqVO.getStatus());
+        // 修改时若状态为 null，保持原值不变
+        if (reqVO.getStatus() != null) {
+            existing.setStatus(reqVO.getStatus());
+        }
 
         categoryRepository.save(existing);
         logger.info("[修改设备类别] id: {}, categoryCode: {}", id, reqVO.getCategoryCode());
@@ -117,7 +129,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         category.setDeleted(true);
         categoryRepository.save(category);
 
-        logger.info("[删除设备类别] id: {}, 原编码: {}, 重命名为: {}", id, originalCode, deletedCode);
+        logger.info("[删除设备类别] id: {}", id);
     }
 
     @Override
