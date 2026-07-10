@@ -49,8 +49,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -251,7 +249,7 @@ class WorkOrderServiceImplTest {
         WorkOrderStatusLogEntity statusLog = captor.getValue();
         assertThat(statusLog.getChangeType()).isEqualTo(WorkOrderChangeTypeEnum.PLAN_CHANGE.getType());
         assertThat(statusLog.getChangeReason()).isEqualTo("客户加急，交期提前");
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -375,7 +373,7 @@ class WorkOrderServiceImplTest {
 
         workOrderService.updateWorkOrder(WORK_ORDER_ID, buildSaveReqVO());
 
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -388,7 +386,7 @@ class WorkOrderServiceImplTest {
 
         workOrderService.deleteWorkOrder(WORK_ORDER_ID);
 
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -425,7 +423,7 @@ class WorkOrderServiceImplTest {
         ArgumentCaptor<WorkOrderStatusLogEntity> logCaptor = ArgumentCaptor.forClass(WorkOrderStatusLogEntity.class);
         verify(workOrderStatusLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.RELEASED.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -570,7 +568,7 @@ class WorkOrderServiceImplTest {
         assertThat(statusLog.getFromStatus()).isEqualTo(WorkOrderStatusEnum.RELEASED.getStatus());
         assertThat(statusLog.getToStatus()).isEqualTo(WorkOrderStatusEnum.PAUSED.getStatus());
         assertThat(statusLog.getChangeReason()).isEqualTo("羽片缺料");
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -623,7 +621,7 @@ class WorkOrderServiceImplTest {
         ArgumentCaptor<WorkOrderStatusLogEntity> captor = ArgumentCaptor.forClass(WorkOrderStatusLogEntity.class);
         verify(workOrderStatusLogRepository).save(captor.capture());
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -655,7 +653,7 @@ class WorkOrderServiceImplTest {
         verify(workOrderStatusLogRepository).save(captor.capture());
         assertThat(captor.getValue().getFromStatus()).isEqualTo(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.FINISHED.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -685,7 +683,7 @@ class WorkOrderServiceImplTest {
         workOrderService.closeWorkOrder(WORK_ORDER_ID);
 
         verify(workOrderStatusLogRepository).save(any(WorkOrderStatusLogEntity.class));
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -701,26 +699,18 @@ class WorkOrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("缓存删除：事务同步激活时推迟到提交后执行，提交前不删")
-    void evictionDeferredUntilAfterCommit() {
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                    .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.FINISHED.getStatus())));
-            when(workOrderRepository.updateStatus(WORK_ORDER_ID,
-                    List.of(WorkOrderStatusEnum.FINISHED.getStatus()),
-                    WorkOrderStatusEnum.CLOSED.getStatus())).thenReturn(1);
+    @DisplayName("缓存删除：写路径委托缓存组件在提交后删除")
+    void evictionDelegatesAfterCommit() {
+        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.FINISHED.getStatus())));
+        when(workOrderRepository.updateStatus(WORK_ORDER_ID,
+                List.of(WorkOrderStatusEnum.FINISHED.getStatus()),
+                WorkOrderStatusEnum.CLOSED.getStatus())).thenReturn(1);
 
-            workOrderService.closeWorkOrder(WORK_ORDER_ID);
+        workOrderService.closeWorkOrder(WORK_ORDER_ID);
 
-            // 提交前不删缓存，避免并发读旧值回填
-            verify(workOrderCache, never()).evict(any());
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
-            verify(workOrderCache).evict(WORK_ORDER_ID);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
+        verify(workOrderCache, never()).evict(any());
     }
 
     @Test
@@ -738,7 +728,7 @@ class WorkOrderServiceImplTest {
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.CANCELLED.getStatus());
         assertThat(captor.getValue().getChangeReason()).isEqualTo("重复创建");
         verify(workOrderMaterialRepository).logicDeleteByWorkOrderId(WORK_ORDER_ID);
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test

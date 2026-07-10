@@ -94,6 +94,74 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode WORK_ORDER_MATERIAL_ISSUED_EXCEED =
             new ErrorCode("A0420", "物料需求数量不能低于已领数量", "计划数量下调后物料需求低于已领数量，请先处理领料再变更计划");
 
+    /** 非"已下达/生产中"状态的工单不允许齐套分析 */
+    public static final ErrorCode KIT_ANALYSIS_ORDER_STATUS_INVALID =
+            new ErrorCode("A0440", "当前工单状态不允许齐套分析", "只有已下达或生产中的工单才能进行齐套分析");
+
+    /** 工单无物料需求，无法齐套分析(未下达或物料需求未生成) */
+    public static final ErrorCode KIT_ANALYSIS_MATERIAL_EMPTY =
+            new ErrorCode("A0440", "工单没有物料需求，无法齐套分析", "请先下达工单生成物料需求");
+
+    /** 欠料处理记录不存在或已删除 */
+    public static final ErrorCode SHORTAGE_HANDLE_NOT_EXISTS =
+            new ErrorCode("A0402", "欠料处理记录不存在", "处理记录不存在或已被删除，请刷新后重试");
+
+    /** 欠料处理记录已解决，不允许重复解决 */
+    public static final ErrorCode SHORTAGE_HANDLE_ALREADY_RESOLVED =
+            new ErrorCode("A0506", "欠料处理记录已解决", "该处理记录已标记解决，请勿重复操作");
+
+    /** 派工单不存在或已删除 */
+    public static final ErrorCode DISPATCH_ORDER_NOT_EXISTS =
+            new ErrorCode("A0402", "派工单不存在", "派工单不存在或已被删除，请刷新后重试");
+
+    /** 非"已下达/生产中"状态的工单不允许派工 */
+    public static final ErrorCode DISPATCH_WORK_ORDER_STATUS_INVALID =
+            new ErrorCode("A0440", "当前工单状态不允许派工", "只有已下达或生产中的工单才能派工");
+
+    /** 派工数量超过工单未派数量(计划数×(1+超产比例)-已派) */
+    public static final ErrorCode DISPATCH_QUANTITY_EXCEED =
+            new ErrorCode("A0420", "派工数量超过工单未派数量", "派工数量超出工单剩余可派数量，请调整数量");
+
+    /** 同产线同日同班次累计排产超出产能 */
+    public static final ErrorCode DISPATCH_CAPACITY_EXCEED =
+            new ErrorCode("A0420", "超出产线班次剩余产能", "该产线该班次排产已满，请更换产线、日期或班次");
+
+    /** 产线不存在、已删除或已停用 */
+    public static final ErrorCode DISPATCH_LINE_NOT_AVAILABLE =
+            new ErrorCode("A0402", "产线不存在或已停用", "所选产线不可用，请重新选择");
+
+    /** 班次不存在、已删除或已停用 */
+    public static final ErrorCode DISPATCH_SHIFT_NOT_AVAILABLE =
+            new ErrorCode("A0402", "班次不存在或已停用", "所选班次不可用，请重新选择");
+
+    /** 排产日期为非工作日 */
+    public static final ErrorCode DISPATCH_DATE_NOT_WORKDAY =
+            new ErrorCode("A0440", "排产日期为非工作日", "所选日期为非工作日，请更换排产日期");
+
+    /** 派工计划结束时间不晚于开始时间 */
+    public static final ErrorCode DISPATCH_PLAN_TIME_INVALID =
+            new ErrorCode("A0420", "计划结束时间必须晚于开始时间", "请检查派工计划开始与结束时间");
+
+    /** 当前派工单状态不允许修改 */
+    public static final ErrorCode DISPATCH_STATUS_NOT_ALLOW_UPDATE =
+            new ErrorCode("A0440", "当前派工单状态不允许修改", "执行中、已完成或已取消的派工单不能修改");
+
+    /** 当前派工单状态不允许审核 */
+    public static final ErrorCode DISPATCH_STATUS_NOT_ALLOW_AUDIT =
+            new ErrorCode("A0440", "当前派工单状态不允许审核", "只有待审核的派工单才能审核");
+
+    /** 当前派工单状态不允许下发 */
+    public static final ErrorCode DISPATCH_STATUS_NOT_ALLOW_ISSUE =
+            new ErrorCode("A0440", "当前派工单状态不允许下发", "只有已审核的派工单才能下发");
+
+    /** 当前派工单状态不允许取消 */
+    public static final ErrorCode DISPATCH_STATUS_NOT_ALLOW_CANCEL =
+            new ErrorCode("A0440", "当前派工单状态不允许取消", "执行中、已完成或已取消的派工单不能取消");
+
+    /** 已下发派工单调整必须填写原因 */
+    public static final ErrorCode DISPATCH_ADJUST_REASON_REQUIRED =
+            new ErrorCode("A0402", "下发后调整必须填写原因", "请填写调整原因后重试");
+
     private ProductionErrorCodeConstants() {
     }
 }

@@ -3,15 +3,19 @@ package com.badminton.mes.module.production.dal.repository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * 生产工单 JPA Repository。
@@ -31,6 +35,14 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
      * @return 工单实体
      */
     Optional<WorkOrderEntity> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * 按主键集合批量查询未删除工单，欠料看板下钻回填工单号/产品名。
+     *
+     * @param ids 工单主键集合，调用方保证非空且规模有限
+     * @return 工单列表
+     */
+    List<WorkOrderEntity> findByIdInAndDeletedFalse(Collection<Long> ids);
 
     /**
      * 判断未删除工单中是否已存在指定工单号。
@@ -192,4 +204,76 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
               AND workOrder.deleted = false
             """)
     int logicDeleteById(@Param("id") Long id, @Param("createdStatus") Integer createdStatus);
+
+    /**
+     * 按主键悲观锁查询工单行(SELECT ... FOR UPDATE)，须在事务内调用。
+     *
+     * <p>齐套重算与派工共用这把工单行锁：串行化"软删旧结果+插新结果"防止
+     * 并发重算残留双份，也阻断"边派工边重算"的交叉写(业务 SQL 1.4)。
+     *
+     * @param id 工单主键
+     * @return 工单实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT workOrder FROM WorkOrderEntity workOrder
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+            """)
+    Optional<WorkOrderEntity> findByIdForUpdate(@Param("id") Long id);
+
+    /**
+     * 冗余回写工单齐套状态(业务 SQL 1.3 的回写步骤)。
+     *
+     * @param id        工单主键
+     * @param kitStatus 工单级齐套状态(各物料行 MAX)
+     * @return 影响行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.kitStatus = :kitStatus,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+            """)
+    int updateKitStatus(@Param("id") Long id, @Param("kitStatus") Integer kitStatus);
+
+    /**
+     * 累加已派工数量，WHERE 条件兜底超派(业务 SQL 1.4)：
+     * 累加后不得超过 计划数量×(1+超产比例) 向下取整。
+     *
+     * @param id       工单主键
+     * @param quantity 本次派工数量
+     * @return 影响行数；0 表示会超派，调用方应抛错回滚
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.dispatchedQuantity = workOrder.dispatchedQuantity + :quantity,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+              AND workOrder.dispatchedQuantity + :quantity
+                  <= FLOOR(workOrder.planQuantity * (1 + COALESCE(workOrder.overRatio, 0) / 100))
+            """)
+    int increaseDispatchedQuantity(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    /**
+     * 回退已派工数量(取消派工单)，WHERE 条件兜底防负数。
+     *
+     * @param id       工单主键
+     * @param quantity 回退数量
+     * @return 影响行数；0 表示会回退成负数，数据已不一致需人工介入
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.dispatchedQuantity = workOrder.dispatchedQuantity - :quantity,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+              AND workOrder.dispatchedQuantity >= :quantity
+            """)
+    int decreaseDispatchedQuantity(@Param("id") Long id, @Param("quantity") Integer quantity);
 }

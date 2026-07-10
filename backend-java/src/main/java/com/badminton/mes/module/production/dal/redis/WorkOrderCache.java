@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import tools.jackson.databind.ObjectMapper;
@@ -87,5 +89,25 @@ public class WorkOrderCache {
         } catch (RuntimeException e) {
             logger.error("[工单缓存删除失败] id: {}, errorMessage: {}", id, e.getMessage(), e);
         }
+    }
+
+    /**
+     * 事务提交后再删除详情缓存：提交前删除会被并发读旧值回填，
+     * 导致缓存在 TTL 内持续不一致。无事务上下文(单测直连等)时立即删除。
+     *
+     * @param id 工单主键
+     */
+    public void evictAfterCommit(Long id) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evict(id);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evict(id);
+            }
+        });
     }
 }

@@ -56,8 +56,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /**
@@ -579,17 +577,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param id 工单主键
      */
     private void evictCacheAfterCommit(Long id) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            workOrderCache.evict(id);
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                workOrderCache.evict(id);
-            }
-        });
+        workOrderCache.evictAfterCommit(id);
     }
 
     /**
