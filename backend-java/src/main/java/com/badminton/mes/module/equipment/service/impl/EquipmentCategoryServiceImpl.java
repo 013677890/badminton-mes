@@ -13,6 +13,7 @@ import com.badminton.mes.module.equipment.convert.EquipmentCategoryConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategorySpecifications;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.service.EquipmentCategoryService;
 
 import org.slf4j.Logger;
@@ -43,13 +44,18 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
     private final EquipmentCategoryRepository categoryRepository;
 
+    private final EquipmentLedgerRepository ledgerRepository;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param categoryRepository 设备类别 Repository
+     * @param ledgerRepository   设备台账 Repository
      */
-    public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository) {
+    public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository,
+                                        EquipmentLedgerRepository ledgerRepository) {
         this.categoryRepository = categoryRepository;
+        this.ledgerRepository = ledgerRepository;
     }
 
     @Override
@@ -116,11 +122,10 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_CHILDREN);
         }
 
-        // TODO(角色C, 2026/07/09): 后续需要检查该类别下是否存在设备
-        // 暂时注释，等设备台账模块完成后再打开
-        // if (equipmentRepository.countByCategoryIdAndDeletedFalse(id) > 0) {
-        //     throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_EQUIPMENT);
-        // }
+        long equipmentCount = ledgerRepository.countByCategoryIdAndDeletedFalse(id);
+        if (equipmentCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_EQUIPMENT);
+        }
 
         // 删除时重命名编码，避免唯一索引冲突（允许撤销删除或数据追溯）
         String originalCode = category.getCategoryCode();

@@ -54,6 +54,18 @@ public final class EquipmentErrorCodeConstants {
     public static final ErrorCode EQUIPMENT_MANUFACTURER_HAS_EQUIPMENT =
             new ErrorCode("A0440", "该制造商下存在设备，不允许删除", "请先删除或移动该制造商下的设备");
 
+    /** 设备台账不存在或已删除 */
+    public static final ErrorCode EQUIPMENT_LEDGER_NOT_EXISTS =
+            new ErrorCode("A0402", "设备不存在", "设备台账不存在或已被删除，请刷新后重试");
+
+    /** 设备编码重复 */
+    public static final ErrorCode EQUIPMENT_LEDGER_CODE_DUPLICATE =
+            new ErrorCode("A0506", "设备编码已存在", "设备编码重复，请更换设备编码后重试");
+
+    /** 设备状态不允许当前操作 */
+    public static final ErrorCode EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED =
+            new ErrorCode("A0440", "设备状态不允许当前操作", "请调整设备状态后再执行该操作");
+
     private EquipmentErrorCodeConstants() {
     }
 }

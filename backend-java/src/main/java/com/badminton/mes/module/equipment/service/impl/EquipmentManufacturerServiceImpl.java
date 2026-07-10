@@ -10,6 +10,7 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentManufacturerRes
 import com.badminton.mes.module.equipment.controller.vo.EquipmentManufacturerSaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentManufacturerConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentManufacturerEntity;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerSpecifications;
 import com.badminton.mes.module.equipment.service.EquipmentManufacturerService;
@@ -42,13 +43,18 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
 
     private final EquipmentManufacturerRepository manufacturerRepository;
 
+    private final EquipmentLedgerRepository ledgerRepository;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param manufacturerRepository 设备制造商 Repository
+     * @param ledgerRepository       设备台账 Repository
      */
-    public EquipmentManufacturerServiceImpl(EquipmentManufacturerRepository manufacturerRepository) {
+    public EquipmentManufacturerServiceImpl(EquipmentManufacturerRepository manufacturerRepository,
+                                            EquipmentLedgerRepository ledgerRepository) {
         this.manufacturerRepository = manufacturerRepository;
+        this.ledgerRepository = ledgerRepository;
     }
 
     @Override
@@ -108,11 +114,10 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
     public void deleteEquipmentManufacturer(Long id) {
         EquipmentManufacturerEntity manufacturer = validateManufacturerExists(id);
 
-        // TODO(角色C, 2026/07/09): 后续需要检查该制造商下是否存在设备
-        // 暂时注释，等设备台账模块完成后再打开
-        // if (equipmentRepository.countByManufacturerIdAndDeletedFalse(id) > 0) {
-        //     throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_MANUFACTURER_HAS_EQUIPMENT);
-        // }
+        long equipmentCount = ledgerRepository.countByManufacturerIdAndDeletedFalse(id);
+        if (equipmentCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_MANUFACTURER_HAS_EQUIPMENT);
+        }
 
         // 删除时重命名编码，避免唯一索引冲突（允许撤销删除或数据追溯）
         String originalCode = manufacturer.getManufacturerCode();

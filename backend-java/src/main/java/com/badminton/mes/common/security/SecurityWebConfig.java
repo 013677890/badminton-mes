@@ -18,6 +18,9 @@ public class SecurityWebConfig implements WebMvcConfigurer {
     /** 登录接口路径，唯一免登录白名单 */
     public static final String LOGIN_PATH = "/api/system/auth/login";
 
+    /** 开发阶段临时关闭登录鉴权，功能联调完成后改回 false */
+    private static final boolean AUTH_DISABLED_FOR_DEVELOPMENT = true;
+
     private final AuthInterceptor authInterceptor;
 
     /**
@@ -31,6 +34,10 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        if (AUTH_DISABLED_FOR_DEVELOPMENT) {
+            return;
+        }
+
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(LOGIN_PATH);
