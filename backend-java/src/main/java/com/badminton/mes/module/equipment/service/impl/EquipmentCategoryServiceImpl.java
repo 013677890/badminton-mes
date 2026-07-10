@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.Set;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryPageReqVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
@@ -43,13 +45,18 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
     private final EquipmentCategoryRepository categoryRepository;
 
+    private final CraftProcessRepository processRepository;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param categoryRepository 设备类别 Repository
+     * @param processRepository  工序 Repository
      */
-    public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository) {
+    public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository,
+                                        CraftProcessRepository processRepository) {
         this.categoryRepository = categoryRepository;
+        this.processRepository = processRepository;
     }
 
     @Override
@@ -75,12 +82,18 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentCategory(Long id, EquipmentCategorySaveReqVO reqVO) {
-        EquipmentCategoryEntity existing = validateCategoryExists(id);
+        EquipmentCategoryEntity existing = validateCategoryExistsForUpdate(id);
         validateCategoryCode(reqVO.getCategoryCode(), id);
         validateParentCategory(reqVO.getParentId());
 
         // 检查循环引用
         validateNoCyclicReference(id, reqVO.getParentId());
+
+        boolean disabling = CommonStatusEnum.ENABLED.getStatus().equals(existing.getStatus())
+                && CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus());
+        if (disabling) {
+            validateNoEnabledProcessReferences(id);
+        }
 
         existing.setCategoryCode(reqVO.getCategoryCode());
         existing.setCategoryName(reqVO.getCategoryName());
@@ -96,13 +109,15 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentCategory(Long id) {
-        EquipmentCategoryEntity category = validateCategoryExists(id);
+        EquipmentCategoryEntity category = validateCategoryExistsForUpdate(id);
 
         // 检查是否存在下级分类
         long childCount = categoryRepository.countByParentIdAndDeletedFalse(id);
         if (childCount > 0) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_CHILDREN);
         }
+
+        validateNoEnabledProcessReferences(id);
 
         // TODO(角色C, 2026/07/09): 后续需要检查该类别下是否存在设备
         // 暂时注释，等设备台账模块完成后再打开
@@ -159,6 +174,17 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
      */
     private EquipmentCategoryEntity validateCategoryExists(Long id) {
         return categoryRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_NOT_EXISTS));
+    }
+
+    /**
+     * 以写锁查询设备类别，供修改和删除操作保护跨表引用校验。
+     *
+     * @param id 类别主键
+     * @return 类别实体
+     */
+    private EquipmentCategoryEntity validateCategoryExistsForUpdate(Long id) {
+        return categoryRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_NOT_EXISTS));
     }
 
@@ -220,6 +246,19 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         Set<Long> ancestorIds = categoryRepository.findAncestorIds(newParentId);
         if (ancestorIds.contains(currentId)) {
             throw new ServiceException(EquipmentErrorCodeConstants.CATEGORY_CYCLIC_REFERENCE);
+        }
+    }
+
+    /**
+     * 校验设备类别未被启用工序引用。
+     *
+     * @param categoryId 设备类别主键
+     */
+    private void validateNoEnabledProcessReferences(Long categoryId) {
+        boolean referenced = processRepository.existsByEquipmentCategoryIdAndStatusAndDeletedFalse(
+                categoryId, CommonStatusEnum.ENABLED.getStatus());
+        if (referenced) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_PROCESS);
         }
     }
 }
