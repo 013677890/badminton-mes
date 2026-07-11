@@ -68,6 +68,7 @@ class WorkOrderCacheTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().getWorkOrderNo()).isEqualTo("WO202607080001");
+        assertThat(result.get().getSourceSystem()).isEqualTo("ERP-MAIN");
     }
 
     @Test
@@ -140,7 +141,9 @@ class WorkOrderCacheTest {
         WorkOrderEntity workOrder = new WorkOrderEntity();
         workOrder.setId(WORK_ORDER_ID);
         workOrder.setWorkOrderNo("WO202607080001");
-        workOrder.setSourceType(WorkOrderSourceTypeEnum.MANUAL.getType());
+        workOrder.setSourceType(WorkOrderSourceTypeEnum.API_WRITE.getType());
+        workOrder.setSourceSystem("ERP-MAIN");
+        workOrder.setSourceOrderNo("ERP-WO-001");
         workOrder.setProductId(10L);
         workOrder.setProductName("比赛级羽毛球");
         workOrder.setUnitId(1L);

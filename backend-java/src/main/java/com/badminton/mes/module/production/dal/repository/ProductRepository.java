@@ -30,6 +30,22 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
     Optional<ProductEntity> findByIdAndDeletedFalse(Long id);
 
     /**
+     * 按产品编码查询未删除产品。
+     *
+     * @param productCode 产品编码
+     * @return 产品实体
+     */
+    Optional<ProductEntity> findByProductCodeAndDeletedFalse(String productCode);
+
+    /**
+     * 判断计量单位是否已被有效产品引用。
+     *
+     * @param unitId 计量单位主键
+     * @return true 表示已被引用
+     */
+    boolean existsByUnitIdAndDeletedFalse(Long unitId);
+
+    /**
      * 批量查询启用且未删除产品。
      *
      * @param ids    产品主键集合

@@ -1,0 +1,279 @@
+package com.badminton.mes.module.integration.service.impl;
+
+import java.util.Locale;
+import java.util.Optional;
+
+import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
+import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
+import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
+import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
+import com.badminton.mes.module.integration.controller.vo.UnitWriteReqVO;
+import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
+import com.badminton.mes.module.integration.dal.entity.UnitEntity;
+import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
+import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogSpecifications;
+import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
+import com.badminton.mes.module.integration.enums.IntegrationWriteStatusEnum;
+import com.badminton.mes.module.integration.service.IntegrationAuditService;
+import com.badminton.mes.module.integration.service.IntegrationService;
+import com.badminton.mes.module.integration.service.IntegrationWriteCommandService;
+import com.badminton.mes.module.integration.service.dto.IntegrationCommandResult;
+import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 外部标准写入接口门面实现。
+ *
+ * <p>成功主数据与日志由命令事务原子提交；命令回滚后的失败日志使用独立事务记录。
+ * 业务校验失败作为稳定的写入结果返回，便于外部系统按日志主键追踪。
+ *
+ * @author 张竹灏
+ * @date 2026/07/11
+ */
+@Service
+public class IntegrationServiceImpl implements IntegrationService {
+
+    private final IntegrationWriteCommandService commandService;
+
+    private final IntegrationAuditService auditService;
+
+    private final IntegrationWriteLogRepository writeLogRepository;
+
+    /**
+     * 构造外部接口门面。
+     *
+     * @param commandService     写入命令服务
+     * @param auditService       接口审计服务
+     * @param writeLogRepository 写入日志 Repository
+     */
+    public IntegrationServiceImpl(IntegrationWriteCommandService commandService,
+                                  IntegrationAuditService auditService,
+                                  IntegrationWriteLogRepository writeLogRepository) {
+        this.commandService = commandService;
+        this.auditService = auditService;
+        this.writeLogRepository = writeLogRepository;
+    }
+
+    @Override
+    public IntegrationWriteResultRespVO writeUnit(UnitWriteReqVO reqVO) {
+        String snapshot = auditService.serializeRequest(reqVO);
+        String sourceSystem = normalizeCode(reqVO.getSourceSystem());
+        String unitCode = normalizeCode(reqVO.getUnitCode());
+        try {
+            return toSuccess(commandService.writeUnit(reqVO, snapshot));
+        } catch (ServiceException exception) {
+            boolean duplicate = IntegrationErrorCodeConstants.UNIT_CODE_DUPLICATE
+                    .equals(exception.getErrorCode());
+            Optional<UnitEntity> existing = duplicate
+                    ? commandService.findUnit(unitCode) : Optional.empty();
+            if (duplicate) {
+                return recordDuplicate(
+                        IntegrationInterfaceTypeEnum.UNIT_WRITE,
+                        sourceSystem,
+                        unitCode,
+                        snapshot,
+                        existing.map(UnitEntity::getId).orElse(null),
+                        existing.map(UnitEntity::getUnitCode).orElse(null));
+            }
+            return recordFailure(
+                    IntegrationInterfaceTypeEnum.UNIT_WRITE,
+                    sourceSystem,
+                    unitCode,
+                    snapshot,
+                    exception,
+                    existing.map(UnitEntity::getId).orElse(null),
+                    existing.map(UnitEntity::getUnitCode).orElse(null));
+        }
+    }
+
+    @Override
+    public IntegrationWriteResultRespVO writeWorkOrder(ExternalWorkOrderWriteReqVO reqVO) {
+        String snapshot = auditService.serializeRequest(reqVO);
+        String sourceSystem = normalizeCode(reqVO.getSourceSystem());
+        String externalNo = reqVO.getExternalWorkOrderNo().trim();
+        try {
+            return toSuccess(commandService.writeWorkOrder(reqVO, snapshot));
+        } catch (ServiceException exception) {
+            boolean duplicate = IntegrationErrorCodeConstants.EXTERNAL_WORK_ORDER_DUPLICATE
+                    .equals(exception.getErrorCode());
+            Optional<WorkOrderEntity> existing = duplicate
+                    ? commandService.findExternalWorkOrder(sourceSystem, externalNo)
+                    : Optional.empty();
+            if (duplicate) {
+                return recordDuplicate(
+                        IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
+                        sourceSystem,
+                        externalNo,
+                        snapshot,
+                        existing.map(WorkOrderEntity::getId).orElse(null),
+                        existing.map(WorkOrderEntity::getWorkOrderNo).orElse(null));
+            }
+            return recordFailure(
+                    IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
+                    sourceSystem,
+                    externalNo,
+                    snapshot,
+                    exception,
+                    existing.map(WorkOrderEntity::getId).orElse(null),
+                    existing.map(WorkOrderEntity::getWorkOrderNo).orElse(null));
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResult<IntegrationWriteLogRespVO> getWriteLogPage(
+            IntegrationWriteLogPageReqVO reqVO) {
+        Specification<IntegrationWriteLogEntity> specification =
+                IntegrationWriteLogSpecifications.page(reqVO);
+        long total = writeLogRepository.count(specification);
+        if (total == 0) {
+            return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
+        }
+
+        int pageSize = reqVO.getPageSize();
+        int pageNo = normalizePageNo(reqVO.getPageNo(), pageSize, total);
+        PageRequest pageRequest = PageRequest.of(
+                pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "id"));
+        Page<IntegrationWriteLogEntity> page =
+                writeLogRepository.findAll(specification, pageRequest);
+        return PageResult.of(page.getContent().stream().map(this::toRespVO).toList(),
+                total, pageNo, pageSize);
+    }
+
+    /**
+     * 将命令结果转换为成功或重复响应。
+     *
+     * @param commandResult 命令结果
+     * @return 写入响应
+     */
+    private IntegrationWriteResultRespVO toSuccess(IntegrationCommandResult commandResult) {
+        IntegrationWriteResultRespVO response = new IntegrationWriteResultRespVO();
+        response.setLogId(commandResult.logId());
+        response.setBusinessId(commandResult.businessId());
+        response.setBusinessNo(commandResult.businessNo());
+        if (commandResult.duplicate()) {
+            response.setStatus(IntegrationWriteStatusEnum.DUPLICATE.getCode());
+            response.setMessage("重复请求，未生成新数据");
+        } else {
+            response.setStatus(IntegrationWriteStatusEnum.SUCCESS.getCode());
+            response.setMessage("写入成功");
+        }
+        return response;
+    }
+
+    /**
+     * 记录失败结果并构造稳定响应。
+     *
+     * @param interfaceType 接口类型
+     * @param sourceSystem  来源系统
+     * @param businessKey   来源业务键
+     * @param snapshot      请求快照
+     * @param exception     业务异常
+     * @param resultId      已存在业务主键
+     * @param resultNo      已存在业务编号
+     * @return 写入响应
+     */
+    private IntegrationWriteResultRespVO recordFailure(
+            IntegrationInterfaceTypeEnum interfaceType,
+            String sourceSystem,
+            String businessKey,
+            String snapshot,
+            ServiceException exception,
+            Long resultId,
+            String resultNo) {
+        Long logId = auditService.recordFailure(
+                interfaceType, sourceSystem, businessKey, snapshot,
+                resultId, resultNo, exception.getErrorCode(), exception.getMessage());
+        IntegrationWriteResultRespVO response = new IntegrationWriteResultRespVO();
+        response.setLogId(logId);
+        response.setStatus(IntegrationWriteStatusEnum.FAILED.getCode());
+        response.setBusinessId(resultId);
+        response.setBusinessNo(resultNo);
+        response.setErrorCode(exception.getErrorCode().code());
+        response.setMessage(exception.getMessage());
+        return response;
+    }
+
+    /**
+     * 记录并发重复结果并构造与前置查重一致的响应。
+     *
+     * @param interfaceType 接口类型
+     * @param sourceSystem  来源系统
+     * @param businessKey   来源业务键
+     * @param snapshot      请求快照
+     * @param resultId      已存在业务主键
+     * @param resultNo      已存在业务编号
+     * @return 不含失败错误码的重复响应
+     */
+    private IntegrationWriteResultRespVO recordDuplicate(
+            IntegrationInterfaceTypeEnum interfaceType,
+            String sourceSystem,
+            String businessKey,
+            String snapshot,
+            Long resultId,
+            String resultNo) {
+        Long logId = auditService.recordDuplicate(
+                interfaceType, sourceSystem, businessKey, snapshot, resultId, resultNo);
+        IntegrationWriteResultRespVO response = new IntegrationWriteResultRespVO();
+        response.setLogId(logId);
+        response.setStatus(IntegrationWriteStatusEnum.DUPLICATE.getCode());
+        response.setBusinessId(resultId);
+        response.setBusinessNo(resultNo);
+        response.setMessage("重复请求，未生成新数据");
+        return response;
+    }
+
+    /**
+     * 转换日志响应。
+     *
+     * @param entity 日志实体
+     * @return 日志响应
+     */
+    private IntegrationWriteLogRespVO toRespVO(IntegrationWriteLogEntity entity) {
+        IntegrationWriteLogRespVO response = new IntegrationWriteLogRespVO();
+        response.setId(entity.getId());
+        response.setInterfaceType(entity.getInterfaceType());
+        response.setSourceSystem(entity.getSourceSystem());
+        response.setBusinessKey(entity.getBusinessKey());
+        response.setRequestSnapshot(entity.getRequestSnapshot());
+        response.setWriteStatus(entity.getWriteStatus());
+        response.setResultId(entity.getResultId());
+        response.setResultNo(entity.getResultNo());
+        response.setErrorCode(entity.getErrorCode());
+        response.setErrorMessage(entity.getErrorMessage());
+        response.setCreateTime(entity.getCreateTime());
+        return response;
+    }
+
+    /**
+     * 修正超出总页数的请求页码。
+     *
+     * @param requestedPageNo 请求页码
+     * @param pageSize        每页条数
+     * @param total           总记录数
+     * @return 实际页码
+     */
+    private int normalizePageNo(int requestedPageNo, int pageSize, long total) {
+        int totalPages = (int) ((total + pageSize - 1) / pageSize);
+        return Math.min(requestedPageNo, totalPages);
+    }
+
+    /**
+     * 规范化 ASCII 编码。
+     *
+     * @param value 原始编码
+     * @return 去空格大写编码
+     */
+    private String normalizeCode(String value) {
+        return value.trim().toUpperCase(Locale.ROOT);
+    }
+}

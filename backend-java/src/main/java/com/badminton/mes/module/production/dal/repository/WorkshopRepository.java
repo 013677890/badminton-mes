@@ -21,4 +21,12 @@ public interface WorkshopRepository extends JpaRepository<WorkshopEntity, Long> 
      * @return 车间实体
      */
     Optional<WorkshopEntity> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * 按车间编码查询未删除车间。
+     *
+     * @param workshopCode 车间编码
+     * @return 车间实体
+     */
+    Optional<WorkshopEntity> findByWorkshopCodeAndDeletedFalse(String workshopCode);
 }

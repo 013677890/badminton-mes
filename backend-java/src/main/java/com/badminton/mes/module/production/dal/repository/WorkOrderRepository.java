@@ -53,6 +53,17 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
     boolean existsByWorkOrderNoAndDeletedFalse(String workOrderNo);
 
     /**
+     * 按来源级幂等键查询未删除工单。
+     *
+     * @param sourceType    来源类型
+     * @param sourceSystem  来源系统
+     * @param sourceOrderNo 外部工单号
+     * @return 已生成的 MES 工单
+     */
+    Optional<WorkOrderEntity> findBySourceTypeAndSourceSystemAndSourceOrderNo(
+            Integer sourceType, String sourceSystem, String sourceOrderNo);
+
+    /**
      * 更新工单计划信息，仅已创建状态允许修改。可空字段使用 COALESCE 保持旧值。
      *
      * @return 影响行数；0 表示工单不存在、已删除或状态已变化
