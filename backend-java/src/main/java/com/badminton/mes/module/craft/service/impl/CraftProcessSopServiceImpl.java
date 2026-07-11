@@ -13,6 +13,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessSopSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSopUpdateReqVO;
 import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessSopEntity;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessSopRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
@@ -50,6 +51,8 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
 
     private final CraftProcessAuditService auditService;
 
+    private final CraftCache craftCache;
+
     /**
      * 构造器注入。
      *
@@ -57,15 +60,18 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
      * @param sopRepository     工序 SOP Repository
      * @param routeDetailRepository 路线明细 Repository
      * @param auditService      工序变更审计服务
+     * @param craftCache        工艺 Redis 缓存
      */
     public CraftProcessSopServiceImpl(CraftProcessRepository processRepository,
                                       CraftProcessSopRepository sopRepository,
                                       CraftRouteDetailRepository routeDetailRepository,
-                                      CraftProcessAuditService auditService) {
+                                      CraftProcessAuditService auditService,
+                                      CraftCache craftCache) {
         this.processRepository = processRepository;
         this.sopRepository = sopRepository;
         this.routeDetailRepository = routeDetailRepository;
         this.auditService = auditService;
+        this.craftCache = craftCache;
     }
 
     @Override
@@ -86,6 +92,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         auditService.record(processId, CraftProcessChangeTypeEnum.SOP_BINDING,
                 null, CraftProcessConvert.toSopRespVO(sop),
                 defaultReason(reqVO.getChangeReason(), "新增工序 SOP"), operatorId);
+        craftCache.evictProcessSopsAfterCommit(processId);
         return sop.getId();
     }
 
@@ -113,6 +120,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         auditService.record(processId, CraftProcessChangeTypeEnum.SOP_BINDING,
                 beforeSnapshot, CraftProcessConvert.toSopRespVO(sop),
                 defaultReason(reqVO.getChangeReason(), "修改工序 SOP"), operatorId);
+        craftCache.evictProcessSopsAfterCommit(processId);
     }
 
     @Override
@@ -131,14 +139,22 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         saveSop(sop);
         auditService.record(processId, CraftProcessChangeTypeEnum.SOP_BINDING,
                 beforeSnapshot, null, "删除工序 SOP", operatorId);
+        craftCache.evictProcessSopsAfterCommit(processId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CraftProcessSopRespVO> getProcessSops(Long processId) {
+        List<CraftProcessSopRespVO> cached = craftCache.getProcessSops(processId).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+
         requireProcess(processId);
-        return CraftProcessConvert.toSopRespVOList(
+        List<CraftProcessSopRespVO> result = CraftProcessConvert.toSopRespVOList(
                 sopRepository.findByProcessIdAndDeletedFalseOrderByIdAsc(processId));
+        craftCache.putProcessSops(processId, result);
+        return result;
     }
 
     /**

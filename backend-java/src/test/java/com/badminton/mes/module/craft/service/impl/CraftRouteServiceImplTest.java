@@ -11,6 +11,7 @@ import com.badminton.mes.module.craft.constants.CraftErrorCodeConstants;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteChangeLogPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteNewVersionReqVO;
+import com.badminton.mes.module.craft.controller.vo.CraftRouteRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftRouteStepSaveReqVO;
@@ -23,6 +24,7 @@ import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.enums.CraftRouteChangeTypeEnum;
 import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.craft.service.CraftRouteAuditService;
@@ -102,13 +104,16 @@ class CraftRouteServiceImplTest {
     @Mock
     private CraftRouteAuditService auditService;
 
+    @Mock
+    private CraftCache craftCache;
+
     private CraftRouteServiceImpl routeService;
 
     @BeforeEach
     void setUp() {
         routeService = new CraftRouteServiceImpl(routeRepository, routeProductRepository,
                 changeLogRepository, processRepository, productRepository, workOrderRepository,
-                childService, referenceValidator, auditService);
+                childService, referenceValidator, auditService, craftCache);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -228,6 +233,7 @@ class CraftRouteServiceImplTest {
         verify(childService).deleteAll(ROUTE_ID, OPERATOR_ID);
         verify(auditService).record(eq(ROUTE_ID), eq(CraftRouteChangeTypeEnum.DELETE),
                 any(), eq(null), eq("删除工艺路线草稿"), eq(OPERATOR_ID));
+        verify(craftCache).evictDefaultRoutesAfterCommit(List.of(PRODUCT_ID));
     }
 
     @Test
@@ -250,6 +256,7 @@ class CraftRouteServiceImplTest {
         verify(childService).activateDefaults(ROUTE_ID, List.of(PRODUCT_ID), OPERATOR_ID);
         verify(auditService).record(eq(ROUTE_ID), eq(CraftRouteChangeTypeEnum.APPROVE),
                 any(), any(), eq("首版审核生效"), eq(OPERATOR_ID));
+        verify(craftCache).evictDefaultRoutesAfterCommit(List.of(PRODUCT_ID));
     }
 
     @Test
@@ -294,6 +301,7 @@ class CraftRouteServiceImplTest {
         verify(childService).clearDefaults(ROUTE_ID, OPERATOR_ID);
         verify(auditService).record(eq(ROUTE_ID), eq(CraftRouteChangeTypeEnum.DISABLE),
                 any(), any(), eq("工艺淘汰"), eq(OPERATOR_ID));
+        verify(craftCache).evictDefaultRoutesAfterCommit(List.of(PRODUCT_ID));
     }
 
     @Test
@@ -346,6 +354,20 @@ class CraftRouteServiceImplTest {
                         assertThat(exception.getErrorCode())
                                 .isSameAs(CraftErrorCodeConstants.ROUTE_NOT_EFFECTIVE));
         verify(routeRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("默认路线：缓存命中时不访问数据库")
+    void getDefaultRouteReturnsCacheHitWithoutDatabaseQuery() {
+        CraftRouteRespVO cached = new CraftRouteRespVO();
+        cached.setId(ROUTE_ID);
+        when(craftCache.getDefaultRoute(PRODUCT_ID)).thenReturn(Optional.of(cached));
+
+        CraftRouteRespVO result = routeService.getDefaultRoute(PRODUCT_ID);
+
+        assertThat(result).isSameAs(cached);
+        verify(routeProductRepository, never())
+                .findByProductIdAndDefaultRouteTrueAndDeletedFalse(PRODUCT_ID);
     }
 
     @Test

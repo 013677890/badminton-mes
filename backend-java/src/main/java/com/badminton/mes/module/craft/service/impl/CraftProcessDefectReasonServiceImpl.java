@@ -12,6 +12,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessDefectReasonSave
 import com.badminton.mes.module.craft.controller.vo.CraftProcessDefectReasonUpdateReqVO;
 import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessDefectReasonEntity;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
@@ -45,19 +46,24 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
 
     private final CraftProcessAuditService auditService;
 
+    private final CraftCache craftCache;
+
     /**
      * 构造器注入。
      *
      * @param processRepository      工序 Repository
      * @param defectReasonRepository 工序不良原因 Repository
      * @param auditService           工序变更审计服务
+     * @param craftCache             工艺 Redis 缓存
      */
     public CraftProcessDefectReasonServiceImpl(CraftProcessRepository processRepository,
                                                CraftProcessDefectReasonRepository defectReasonRepository,
-                                               CraftProcessAuditService auditService) {
+                                               CraftProcessAuditService auditService,
+                                               CraftCache craftCache) {
         this.processRepository = processRepository;
         this.defectReasonRepository = defectReasonRepository;
         this.auditService = auditService;
+        this.craftCache = craftCache;
     }
 
     @Override
@@ -79,6 +85,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         auditService.record(processId, CraftProcessChangeTypeEnum.DEFECT_REASON_BINDING,
                 null, CraftProcessConvert.toDefectReasonRespVO(reason),
                 defaultReason(reqVO.getChangeReason(), "新增工序不良原因"), operatorId);
+        craftCache.evictProcessDefectReasonsAfterCommit(processId);
         return reason.getId();
     }
 
@@ -103,6 +110,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         auditService.record(processId, CraftProcessChangeTypeEnum.DEFECT_REASON_BINDING,
                 beforeSnapshot, CraftProcessConvert.toDefectReasonRespVO(reason),
                 defaultReason(reqVO.getChangeReason(), "修改工序不良原因"), operatorId);
+        craftCache.evictProcessDefectReasonsAfterCommit(processId);
     }
 
     @Override
@@ -121,14 +129,23 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         saveReason(reason);
         auditService.record(processId, CraftProcessChangeTypeEnum.DEFECT_REASON_BINDING,
                 beforeSnapshot, null, "删除工序不良原因", operatorId);
+        craftCache.evictProcessDefectReasonsAfterCommit(processId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CraftProcessDefectReasonRespVO> getProcessDefectReasons(Long processId) {
+        List<CraftProcessDefectReasonRespVO> cached =
+                craftCache.getProcessDefectReasons(processId).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+
         requireProcess(processId);
-        return CraftProcessConvert.toDefectReasonRespVOList(
+        List<CraftProcessDefectReasonRespVO> result = CraftProcessConvert.toDefectReasonRespVOList(
                 defectReasonRepository.findByProcessIdAndDeletedFalseOrderByIdAsc(processId));
+        craftCache.putProcessDefectReasons(processId, result);
+        return result;
     }
 
     /**

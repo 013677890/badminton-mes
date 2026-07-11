@@ -10,6 +10,7 @@ import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.craft.constants.CraftErrorCodeConstants;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
@@ -21,6 +22,7 @@ import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessSopRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftQualityPlanReferenceRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
@@ -83,13 +85,16 @@ class CraftProcessServiceImplTest {
     @Mock
     private CraftProcessAuditService auditService;
 
+    @Mock
+    private CraftCache craftCache;
+
     private CraftProcessServiceImpl processService;
 
     @BeforeEach
     void setUp() {
         processService = new CraftProcessServiceImpl(processRepository, changeLogRepository,
                 sopRepository, defectReasonRepository, routeDetailRepository, qualityPlanRepository,
-                equipmentCategoryRepository, auditService);
+                equipmentCategoryRepository, auditService, craftCache);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -120,6 +125,7 @@ class CraftProcessServiceImplTest {
         assertThat(captor.getValue().getProcessCode()).isEqualTo("FEATHER-FIX");
         verify(auditService).record(eq(PROCESS_ID), eq(CraftProcessChangeTypeEnum.CREATE),
                 eq(null), any(), eq("创建工序档案"), eq(OPERATOR_ID));
+        verify(craftCache).evictProcessAfterCommit(PROCESS_ID);
     }
 
     @Test
@@ -224,6 +230,32 @@ class CraftProcessServiceImplTest {
         assertThat(process.getProcessCode()).isEqualTo("FEATHER-FIX");
         verify(auditService).record(eq(PROCESS_ID), eq(CraftProcessChangeTypeEnum.DELETE),
                 any(), eq(null), eq("删除工序档案"), eq(OPERATOR_ID));
+        verify(craftCache).evictProcessAggregateAfterCommit(PROCESS_ID);
+    }
+
+    @Test
+    @DisplayName("工序详情：缓存命中时不访问数据库")
+    void getProcessReturnsCacheHitWithoutDatabaseQuery() {
+        CraftProcessRespVO cached = new CraftProcessRespVO();
+        cached.setId(PROCESS_ID);
+        when(craftCache.getProcess(PROCESS_ID)).thenReturn(Optional.of(cached));
+
+        CraftProcessRespVO result = processService.getProcess(PROCESS_ID);
+
+        assertThat(result).isSameAs(cached);
+        verify(processRepository, never()).findByIdAndDeletedFalse(PROCESS_ID);
+    }
+
+    @Test
+    @DisplayName("工序详情：缓存未命中时查询数据库并回填")
+    void getProcessLoadsDatabaseAndPopulatesCacheOnMiss() {
+        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID))
+                .thenReturn(Optional.of(buildProcess(0)));
+
+        CraftProcessRespVO result = processService.getProcess(PROCESS_ID);
+
+        assertThat(result.getId()).isEqualTo(PROCESS_ID);
+        verify(craftCache).putProcess(result);
     }
 
     @Test

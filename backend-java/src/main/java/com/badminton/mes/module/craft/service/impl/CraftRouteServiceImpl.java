@@ -26,6 +26,7 @@ import com.badminton.mes.module.craft.dal.entity.CraftRouteChangeLogEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftRouteDetailEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftRouteProductEntity;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
@@ -92,6 +93,8 @@ public class CraftRouteServiceImpl implements CraftRouteService {
 
     private final CraftRouteAuditService auditService;
 
+    private final CraftCache craftCache;
+
     /**
      * 构造器注入。
      *
@@ -104,6 +107,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
      * @param childService           路线子记录持久化服务
      * @param referenceValidator     路线引用校验器
      * @param auditService           路线变更审计服务
+     * @param craftCache             工艺 Redis 缓存
      */
     public CraftRouteServiceImpl(CraftRouteRepository routeRepository,
                                  CraftRouteProductRepository routeProductRepository,
@@ -113,7 +117,8 @@ public class CraftRouteServiceImpl implements CraftRouteService {
                                  WorkOrderRepository workOrderRepository,
                                  CraftRouteChildService childService,
                                  CraftRouteReferenceValidator referenceValidator,
-                                 CraftRouteAuditService auditService) {
+                                 CraftRouteAuditService auditService,
+                                 CraftCache craftCache) {
         this.routeRepository = routeRepository;
         this.routeProductRepository = routeProductRepository;
         this.changeLogRepository = changeLogRepository;
@@ -123,6 +128,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         this.childService = childService;
         this.referenceValidator = referenceValidator;
         this.auditService = auditService;
+        this.craftCache = craftCache;
     }
 
     @Override
@@ -188,13 +194,15 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         }
 
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
-        CraftRouteSnapshotDTO beforeSnapshot = toSnapshot(route, childService.load(id));
+        CraftRouteChildren children = childService.load(id);
+        CraftRouteSnapshotDTO beforeSnapshot = toSnapshot(route, children);
         route.setDeleted(true);
         route.setUpdateBy(operatorId);
         saveRoute(route);
         childService.deleteAll(id, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.DELETE,
                 beforeSnapshot, null, DELETE_REASON, operatorId);
+        craftCache.evictDefaultRoutesAfterCommit(getProductIds(children));
     }
 
     @Override
@@ -209,9 +217,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         if (children.products().isEmpty() || children.details().isEmpty()) {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_CONFIGURATION_INCOMPLETE);
         }
-        List<Long> productIds = children.products().stream()
-                .map(CraftRouteProductEntity::getProductId)
-                .toList();
+        List<Long> productIds = getProductIds(children);
         productRepository.findAllByIdInForUpdateOrderByIdAsc(productIds);
         referenceValidator.validateForApproval(children.products(), children.details());
 
@@ -225,6 +231,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         childService.activateDefaults(id, productIds, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.APPROVE,
                 beforeSnapshot, toSnapshot(route, children), reqVO.getReason().trim(), operatorId);
+        craftCache.evictDefaultRoutesAfterCommit(productIds);
     }
 
     @Override
@@ -244,6 +251,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         childService.clearDefaults(id, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.DISABLE,
                 beforeSnapshot, toSnapshot(route, children), reqVO.getReason().trim(), operatorId);
+        craftCache.evictDefaultRoutesAfterCommit(getProductIds(children));
     }
 
     @Override
@@ -304,6 +312,11 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(readOnly = true)
     public CraftRouteRespVO getDefaultRoute(Long productId) {
+        CraftRouteRespVO cached = craftCache.getDefaultRoute(productId).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+
         CraftRouteProductEntity relation = routeProductRepository
                 .findByProductIdAndDefaultRouteTrueAndDeletedFalse(productId)
                 .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.ROUTE_DEFAULT_NOT_FOUND));
@@ -312,7 +325,9 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         if (!CraftRouteStatusEnum.EFFECTIVE.getStatus().equals(route.getRoutingStatus())) {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_DEFAULT_NOT_FOUND);
         }
-        return buildRouteDetail(route);
+        CraftRouteRespVO result = buildRouteDetail(route);
+        craftCache.putDefaultRoute(productId, result);
+        return result;
     }
 
     @Override
@@ -435,6 +450,18 @@ public class CraftRouteServiceImpl implements CraftRouteService {
                 .collect(Collectors.toMap(CraftProcessEntity::getId, Function.identity()));
         return CraftRouteConvert.toRespVO(
                 route, children.products(), children.details(), productMap, processMap);
+    }
+
+    /**
+     * 提取路线适用的产品主键。
+     *
+     * @param children 路线子记录
+     * @return 产品主键列表
+     */
+    private List<Long> getProductIds(CraftRouteChildren children) {
+        return children.products().stream()
+                .map(CraftRouteProductEntity::getProductId)
+                .toList();
     }
 
     /**

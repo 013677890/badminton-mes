@@ -19,6 +19,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
 import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessChangeLogEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
@@ -81,6 +82,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
 
     private final CraftProcessAuditService auditService;
 
+    private final CraftCache craftCache;
+
     /**
      * 构造器注入。
      *
@@ -92,6 +95,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      * @param qualityPlanRepository       质量检验方案只读 Repository
      * @param equipmentCategoryRepository 设备类别 Repository
      * @param auditService                工序变更审计服务
+     * @param craftCache                  工艺 Redis 缓存
      */
     public CraftProcessServiceImpl(CraftProcessRepository processRepository,
                                    CraftProcessChangeLogRepository changeLogRepository,
@@ -100,7 +104,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
                                    CraftRouteDetailRepository routeDetailRepository,
                                    CraftQualityPlanReferenceRepository qualityPlanRepository,
                                    EquipmentCategoryRepository equipmentCategoryRepository,
-                                   CraftProcessAuditService auditService) {
+                                   CraftProcessAuditService auditService,
+                                   CraftCache craftCache) {
         this.processRepository = processRepository;
         this.changeLogRepository = changeLogRepository;
         this.sopRepository = sopRepository;
@@ -109,6 +114,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         this.qualityPlanRepository = qualityPlanRepository;
         this.equipmentCategoryRepository = equipmentCategoryRepository;
         this.auditService = auditService;
+        this.craftCache = craftCache;
     }
 
     @Override
@@ -129,6 +135,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         auditService.record(process.getId(), CraftProcessChangeTypeEnum.CREATE,
                 null, CraftProcessConvert.toSnapshotDTO(process),
                 defaultReason(reqVO.getChangeReason(), CREATE_REASON), operatorId);
+        craftCache.evictProcessAfterCommit(process.getId());
         return process.getId();
     }
 
@@ -152,6 +159,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         auditService.record(id, CraftProcessChangeTypeEnum.UPDATE,
                 beforeSnapshot, CraftProcessConvert.toSnapshotDTO(process),
                 reqVO.getChangeReason(), process.getUpdateBy());
+        craftCache.evictProcessAfterCommit(id);
     }
 
     @Override
@@ -169,6 +177,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         saveProcess(process);
         auditService.record(id, CraftProcessChangeTypeEnum.DELETE,
                 beforeSnapshot, null, DELETE_REASON, operatorId);
+        craftCache.evictProcessAggregateAfterCommit(id);
     }
 
     @Override
@@ -195,12 +204,20 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         auditService.record(id, CraftProcessChangeTypeEnum.STATUS_CHANGE,
                 beforeSnapshot, CraftProcessConvert.toSnapshotDTO(process),
                 reqVO.getReason().trim(), operatorId);
+        craftCache.evictProcessAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CraftProcessRespVO getProcess(Long id) {
-        return CraftProcessConvert.toRespVO(requireProcess(id));
+        CraftProcessRespVO cached = craftCache.getProcess(id).orElse(null);
+        if (cached != null) {
+            return cached;
+        }
+
+        CraftProcessRespVO result = CraftProcessConvert.toRespVO(requireProcess(id));
+        craftCache.putProcess(result);
+        return result;
     }
 
     @Override

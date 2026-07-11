@@ -12,6 +12,7 @@ import com.badminton.mes.module.craft.dal.entity.CraftProcessDefectReasonEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 
 import org.junit.jupiter.api.AfterEach;
@@ -51,12 +52,15 @@ class CraftProcessDefectReasonServiceImplTest {
     @Mock
     private CraftProcessAuditService auditService;
 
+    @Mock
+    private CraftCache craftCache;
+
     private CraftProcessDefectReasonServiceImpl reasonService;
 
     @BeforeEach
     void setUp() {
         reasonService = new CraftProcessDefectReasonServiceImpl(
-                processRepository, reasonRepository, auditService);
+                processRepository, reasonRepository, auditService, craftCache);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(9L);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -96,6 +100,7 @@ class CraftProcessDefectReasonServiceImplTest {
 
         assertThat(reason.getDeleted()).isTrue();
         assertThat(reason.getReasonCode()).isEqualTo("BROKEN-FEATHER");
+        verify(craftCache).evictProcessDefectReasonsAfterCommit(PROCESS_ID);
     }
 
     private CraftProcessDefectReasonUpdateReqVO buildUpdateReqVO() {

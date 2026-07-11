@@ -13,6 +13,7 @@ import com.badminton.mes.module.craft.dal.entity.CraftProcessSopEntity;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessSopRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
+import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 
 import org.junit.jupiter.api.AfterEach;
@@ -57,12 +58,15 @@ class CraftProcessSopServiceImplTest {
     @Mock
     private CraftProcessAuditService auditService;
 
+    @Mock
+    private CraftCache craftCache;
+
     private CraftProcessSopServiceImpl sopService;
 
     @BeforeEach
     void setUp() {
         sopService = new CraftProcessSopServiceImpl(
-                processRepository, sopRepository, routeDetailRepository, auditService);
+                processRepository, sopRepository, routeDetailRepository, auditService, craftCache);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(9L);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -91,6 +95,7 @@ class CraftProcessSopServiceImplTest {
 
         assertThat(id).isEqualTo(SOP_ID);
         assertThat(reqVO.getSopCode()).isEqualTo("SOP-01");
+        verify(craftCache).evictProcessSopsAfterCommit(PROCESS_ID);
     }
 
     @Test
