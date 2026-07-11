@@ -73,4 +73,8 @@ public class IntegrationWriteLogEntity {
     /** 创建时间 */
     @Column(name = "create_time", insertable = false, updatable = false)
     private LocalDateTime createTime;
+
+    /** 更新时间 */
+    @Column(name = "update_time", insertable = false, updatable = false)
+    private LocalDateTime updateTime;
 }

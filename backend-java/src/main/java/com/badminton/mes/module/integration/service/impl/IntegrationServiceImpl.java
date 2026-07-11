@@ -12,7 +12,6 @@ import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRes
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
 import com.badminton.mes.module.integration.controller.vo.UnitWriteReqVO;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
-import com.badminton.mes.module.integration.dal.entity.UnitEntity;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogSpecifications;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
@@ -73,16 +72,8 @@ public class IntegrationServiceImpl implements IntegrationService {
         } catch (ServiceException exception) {
             boolean duplicate = IntegrationErrorCodeConstants.UNIT_CODE_DUPLICATE
                     .equals(exception.getErrorCode());
-            Optional<UnitEntity> existing = duplicate
-                    ? commandService.findUnit(unitCode) : Optional.empty();
             if (duplicate) {
-                return recordDuplicate(
-                        IntegrationInterfaceTypeEnum.UNIT_WRITE,
-                        sourceSystem,
-                        unitCode,
-                        snapshot,
-                        existing.map(UnitEntity::getId).orElse(null),
-                        existing.map(UnitEntity::getUnitCode).orElse(null));
+                return retryConcurrentUnitUpsert(reqVO, snapshot, sourceSystem, unitCode);
             }
             return recordFailure(
                     IntegrationInterfaceTypeEnum.UNIT_WRITE,
@@ -90,8 +81,8 @@ public class IntegrationServiceImpl implements IntegrationService {
                     unitCode,
                     snapshot,
                     exception,
-                    existing.map(UnitEntity::getId).orElse(null),
-                    existing.map(UnitEntity::getUnitCode).orElse(null));
+                    null,
+                    null);
         }
     }
 
@@ -109,6 +100,16 @@ public class IntegrationServiceImpl implements IntegrationService {
                     ? commandService.findExternalWorkOrder(sourceSystem, externalNo)
                     : Optional.empty();
             if (duplicate) {
+                if (existing.isEmpty()) {
+                    return recordFailure(
+                            IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
+                            sourceSystem,
+                            externalNo,
+                            snapshot,
+                            new ServiceException(IntegrationErrorCodeConstants.WRITE_CONFLICT),
+                            null,
+                            null);
+                }
                 return recordDuplicate(
                         IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
                         sourceSystem,
@@ -147,6 +148,37 @@ public class IntegrationServiceImpl implements IntegrationService {
                 writeLogRepository.findAll(specification, pageRequest);
         return PageResult.of(page.getContent().stream().map(this::toRespVO).toList(),
                 total, pageNo, pageSize);
+    }
+
+    /**
+     * 首次并发新增单位发生唯一键竞争后，重新开启事务执行既有单位更新。
+     *
+     * <p>单位接口契约是 upsert，不能因为两个首次请求的到达顺序不同而把落败请求
+     * 降级为重复。首次事务已回滚，第二次调用可安全锁定获胜事务插入的单位行。
+     *
+     * @param reqVO        单位写入请求
+     * @param snapshot     请求快照
+     * @param sourceSystem 来源系统
+     * @param unitCode     规范化单位编码
+     * @return 最终写入结果
+     */
+    private IntegrationWriteResultRespVO retryConcurrentUnitUpsert(
+            UnitWriteReqVO reqVO,
+            String snapshot,
+            String sourceSystem,
+            String unitCode) {
+        try {
+            return toSuccess(commandService.writeUnit(reqVO, snapshot));
+        } catch (ServiceException retryException) {
+            return recordFailure(
+                    IntegrationInterfaceTypeEnum.UNIT_WRITE,
+                    sourceSystem,
+                    unitCode,
+                    snapshot,
+                    retryException,
+                    null,
+                    null);
+        }
     }
 
     /**
@@ -251,6 +283,7 @@ public class IntegrationServiceImpl implements IntegrationService {
         response.setErrorCode(entity.getErrorCode());
         response.setErrorMessage(entity.getErrorMessage());
         response.setCreateTime(entity.getCreateTime());
+        response.setUpdateTime(entity.getUpdateTime());
         return response;
     }
 
