@@ -66,6 +66,38 @@ public final class EquipmentErrorCodeConstants {
     public static final ErrorCode EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED =
             new ErrorCode("A0440", "设备状态不允许当前操作", "请调整设备状态后再执行该操作");
 
+    /** 设备故障原理不存在或已删除 */
+    public static final ErrorCode EQUIPMENT_FAULT_PRINCIPLE_NOT_EXISTS =
+            new ErrorCode("A0402", "故障原理不存在", "设备故障原理不存在或已被删除，请刷新后重试");
+
+    /** 设备故障原理编码重复 */
+    public static final ErrorCode EQUIPMENT_FAULT_PRINCIPLE_CODE_DUPLICATE =
+            new ErrorCode("A0506", "故障编码已存在", "故障编码重复，请更换故障编码后重试");
+
+    /** 设备类别下存在故障原理，不允许删除 */
+    public static final ErrorCode EQUIPMENT_CATEGORY_HAS_FAULT_PRINCIPLE =
+            new ErrorCode("A0440", "该类别下存在故障原理，不允许删除", "请先删除或移动该类别下的故障原理");
+
+    /** 设备报修任务不存在或已删除 */
+    public static final ErrorCode EQUIPMENT_REPAIR_ORDER_NOT_EXISTS =
+            new ErrorCode("A0402", "报修任务不存在", "设备报修任务不存在或已被删除，请刷新后重试");
+
+    /** 设备报修单号重复 */
+    public static final ErrorCode EQUIPMENT_REPAIR_ORDER_NO_DUPLICATE =
+            new ErrorCode("A0506", "报修单号已存在", "报修单号重复，请更换报修单号后重试");
+
+    /** 设备下存在报修任务，不允许删除 */
+    public static final ErrorCode EQUIPMENT_LEDGER_HAS_REPAIR_ORDER =
+            new ErrorCode("A0440", "该设备存在报修任务，不允许删除", "请先删除或完成该设备关联的报修任务");
+
+    /** 故障原理下存在报修任务，不允许删除 */
+    public static final ErrorCode EQUIPMENT_FAULT_PRINCIPLE_HAS_REPAIR_ORDER =
+            new ErrorCode("A0440", "该故障原理存在报修任务，不允许删除", "请先删除或变更该故障原理关联的报修任务");
+
+    /** 报修状态流转不允许当前操作 */
+    public static final ErrorCode EQUIPMENT_REPAIR_STATUS_OPERATION_NOT_ALLOWED =
+            new ErrorCode("A0440", "报修状态不允许当前操作", "请调整报修状态后再执行该操作");
+
     private EquipmentErrorCodeConstants() {
     }
 }

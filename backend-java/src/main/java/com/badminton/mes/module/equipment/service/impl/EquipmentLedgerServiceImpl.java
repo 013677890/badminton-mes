@@ -14,6 +14,7 @@ import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryReposi
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerSpecifications;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerRepository;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentRepairOrderRepository;
 import com.badminton.mes.module.equipment.service.EquipmentLedgerService;
 
 import org.slf4j.Logger;
@@ -60,19 +61,24 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
 
     private final EquipmentManufacturerRepository manufacturerRepository;
 
+    private final EquipmentRepairOrderRepository repairOrderRepository;
+
     /**
      * 构造器注入，保证依赖不可变。
      *
-     * @param ledgerRepository       设备台账 Repository
-     * @param categoryRepository     设备类别 Repository
+     * @param ledgerRepository      设备台账 Repository
+     * @param categoryRepository    设备类别 Repository
      * @param manufacturerRepository 设备制造商 Repository
+     * @param repairOrderRepository 设备报修任务 Repository
      */
     public EquipmentLedgerServiceImpl(EquipmentLedgerRepository ledgerRepository,
                                       EquipmentCategoryRepository categoryRepository,
-                                      EquipmentManufacturerRepository manufacturerRepository) {
+                                      EquipmentManufacturerRepository manufacturerRepository,
+                                      EquipmentRepairOrderRepository repairOrderRepository) {
         this.ledgerRepository = ledgerRepository;
         this.categoryRepository = categoryRepository;
         this.manufacturerRepository = manufacturerRepository;
+        this.repairOrderRepository = repairOrderRepository;
     }
 
     @Override
@@ -142,6 +148,11 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
         EquipmentLedgerEntity equipmentLedger = validateLedgerExists(id);
         if ("RUNNING".equals(equipmentLedger.getEquipmentStatus())) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED);
+        }
+
+        long repairOrderCount = repairOrderRepository.countByEquipmentIdAndDeletedFalse(id);
+        if (repairOrderCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_HAS_REPAIR_ORDER);
         }
 
         String deletedCode = buildDeletedEquipmentCode(equipmentLedger.getEquipmentCode(), equipmentLedger.getId());
