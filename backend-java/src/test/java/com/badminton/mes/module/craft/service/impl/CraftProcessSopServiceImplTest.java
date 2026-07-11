@@ -12,6 +12,7 @@ import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessSopEntity;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessSopRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 
 import org.junit.jupiter.api.AfterEach;
@@ -51,13 +52,17 @@ class CraftProcessSopServiceImplTest {
     private CraftProcessSopRepository sopRepository;
 
     @Mock
+    private CraftRouteDetailRepository routeDetailRepository;
+
+    @Mock
     private CraftProcessAuditService auditService;
 
     private CraftProcessSopServiceImpl sopService;
 
     @BeforeEach
     void setUp() {
-        sopService = new CraftProcessSopServiceImpl(processRepository, sopRepository, auditService);
+        sopService = new CraftProcessSopServiceImpl(
+                processRepository, sopRepository, routeDetailRepository, auditService);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(9L);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -91,7 +96,7 @@ class CraftProcessSopServiceImplTest {
     @Test
     @DisplayName("修改 SOP：客户端版本落后时拒绝覆盖")
     void updateSopRejectsStaleVersion() {
-        when(sopRepository.findByIdAndProcessIdAndDeletedFalse(SOP_ID, PROCESS_ID))
+        when(sopRepository.findByIdAndProcessIdAndDeletedFalseForUpdate(SOP_ID, PROCESS_ID))
                 .thenReturn(Optional.of(buildSop(2)));
         CraftProcessSopUpdateReqVO reqVO = buildUpdateReqVO();
         reqVO.setVersion(1);
@@ -107,7 +112,7 @@ class CraftProcessSopServiceImplTest {
     @DisplayName("删除 SOP：仅设置逻辑删除标志并保留原编码")
     void deleteSopMarksDeletedWithoutRenaming() {
         CraftProcessSopEntity sop = buildSop(0);
-        when(sopRepository.findByIdAndProcessIdAndDeletedFalse(SOP_ID, PROCESS_ID))
+        when(sopRepository.findByIdAndProcessIdAndDeletedFalseForUpdate(SOP_ID, PROCESS_ID))
                 .thenReturn(Optional.of(sop));
 
         sopService.deleteProcessSop(PROCESS_ID, SOP_ID, 0);
@@ -117,9 +122,26 @@ class CraftProcessSopServiceImplTest {
     }
 
     @Test
+    @DisplayName("停用 SOP：仍被生效路线引用时拒绝修改")
+    void disableSopRejectsEffectiveRouteReference() {
+        when(sopRepository.findByIdAndProcessIdAndDeletedFalseForUpdate(SOP_ID, PROCESS_ID))
+                .thenReturn(Optional.of(buildSop(0)));
+        when(routeDetailRepository.existsEffectiveRouteBySopId(SOP_ID, 1)).thenReturn(true);
+        CraftProcessSopUpdateReqVO reqVO = buildUpdateReqVO();
+        reqVO.setVersion(0);
+        reqVO.setStatus(0);
+
+        assertThatThrownBy(() -> sopService.updateProcessSop(PROCESS_ID, SOP_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                CraftErrorCodeConstants.PROCESS_SOP_REFERENCED_BY_EFFECTIVE_ROUTE));
+        verify(sopRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("保存 SOP：事务重叠触发 JPA 乐观锁时转换为业务错误")
     void updateSopTranslatesJpaOptimisticLockFailure() {
-        when(sopRepository.findByIdAndProcessIdAndDeletedFalse(SOP_ID, PROCESS_ID))
+        when(sopRepository.findByIdAndProcessIdAndDeletedFalseForUpdate(SOP_ID, PROCESS_ID))
                 .thenReturn(Optional.of(buildSop(0)));
         when(sopRepository.saveAndFlush(any(CraftProcessSopEntity.class)))
                 .thenThrow(new ObjectOptimisticLockingFailureException(CraftProcessSopEntity.class, SOP_ID));

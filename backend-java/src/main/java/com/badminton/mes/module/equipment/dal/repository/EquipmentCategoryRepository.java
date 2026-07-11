@@ -1,5 +1,7 @@
 package com.badminton.mes.module.equipment.dal.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -41,6 +43,34 @@ public interface EquipmentCategoryRepository extends JpaRepository<EquipmentCate
     @Query("SELECT category FROM EquipmentCategoryEntity category "
             + "WHERE category.id = :id AND category.deleted = false")
     Optional<EquipmentCategoryEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
+
+    /**
+     * 批量查询启用且未删除设备类别。
+     *
+     * @param ids    设备类别主键集合
+     * @param status 启用状态
+     * @return 可用设备类别列表
+     */
+    List<EquipmentCategoryEntity> findByIdInAndStatusAndDeletedFalse(
+            Collection<Long> ids, Integer status);
+
+    /**
+     * 按主键升序写锁可用设备类别，供路线审核在锁内复核引用。
+     *
+     * @param ids    设备类别主键集合
+     * @param status 启用状态
+     * @return 已锁定设备类别列表
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT category FROM EquipmentCategoryEntity category
+            WHERE category.id IN :ids
+              AND category.status = :status
+              AND category.deleted = false
+            ORDER BY category.id ASC
+            """)
+    List<EquipmentCategoryEntity> findAvailableByIdInForUpdateOrderByIdAsc(
+            @Param("ids") Collection<Long> ids, @Param("status") Integer status);
 
     /**
      * 判断未删除类别中是否已存在指定类别编码。

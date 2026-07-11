@@ -42,6 +42,10 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode WORK_ORDER_RELEASE_MISSING_BOM_ROUTING =
             new ErrorCode("A0440", "工单未维护 BOM 或工艺路线，不允许下达", "请先维护 BOM 与工艺路线再下达");
 
+    /** 工艺路线不存在、未生效或未绑定工单产品 */
+    public static final ErrorCode WORK_ORDER_ROUTING_NOT_AVAILABLE =
+            new ErrorCode("A0440", "工单工艺路线不可用于下达", "请选择已生效且适用于当前产品的工艺路线");
+
     /** 产品不存在或已停用 */
     public static final ErrorCode PRODUCT_NOT_EXISTS =
             new ErrorCode("A0402", "产品不存在或已停用", "所选产品不可用，请重新选择");

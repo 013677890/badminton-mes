@@ -276,4 +276,12 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
               AND workOrder.dispatchedQuantity >= :quantity
             """)
     int decreaseDispatchedQuantity(@Param("id") Long id, @Param("quantity") Integer quantity);
+
+    /**
+     * 判断工艺路线是否已被生产工单引用。
+     *
+     * @param routingId 工艺路线主键
+     * @return true 表示存在历史或当前工单引用
+     */
+    boolean existsByRoutingIdAndDeletedFalse(Long routingId);
 }

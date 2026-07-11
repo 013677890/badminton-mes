@@ -1,6 +1,7 @@
 package com.badminton.mes.module.craft.service.impl;
 
 import java.util.Locale;
+import java.util.Objects;
 
 import com.badminton.mes.common.core.GlobalErrorCodeConstants;
 import com.badminton.mes.common.core.PageResult;
@@ -26,6 +27,7 @@ import com.badminton.mes.module.craft.dal.repository.CraftProcessSpecifications;
 import com.badminton.mes.module.craft.dal.repository.CraftQualityPlanReferenceRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 import com.badminton.mes.module.craft.service.CraftProcessService;
 import com.badminton.mes.module.craft.service.dto.CraftProcessSnapshotDTO;
@@ -133,7 +135,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProcess(Long id, CraftProcessUpdateReqVO reqVO) {
-        CraftProcessEntity process = requireProcess(id);
+        CraftProcessEntity process = requireProcessForUpdate(id);
         CraftVersionValidator.validate(process.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
         normalizeSaveRequest(reqVO);
@@ -141,6 +143,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         validateProcessCode(reqVO.getProcessCode(), id);
         validateAssociations(reqVO.getQualityRequired(), reqVO.getQualityPlanId(),
                 reqVO.getEquipmentCategoryId());
+        validateEffectiveRouteRuleChange(process, reqVO);
 
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
         CraftProcessConvert.copyToEntity(reqVO, process);
@@ -154,7 +157,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProcess(Long id, Integer expectedVersion) {
-        CraftProcessEntity process = requireProcess(id);
+        CraftProcessEntity process = requireProcessForUpdate(id);
         CraftVersionValidator.validate(process.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
         validateNoReferences(id);
@@ -171,7 +174,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProcessStatus(Long id, CraftProcessStatusReqVO reqVO) {
-        CraftProcessEntity process = requireProcess(id);
+        CraftProcessEntity process = requireProcessForUpdate(id);
         CraftVersionValidator.validate(process.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
         if (reqVO.getStatus().equals(process.getStatus())) {
@@ -180,6 +183,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         if (CommonStatusEnum.ENABLED.getStatus().equals(reqVO.getStatus())) {
             validateAssociations(process.getQualityRequired(), process.getQualityPlanId(),
                     process.getEquipmentCategoryId());
+        } else {
+            validateNoEffectiveRouteReferences(id);
         }
 
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
@@ -245,6 +250,51 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     private CraftProcessEntity requireProcess(Long id) {
         return processRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.PROCESS_NOT_EXISTS));
+    }
+
+    /**
+     * 以写锁查询未删除工序，和路线审核的引用锁串行化。
+     *
+     * @param id 工序主键
+     * @return 工序实体
+     */
+    private CraftProcessEntity requireProcessForUpdate(Long id) {
+        return processRepository.findByIdAndDeletedFalseForUpdate(id)
+                .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.PROCESS_NOT_EXISTS));
+    }
+
+    /**
+     * 生效路线引用工序时，禁止原地改变会影响路线执行的控制规则。
+     *
+     * @param process 当前工序
+     * @param reqVO   修改请求
+     */
+    private void validateEffectiveRouteRuleChange(
+            CraftProcessEntity process, CraftProcessUpdateReqVO reqVO) {
+        boolean controlRuleChanged = !Objects.equals(process.getProcessType(), reqVO.getProcessType())
+                || !Objects.equals(process.getStandardTimeSeconds(), reqVO.getStandardTimeSeconds())
+                || !Objects.equals(process.getKeyProcess(), reqVO.getKeyProcess())
+                || !Objects.equals(process.getQualityRequired(), reqVO.getQualityRequired())
+                || !Objects.equals(process.getScanRequired(), reqVO.getScanRequired())
+                || !Objects.equals(process.getPieceRateEnabled(), reqVO.getPieceRateEnabled())
+                || !Objects.equals(process.getEquipmentCategoryId(), reqVO.getEquipmentCategoryId())
+                || !Objects.equals(process.getQualityPlanId(), reqVO.getQualityPlanId());
+        if (controlRuleChanged) {
+            validateNoEffectiveRouteReferences(process.getId());
+        }
+    }
+
+    /**
+     * 校验工序未被生效路线引用。
+     *
+     * @param processId 工序主键
+     */
+    private void validateNoEffectiveRouteReferences(Long processId) {
+        boolean referenced = routeDetailRepository.existsEffectiveRouteByProcessId(
+                processId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
+        if (referenced) {
+            throw new ServiceException(CraftErrorCodeConstants.PROCESS_RULE_REFERENCED_BY_EFFECTIVE_ROUTE);
+        }
     }
 
     /**

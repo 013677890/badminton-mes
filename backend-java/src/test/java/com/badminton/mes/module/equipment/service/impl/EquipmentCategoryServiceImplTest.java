@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
@@ -40,11 +41,15 @@ class EquipmentCategoryServiceImplTest {
     @Mock
     private CraftProcessRepository processRepository;
 
+    @Mock
+    private CraftRouteDetailRepository routeDetailRepository;
+
     private EquipmentCategoryServiceImpl categoryService;
 
     @BeforeEach
     void setUp() {
-        categoryService = new EquipmentCategoryServiceImpl(categoryRepository, processRepository);
+        categoryService = new EquipmentCategoryServiceImpl(
+                categoryRepository, processRepository, routeDetailRepository);
     }
 
     @Test
@@ -75,6 +80,22 @@ class EquipmentCategoryServiceImplTest {
 
         assertThatThrownBy(() -> categoryService.deleteEquipmentCategory(CATEGORY_ID))
                 .isInstanceOf(ServiceException.class);
+        verify(categoryRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("停用设备类别：仍被生效路线直接引用时拒绝修改")
+    void updateCategoryRejectsEffectiveRouteReference() {
+        when(categoryRepository.findByIdAndDeletedFalseForUpdate(CATEGORY_ID))
+                .thenReturn(Optional.of(buildEnabledCategory()));
+        when(routeDetailRepository.existsEffectiveRouteByEquipmentCategoryId(CATEGORY_ID, 1))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> categoryService.updateEquipmentCategory(
+                CATEGORY_ID, buildSaveReqVO(0)))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE));
         verify(categoryRepository, never()).save(any());
     }
 

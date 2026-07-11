@@ -126,7 +126,7 @@ class CraftProcessServiceImplTest {
     @DisplayName("修改工序：客户端版本落后时拒绝覆盖新数据")
     void updateProcessRejectsStaleClientVersion() {
         CraftProcessEntity process = buildProcess(1);
-        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID)).thenReturn(Optional.of(process));
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID)).thenReturn(Optional.of(process));
         CraftProcessUpdateReqVO reqVO = buildUpdateReqVO();
         reqVO.setVersion(0);
 
@@ -140,7 +140,7 @@ class CraftProcessServiceImplTest {
     @Test
     @DisplayName("状态幂等请求：版本落后时仍返回并发冲突")
     void updateStatusChecksVersionBeforeIdempotence() {
-        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID))
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
                 .thenReturn(Optional.of(buildProcess(1)));
         CraftProcessStatusReqVO reqVO = new CraftProcessStatusReqVO();
         reqVO.setVersion(0);
@@ -149,6 +149,24 @@ class CraftProcessServiceImplTest {
 
         assertThatThrownBy(() -> processService.updateProcessStatus(PROCESS_ID, reqVO))
                 .isInstanceOf(ServiceException.class);
+        verify(processRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("停用工序：仍被生效路线引用时拒绝状态变更")
+    void disableProcessRejectsEffectiveRouteReference() {
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
+                .thenReturn(Optional.of(buildProcess(0)));
+        when(routeDetailRepository.existsEffectiveRouteByProcessId(PROCESS_ID, 1)).thenReturn(true);
+        CraftProcessStatusReqVO reqVO = new CraftProcessStatusReqVO();
+        reqVO.setVersion(0);
+        reqVO.setStatus(0);
+        reqVO.setReason("工序淘汰");
+
+        assertThatThrownBy(() -> processService.updateProcessStatus(PROCESS_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                CraftErrorCodeConstants.PROCESS_RULE_REFERENCED_BY_EFFECTIVE_ROUTE));
         verify(processRepository, never()).saveAndFlush(any());
     }
 
@@ -169,7 +187,7 @@ class CraftProcessServiceImplTest {
     @Test
     @DisplayName("删除工序：存在未删除 SOP 时拒绝删除")
     void deleteProcessRejectsActiveBindings() {
-        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID))
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
                 .thenReturn(Optional.of(buildProcess(0)));
         when(sopRepository.existsByProcessIdAndDeletedFalse(PROCESS_ID)).thenReturn(true);
 
@@ -183,7 +201,7 @@ class CraftProcessServiceImplTest {
     @Test
     @DisplayName("删除工序：仍被工艺路线引用时拒绝删除")
     void deleteProcessRejectsRouteReference() {
-        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID))
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
                 .thenReturn(Optional.of(buildProcess(0)));
         when(routeDetailRepository.existsByProcessIdAndDeletedFalse(PROCESS_ID)).thenReturn(true);
 
@@ -198,7 +216,7 @@ class CraftProcessServiceImplTest {
     @DisplayName("删除工序：逻辑删除但不再重命名编码")
     void deleteProcessMarksDeletedWithoutRenamingCode() {
         CraftProcessEntity process = buildProcess(0);
-        when(processRepository.findByIdAndDeletedFalse(PROCESS_ID)).thenReturn(Optional.of(process));
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID)).thenReturn(Optional.of(process));
 
         processService.deleteProcess(PROCESS_ID, 0);
 

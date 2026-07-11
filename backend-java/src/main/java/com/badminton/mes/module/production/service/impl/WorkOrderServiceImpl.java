@@ -15,6 +15,10 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
@@ -76,6 +80,10 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private final ProductRepository productRepository;
 
+    private final CraftRouteRepository routeRepository;
+
+    private final CraftRouteProductRepository routeProductRepository;
+
     private final WorkshopRepository workshopRepository;
 
     private final BomRepository bomRepository;
@@ -97,6 +105,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      *
      * @param workOrderRepository          工单 Repository
      * @param productRepository            产品 Repository
+     * @param routeRepository              工艺路线 Repository
+     * @param routeProductRepository       路线产品关系 Repository
      * @param workshopRepository           车间 Repository
      * @param bomRepository                BOM Repository
      * @param bomDetailRepository          BOM 明细 Repository
@@ -107,6 +117,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param workOrderNoSequence          工单号流水生成器
      */
     public WorkOrderServiceImpl(WorkOrderRepository workOrderRepository, ProductRepository productRepository,
+                                CraftRouteRepository routeRepository,
+                                CraftRouteProductRepository routeProductRepository,
                                 WorkshopRepository workshopRepository, BomRepository bomRepository,
                                 BomDetailRepository bomDetailRepository, MaterialRepository materialRepository,
                                 WorkOrderMaterialRepository workOrderMaterialRepository,
@@ -114,6 +126,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
                                 WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence) {
         this.workOrderRepository = workOrderRepository;
         this.productRepository = productRepository;
+        this.routeRepository = routeRepository;
+        this.routeProductRepository = routeProductRepository;
         this.workshopRepository = workshopRepository;
         this.bomRepository = bomRepository;
         this.bomDetailRepository = bomDetailRepository;
@@ -129,6 +143,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     public Long createWorkOrder(WorkOrderSaveReqVO reqVO) {
         validatePlanTime(reqVO);
         ProductEntity product = validateProduct(reqVO.getProductId());
+        validateRoutingReference(reqVO.getRoutingId(), reqVO.getProductId(), false);
         validateWorkshop(reqVO.getWorkshopId());
         String workOrderNo = resolveWorkOrderNo(reqVO.getWorkOrderNo());
 
@@ -178,6 +193,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      */
     private void updateCreatedWorkOrder(Long id, WorkOrderSaveReqVO reqVO) {
         ProductEntity product = validateProduct(reqVO.getProductId());
+        validateRoutingReference(reqVO.getRoutingId(), reqVO.getProductId(), false);
         validateWorkshop(reqVO.getWorkshopId());
 
         WorkOrderEntity updateEntity = WorkOrderConvert.toEntity(reqVO);
@@ -253,31 +269,28 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void releaseWorkOrder(Long id) {
-        // 先 CAS 更新再对失败查因，避免"先查后改"竞态；条件含 BOM/工艺路线非空校验
-        int rows = workOrderRepository.updateToReleased(id, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus());
-        if (rows == 1) {
-            WorkOrderEntity workOrder = validateWorkOrderExists(id);
-            // BOM 校验或明细为空抛异常时，本事务连同上面的状态更新一起回滚
-            generateWorkOrderMaterials(workOrder);
-            insertStatusLog(id, WorkOrderStatusEnum.CREATED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
-                    WorkOrderChangeTypeEnum.STATUS_TRANSITION, null);
-            evictCacheAfterCommit(id);
-            logger.info("[下达工单] id: {}", id);
-            return;
-        }
-
-        // CAS 未命中，逐项查明原因给出精确提示(EXC-003 分门别类提示)
-        WorkOrderEntity workOrder = validateWorkOrderExists(id);
+        WorkOrderEntity workOrder = workOrderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         if (!WorkOrderStatusEnum.CREATED.getStatus().equals(workOrder.getOrderStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
         }
         if (workOrder.getBomId() == null || workOrder.getRoutingId() == null) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_RELEASE_MISSING_BOM_ROUTING);
         }
+        validateRoutingReference(workOrder.getRoutingId(), workOrder.getProductId(), true);
 
-        // 查因瞬间状态又被并发修改，按状态不允许下达处理
-        throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
+        int rows = workOrderRepository.updateToReleased(id, WorkOrderStatusEnum.CREATED.getStatus(),
+                WorkOrderStatusEnum.RELEASED.getStatus());
+        if (rows != 1) {
+            throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
+        }
+
+        // BOM 或明细校验失败会抛异常，本事务连同状态更新一起回滚。
+        generateWorkOrderMaterials(workOrder);
+        insertStatusLog(id, WorkOrderStatusEnum.CREATED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
+                WorkOrderChangeTypeEnum.STATUS_TRANSITION, null);
+        evictCacheAfterCommit(id);
+        logger.info("[下达工单] id: {}", id);
     }
 
     @Override
@@ -659,6 +672,34 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         }
 
         return product;
+    }
+
+    /**
+     * 锁定并校验工艺路线存在、状态可用且绑定当前产品。
+     *
+     * <p>工单草稿允许引用草稿或生效路线，但不允许引用停用路线；正式下达只接受生效路线。
+     * 路线写锁与停用、删除共用，保证“校验有效后下达”的事务窗口内状态不漂移。
+     *
+     * @param routingId        工艺路线主键，可空
+     * @param productId        工单产品主键
+     * @param effectiveRequired 是否必须为生效状态
+     */
+    private void validateRoutingReference(
+            Long routingId, Long productId, boolean effectiveRequired) {
+        if (routingId == null) {
+            return;
+        }
+        CraftRouteEntity route = routeRepository.findByIdAndDeletedFalseForUpdate(routingId)
+                .orElseThrow(() -> new ServiceException(
+                        ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE));
+        boolean statusAvailable = effectiveRequired
+                ? CraftRouteStatusEnum.EFFECTIVE.getStatus().equals(route.getRoutingStatus())
+                : !CraftRouteStatusEnum.DISABLED.getStatus().equals(route.getRoutingStatus());
+        boolean productBound = routeProductRepository
+                .existsByRouteIdAndProductIdAndDeletedFalse(routingId, productId);
+        if (!statusAvailable || !productBound) {
+            throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE);
+        }
     }
 
     /**

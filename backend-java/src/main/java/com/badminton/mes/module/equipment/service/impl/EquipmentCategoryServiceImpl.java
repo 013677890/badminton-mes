@@ -7,6 +7,8 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryPageReqVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
@@ -47,16 +49,21 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
     private final CraftProcessRepository processRepository;
 
+    private final CraftRouteDetailRepository routeDetailRepository;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param categoryRepository 设备类别 Repository
      * @param processRepository  工序 Repository
+     * @param routeDetailRepository 路线明细 Repository
      */
     public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository,
-                                        CraftProcessRepository processRepository) {
+                                        CraftProcessRepository processRepository,
+                                        CraftRouteDetailRepository routeDetailRepository) {
         this.categoryRepository = categoryRepository;
         this.processRepository = processRepository;
+        this.routeDetailRepository = routeDetailRepository;
     }
 
     @Override
@@ -92,7 +99,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         boolean disabling = CommonStatusEnum.ENABLED.getStatus().equals(existing.getStatus())
                 && CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus());
         if (disabling) {
-            validateNoEnabledProcessReferences(id);
+            validateNoActiveReferences(id);
         }
 
         existing.setCategoryCode(reqVO.getCategoryCode());
@@ -117,7 +124,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_CHILDREN);
         }
 
-        validateNoEnabledProcessReferences(id);
+        validateNoActiveReferences(id);
 
         // TODO(角色C, 2026/07/09): 后续需要检查该类别下是否存在设备
         // 暂时注释，等设备台账模块完成后再打开
@@ -250,15 +257,20 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     }
 
     /**
-     * 校验设备类别未被启用工序引用。
+     * 校验设备类别未被启用工序或生效路线引用。
      *
      * @param categoryId 设备类别主键
      */
-    private void validateNoEnabledProcessReferences(Long categoryId) {
+    private void validateNoActiveReferences(Long categoryId) {
         boolean referenced = processRepository.existsByEquipmentCategoryIdAndStatusAndDeletedFalse(
                 categoryId, CommonStatusEnum.ENABLED.getStatus());
         if (referenced) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_PROCESS);
+        }
+        boolean routeReferenced = routeDetailRepository.existsEffectiveRouteByEquipmentCategoryId(
+                categoryId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
+        if (routeReferenced) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE);
         }
     }
 }

@@ -16,7 +16,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * 工艺路线明细实体，记录顺序、工位、设备、SOP 和质检控制要求。
+ * 工艺路线主档实体，对应表 craft_route。
  *
  * @author 张竹灏
  * @date 2026/07/10
@@ -25,45 +25,45 @@ import jakarta.persistence.Version;
 @Entity
 @DynamicInsert
 @DynamicUpdate
-@Table(name = "craft_route_detail")
-public class CraftRouteDetailEntity {
+@Table(name = "craft_route")
+public class CraftRouteEntity {
 
     /** 主键 */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 工艺路线主键 */
-    @Column(name = "route_id")
-    private Long routeId;
+    /** 路线编码 */
+    @Column(name = "routing_code")
+    private String routingCode;
 
-    /** 工序主键 */
-    @Column(name = "process_id")
-    private Long processId;
+    /** 路线名称 */
+    @Column(name = "routing_name")
+    private String routingName;
 
-    /** 默认工位主键 */
-    @Column(name = "station_id")
-    private Long stationId;
+    /** 业务版本 */
+    @Column(name = "routing_version")
+    private String routingVersion;
 
-    /** 设备类别要求 */
-    @Column(name = "equipment_category_id")
-    private Long equipmentCategoryId;
+    /** 上一版本路线主键 */
+    @Column(name = "previous_route_id")
+    private Long previousRouteId;
 
-    /** 是否质检节点 */
-    @Column(name = "is_inspect")
-    private Boolean inspect;
+    /** 来源：1 本地创建 2 ERP 读取确认 */
+    @Column(name = "source_type")
+    private Integer sourceType;
 
-    /** 工序 SOP 关联主键 */
-    @Column(name = "sop_id")
-    private Long sopId;
+    /** 状态：0 草稿 1 生效 2 停用 */
+    @Column(name = "routing_status")
+    private Integer routingStatus;
 
-    /** 检验方案主键 */
-    @Column(name = "quality_plan_id")
-    private Long qualityPlanId;
+    /** 审核人 */
+    @Column(name = "audit_by")
+    private Long auditBy;
 
-    /** 工序顺序号 */
-    @Column(name = "sequence_no")
-    private Integer sequenceNo;
+    /** 审核时间 */
+    @Column(name = "audit_time")
+    private LocalDateTime auditTime;
 
     /** 乐观锁版本 */
     @Version

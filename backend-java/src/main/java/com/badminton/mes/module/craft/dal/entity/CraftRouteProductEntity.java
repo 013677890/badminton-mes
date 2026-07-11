@@ -16,7 +16,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * 工艺路线明细实体，记录顺序、工位、设备、SOP 和质检控制要求。
+ * 工艺路线产品关系实体，对应表 craft_route_product。
  *
  * @author 张竹灏
  * @date 2026/07/10
@@ -25,8 +25,8 @@ import jakarta.persistence.Version;
 @Entity
 @DynamicInsert
 @DynamicUpdate
-@Table(name = "craft_route_detail")
-public class CraftRouteDetailEntity {
+@Table(name = "craft_route_product")
+public class CraftRouteProductEntity {
 
     /** 主键 */
     @Id
@@ -37,33 +37,13 @@ public class CraftRouteDetailEntity {
     @Column(name = "route_id")
     private Long routeId;
 
-    /** 工序主键 */
-    @Column(name = "process_id")
-    private Long processId;
+    /** 产品主键 */
+    @Column(name = "product_id")
+    private Long productId;
 
-    /** 默认工位主键 */
-    @Column(name = "station_id")
-    private Long stationId;
-
-    /** 设备类别要求 */
-    @Column(name = "equipment_category_id")
-    private Long equipmentCategoryId;
-
-    /** 是否质检节点 */
-    @Column(name = "is_inspect")
-    private Boolean inspect;
-
-    /** 工序 SOP 关联主键 */
-    @Column(name = "sop_id")
-    private Long sopId;
-
-    /** 检验方案主键 */
-    @Column(name = "quality_plan_id")
-    private Long qualityPlanId;
-
-    /** 工序顺序号 */
-    @Column(name = "sequence_no")
-    private Integer sequenceNo;
+    /** 是否产品默认生效路线 */
+    @Column(name = "is_default")
+    private Boolean defaultRoute;
 
     /** 乐观锁版本 */
     @Version

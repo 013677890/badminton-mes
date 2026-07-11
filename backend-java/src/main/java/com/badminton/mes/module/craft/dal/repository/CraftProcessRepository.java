@@ -8,6 +8,11 @@ import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * 工序档案 JPA Repository。
@@ -25,6 +30,17 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
      * @return 工序实体
      */
     Optional<CraftProcessEntity> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * 以写锁查询未删除工序，和路线审核的引用锁串行化。
+     *
+     * @param id 工序主键
+     * @return 工序实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT process FROM CraftProcessEntity process "
+            + "WHERE process.id = :id AND process.deleted = false")
+    Optional<CraftProcessEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
 
     /**
      * 判断未删除工序中是否存在指定编码。
@@ -51,6 +67,24 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
      * @return 工序列表
      */
     List<CraftProcessEntity> findByIdInAndStatusAndDeletedFalse(Collection<Long> ids, Integer status);
+
+    /**
+     * 按主键升序写锁可用工序，供路线审核在锁内复核引用。
+     *
+     * @param ids    工序主键集合
+     * @param status 启用状态
+     * @return 已锁定工序列表
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT process FROM CraftProcessEntity process
+            WHERE process.id IN :ids
+              AND process.status = :status
+              AND process.deleted = false
+            ORDER BY process.id ASC
+            """)
+    List<CraftProcessEntity> findAvailableByIdInForUpdateOrderByIdAsc(
+            @Param("ids") Collection<Long> ids, @Param("status") Integer status);
 
     /**
      * 判断设备类别是否仍被启用工序引用。

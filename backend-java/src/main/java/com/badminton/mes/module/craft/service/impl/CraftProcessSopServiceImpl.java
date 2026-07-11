@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 
 import com.badminton.mes.common.core.GlobalErrorCodeConstants;
+import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.craft.constants.CraftErrorCodeConstants;
@@ -14,7 +15,9 @@ import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessSopEntity;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessSopRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 import com.badminton.mes.module.craft.service.CraftProcessSopService;
 import com.badminton.mes.module.craft.service.support.CraftPersistenceExceptionTranslator;
@@ -43,6 +46,8 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
 
     private final CraftProcessSopRepository sopRepository;
 
+    private final CraftRouteDetailRepository routeDetailRepository;
+
     private final CraftProcessAuditService auditService;
 
     /**
@@ -50,13 +55,16 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
      *
      * @param processRepository 工序 Repository
      * @param sopRepository     工序 SOP Repository
+     * @param routeDetailRepository 路线明细 Repository
      * @param auditService      工序变更审计服务
      */
     public CraftProcessSopServiceImpl(CraftProcessRepository processRepository,
                                       CraftProcessSopRepository sopRepository,
+                                      CraftRouteDetailRepository routeDetailRepository,
                                       CraftProcessAuditService auditService) {
         this.processRepository = processRepository;
         this.sopRepository = sopRepository;
+        this.routeDetailRepository = routeDetailRepository;
         this.auditService = auditService;
     }
 
@@ -85,12 +93,17 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     @Transactional(rollbackFor = Exception.class)
     public void updateProcessSop(Long processId, Long sopId, CraftProcessSopUpdateReqVO reqVO) {
         requireProcess(processId);
-        CraftProcessSopEntity sop = requireSop(processId, sopId);
+        CraftProcessSopEntity sop = requireSopForUpdate(processId, sopId);
         CraftVersionValidator.validate(sop.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_SOP_CONCURRENT_MODIFICATION);
         normalizeRequest(reqVO);
         validateNormalizedCodeLength(reqVO.getSopCode());
         validateSopCode(processId, reqVO.getSopCode(), sopId);
+        boolean disabling = CommonStatusEnum.ENABLED.getStatus().equals(sop.getStatus())
+                && CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus());
+        if (disabling) {
+            validateNoEffectiveRouteReferences(sopId);
+        }
 
         CraftProcessSopRespVO beforeSnapshot = CraftProcessConvert.toSopRespVO(sop);
         copyToEntity(reqVO, sop);
@@ -106,9 +119,10 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteProcessSop(Long processId, Long sopId, Integer expectedVersion) {
         requireProcess(processId);
-        CraftProcessSopEntity sop = requireSop(processId, sopId);
+        CraftProcessSopEntity sop = requireSopForUpdate(processId, sopId);
         CraftVersionValidator.validate(sop.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.PROCESS_SOP_CONCURRENT_MODIFICATION);
+        validateNoEffectiveRouteReferences(sopId);
 
         CraftProcessSopRespVO beforeSnapshot = CraftProcessConvert.toSopRespVO(sop);
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
@@ -148,6 +162,31 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     private CraftProcessSopEntity requireSop(Long processId, Long sopId) {
         return sopRepository.findByIdAndProcessIdAndDeletedFalse(sopId, processId)
                 .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.PROCESS_SOP_NOT_EXISTS));
+    }
+
+    /**
+     * 以写锁查询工序下未删除 SOP，和路线审核的引用锁串行化。
+     *
+     * @param processId 工序主键
+     * @param sopId     SOP 主键
+     * @return SOP 实体
+     */
+    private CraftProcessSopEntity requireSopForUpdate(Long processId, Long sopId) {
+        return sopRepository.findByIdAndProcessIdAndDeletedFalseForUpdate(sopId, processId)
+                .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.PROCESS_SOP_NOT_EXISTS));
+    }
+
+    /**
+     * 校验 SOP 未被生效路线引用。
+     *
+     * @param sopId SOP 主键
+     */
+    private void validateNoEffectiveRouteReferences(Long sopId) {
+        boolean referenced = routeDetailRepository.existsEffectiveRouteBySopId(
+                sopId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
+        if (referenced) {
+            throw new ServiceException(CraftErrorCodeConstants.PROCESS_SOP_REFERENCED_BY_EFFECTIVE_ROUTE);
+        }
     }
 
     /**

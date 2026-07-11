@@ -9,6 +9,10 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
@@ -81,6 +85,9 @@ class WorkOrderServiceImplTest {
     /** 测试用 BOM id */
     private static final Long BOM_ID = 30L;
 
+    /** 测试用工艺路线 id */
+    private static final Long ROUTE_ID = 40L;
+
     /** 测试用物料 id */
     private static final Long MATERIAL_ID = 50L;
 
@@ -92,6 +99,12 @@ class WorkOrderServiceImplTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private CraftRouteRepository routeRepository;
+
+    @Mock
+    private CraftRouteProductRepository routeProductRepository;
 
     @Mock
     private WorkshopRepository workshopRepository;
@@ -121,8 +134,9 @@ class WorkOrderServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository, workshopRepository,
-                bomRepository, bomDetailRepository, materialRepository, workOrderMaterialRepository,
+        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository,
+                routeRepository, routeProductRepository, workshopRepository, bomRepository,
+                bomDetailRepository, materialRepository, workOrderMaterialRepository,
                 workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
         // Service 从登录上下文取操作人，单测手工构造上下文并在用后清理
         LoginUser loginUser = new LoginUser();
@@ -402,10 +416,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：CAS 命中后按 BOM 生成物料需求(含损耗率)并记录状态日志")
     void releaseWorkOrderGeneratesMaterialsAndLog() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
@@ -429,10 +442,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：BOM 未生效，抛 BOM 不可用异常")
     void releaseWorkOrderRejectsIneffectiveBom() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.DRAFT.getStatus())));
 
@@ -445,10 +457,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：BOM 无明细，抛明细为空异常")
     void releaseWorkOrderRejectsEmptyBomDetail() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of());
@@ -461,11 +472,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：未维护 BOM，查因后抛缺 BOM/工艺路线异常")
     void releaseWorkOrderRejectsMissingBom() {
-        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(0);
         WorkOrderEntity created = buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus());
         created.setBomId(null);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID)).thenReturn(Optional.of(created));
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID)).thenReturn(Optional.of(created));
 
         assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
@@ -475,14 +484,27 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：状态已是已下达，查因后抛状态不允许下达异常")
     void releaseWorkOrderRejectsWrongStatus() {
-        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(0);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
 
         assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
                         .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE));
+    }
+
+    @Test
+    @DisplayName("下达工单：路线未绑定当前产品时拒绝下达")
+    void releaseWorkOrderRejectsUnboundRoute() {
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+
+        assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE));
+        verify(workOrderRepository, never()).updateToReleased(any(), any(), any());
     }
 
     @Test
@@ -803,6 +825,32 @@ class WorkOrderServiceImplTest {
     }
 
     /**
+     * 准备可下达工单及其生效路线引用。
+     */
+    private void stubReleasableWorkOrder() {
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
+    }
+
+    /**
+     * 构造指定状态的工艺路线。
+     *
+     * @param status 路线状态
+     * @return 路线实体
+     */
+    private CraftRouteEntity buildRoute(CraftRouteStatusEnum status) {
+        CraftRouteEntity route = new CraftRouteEntity();
+        route.setId(ROUTE_ID);
+        route.setRoutingStatus(status.getStatus());
+        route.setDeleted(false);
+        return route;
+    }
+
+    /**
      * 构造合法的保存请求。
      */
     private WorkOrderSaveReqVO buildSaveReqVO() {
@@ -859,7 +907,7 @@ class WorkOrderServiceImplTest {
         workOrder.setProductName("比赛级羽毛球");
         workOrder.setUnitId(1L);
         workOrder.setBomId(30L);
-        workOrder.setRoutingId(40L);
+        workOrder.setRoutingId(ROUTE_ID);
         workOrder.setWorkshopId(WORKSHOP_ID);
         workOrder.setPlanQuantity(1000);
         workOrder.setPlanStartTime(LocalDateTime.of(2026, 7, 10, 8, 0, 0));
