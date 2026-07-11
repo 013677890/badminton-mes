@@ -1,6 +1,7 @@
 package com.badminton.mes.module.equipment.service.impl;
 
 import java.util.List;
+import java.util.Set;
 
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
@@ -54,6 +55,9 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
 
     /** 逻辑删除编码后缀前缀，用于释放原设备编码唯一约束 */
     private static final String DELETED_CODE_SUFFIX_PREFIX = "_D";
+
+    /** 设备存在处理中的报修任务，不允许删除 */
+    private static final Set<String> ACTIVE_REPAIR_STATUSES = Set.of("REPORTED", "ASSIGNED", "REPAIRING");
 
     private final EquipmentLedgerRepository ledgerRepository;
 
@@ -145,13 +149,15 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentLedger(Long id) {
-        EquipmentLedgerEntity equipmentLedger = validateLedgerExists(id);
+        EquipmentLedgerEntity equipmentLedger = ledgerRepository.findByIdAndDeletedFalseForUpdate(id)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_NOT_EXISTS));
         if ("RUNNING".equals(equipmentLedger.getEquipmentStatus())) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED);
         }
 
-        long repairOrderCount = repairOrderRepository.countByEquipmentIdAndDeletedFalse(id);
-        if (repairOrderCount > 0) {
+        long activeRepairOrderCount = repairOrderRepository.countByEquipmentIdAndRepairStatusInAndDeletedFalse(
+                id, ACTIVE_REPAIR_STATUSES);
+        if (activeRepairOrderCount > 0) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_HAS_REPAIR_ORDER);
         }
 

@@ -50,6 +50,15 @@ public interface EquipmentRepairOrderRepository extends JpaRepository<EquipmentR
     long countByEquipmentIdAndDeletedFalse(Long equipmentId);
 
     /**
+     * 统计指定设备下仍处于处理中的报修任务数量。
+     *
+     * @param equipmentId    设备台账 id
+     * @param repairStatuses 处理中状态集合
+     * @return 报修任务数量
+     */
+    long countByEquipmentIdAndRepairStatusInAndDeletedFalse(Long equipmentId, Iterable<String> repairStatuses);
+
+    /**
      * 统计指定故障原理下的未删除报修任务数量。
      *
      * @param faultPrincipleId 故障原理 id

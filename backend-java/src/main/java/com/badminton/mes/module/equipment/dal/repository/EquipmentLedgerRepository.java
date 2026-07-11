@@ -6,6 +6,11 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentLedgerEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * 设备台账 JPA Repository。
@@ -23,6 +28,16 @@ public interface EquipmentLedgerRepository extends JpaRepository<EquipmentLedger
      * @return 设备台账实体
      */
     Optional<EquipmentLedgerEntity> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * 按主键查询未删除的设备台账，并对记录加写锁。
+     *
+     * @param id 设备主键
+     * @return 设备台账实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select ledger from EquipmentLedgerEntity ledger where ledger.id = :id and ledger.deleted = false")
+    Optional<EquipmentLedgerEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
 
     /**
      * 判断未删除设备中是否已存在指定设备编码。

@@ -94,6 +94,10 @@ public final class EquipmentErrorCodeConstants {
     public static final ErrorCode EQUIPMENT_FAULT_PRINCIPLE_HAS_REPAIR_ORDER =
             new ErrorCode("A0440", "该故障原理存在报修任务，不允许删除", "请先删除或变更该故障原理关联的报修任务");
 
+    /** 设备故障原理与设备类别不匹配 */
+    public static final ErrorCode EQUIPMENT_FAULT_PRINCIPLE_CATEGORY_NOT_MATCH =
+            new ErrorCode("A0420", "故障原理不适用于该设备类别", "请选择通用故障原理或该设备类别下的故障原理");
+
     /** 报修状态流转不允许当前操作 */
     public static final ErrorCode EQUIPMENT_REPAIR_STATUS_OPERATION_NOT_ALLOWED =
             new ErrorCode("A0440", "报修状态不允许当前操作", "请调整报修状态后再执行该操作");

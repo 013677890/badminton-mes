@@ -3,6 +3,7 @@ package com.badminton.mes.module.equipment.service.impl;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
@@ -11,6 +12,7 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentRepairOrderPage
 import com.badminton.mes.module.equipment.controller.vo.EquipmentRepairOrderRespVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentRepairOrderSaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentRepairOrderConvert;
+import com.badminton.mes.module.equipment.dal.entity.EquipmentFaultPrincipleEntity;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentLedgerEntity;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentRepairOrderEntity;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
@@ -94,8 +96,8 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEquipmentRepairOrder(EquipmentRepairOrderSaveReqVO reqVO) {
-        validateEquipmentAvailable(reqVO.getEquipmentId());
-        validateFaultPrincipleAvailable(reqVO.getFaultPrincipleId());
+        EquipmentLedgerEntity equipmentLedger = validateEquipmentAvailableForUpdate(reqVO.getEquipmentId());
+        validateFaultPrincipleAvailableForEquipment(reqVO.getFaultPrincipleId(), equipmentLedger);
 
         EquipmentRepairOrderEntity repairOrder = EquipmentRepairOrderConvert.toEntity(reqVO);
         repairOrder.setCreateBy(DEFAULT_OPERATOR_ID);
@@ -117,7 +119,7 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         try {
             repairOrderRepository.saveAndFlush(repairOrder);
         } catch (DataIntegrityViolationException e) {
-            if (e.getMessage() != null && e.getMessage().contains("uk_repair_no")) {
+            if (isDuplicateRepairNoException(e)) {
                 throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_REPAIR_ORDER_NO_DUPLICATE);
             }
             throw e;
@@ -131,11 +133,14 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentRepairOrder(Long id, EquipmentRepairOrderSaveReqVO reqVO) {
         EquipmentRepairOrderEntity existing = validateRepairOrderExists(id);
-        validateEquipmentAvailable(reqVO.getEquipmentId());
-        validateFaultPrincipleAvailable(reqVO.getFaultPrincipleId());
+        EquipmentLedgerEntity equipmentLedger = validateEquipmentAvailableForUpdate(reqVO.getEquipmentId());
+        validateFaultPrincipleAvailableForEquipment(reqVO.getFaultPrincipleId(), equipmentLedger);
 
         String repairNo = StringUtils.hasText(reqVO.getRepairNo()) ? reqVO.getRepairNo() : existing.getRepairNo();
         validateRepairNo(repairNo, id);
+        String previousRepairStatus = existing.getRepairStatus();
+        String nextRepairStatus = reqVO.getRepairStatus() == null ? previousRepairStatus : reqVO.getRepairStatus();
+        validateRepairStatusTransition(previousRepairStatus, nextRepairStatus);
 
         existing.setRepairNo(repairNo);
         existing.setEquipmentId(reqVO.getEquipmentId());
@@ -147,17 +152,30 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         if (reqVO.getReportUserId() != null) {
             existing.setReportUserId(reqVO.getReportUserId());
         }
-        existing.setRepairUserId(reqVO.getRepairUserId());
-        existing.setRepairStartTime(reqVO.getRepairStartTime());
-        existing.setRepairEndTime(reqVO.getRepairEndTime());
-        existing.setRepairResult(reqVO.getRepairResult());
-        if (reqVO.getRepairStatus() != null) {
-            existing.setRepairStatus(reqVO.getRepairStatus());
+        if (reqVO.getRepairUserId() != null) {
+            existing.setRepairUserId(reqVO.getRepairUserId());
         }
+        if (reqVO.getRepairStartTime() != null) {
+            existing.setRepairStartTime(reqVO.getRepairStartTime());
+        }
+        if (reqVO.getRepairEndTime() != null) {
+            existing.setRepairEndTime(reqVO.getRepairEndTime());
+        }
+        if (StringUtils.hasText(reqVO.getRepairResult())) {
+            existing.setRepairResult(reqVO.getRepairResult());
+        }
+        existing.setRepairStatus(nextRepairStatus);
         existing.setRemark(reqVO.getRemark());
-        fillTimeByRepairStatus(existing);
+        fillTimeByRepairStatus(existing, previousRepairStatus);
 
-        repairOrderRepository.save(existing);
+        try {
+            repairOrderRepository.saveAndFlush(existing);
+        } catch (DataIntegrityViolationException e) {
+            if (isDuplicateRepairNoException(e)) {
+                throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_REPAIR_ORDER_NO_DUPLICATE);
+            }
+            throw e;
+        }
         logger.info("[修改设备报修任务] id: {}, repairNo: {}", id, existing.getRepairNo());
     }
 
@@ -231,30 +249,61 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     }
 
     /**
-     * 校验设备存在且未删除。
+     * 校验设备存在且未删除，并对设备记录加写锁。
      *
      * @param equipmentId 设备台账 id
+     * @return 设备台账实体
      */
-    private void validateEquipmentAvailable(Long equipmentId) {
-        EquipmentLedgerEntity equipmentLedger = ledgerRepository.findByIdAndDeletedFalse(equipmentId)
+    private EquipmentLedgerEntity validateEquipmentAvailableForUpdate(Long equipmentId) {
+        EquipmentLedgerEntity equipmentLedger = ledgerRepository.findByIdAndDeletedFalseForUpdate(equipmentId)
                 .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_NOT_EXISTS));
         if ("SCRAPPED".equals(equipmentLedger.getEquipmentStatus())) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED);
         }
+        return equipmentLedger;
     }
 
     /**
-     * 校验故障原理存在且未删除。
+     * 校验故障原理存在、未删除且适用于当前设备类别。
      *
      * @param faultPrincipleId 故障原理 id，可空
+     * @param equipmentLedger  设备台账实体
      */
-    private void validateFaultPrincipleAvailable(Long faultPrincipleId) {
+    private void validateFaultPrincipleAvailableForEquipment(Long faultPrincipleId, EquipmentLedgerEntity equipmentLedger) {
         if (faultPrincipleId == null) {
             return;
         }
-        boolean exists = faultPrincipleRepository.findByIdAndDeletedFalse(faultPrincipleId).isPresent();
-        if (!exists) {
-            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_NOT_EXISTS);
+
+        EquipmentFaultPrincipleEntity faultPrinciple = faultPrincipleRepository.findByIdAndDeletedFalseForUpdate(faultPrincipleId)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_NOT_EXISTS));
+        Long applicableCategoryId = faultPrinciple.getCategoryId();
+        if (applicableCategoryId != null && !applicableCategoryId.equals(equipmentLedger.getCategoryId())) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_CATEGORY_NOT_MATCH);
+        }
+    }
+
+    /**
+     * 校验报修状态流转是否合法。
+     *
+     * @param previousRepairStatus 当前状态
+     * @param nextRepairStatus     目标状态
+     */
+    private void validateRepairStatusTransition(String previousRepairStatus, String nextRepairStatus) {
+        if (previousRepairStatus == null || previousRepairStatus.equals(nextRepairStatus)) {
+            return;
+        }
+        if (FINISHED_STATUS.equals(previousRepairStatus) || CANCELLED_STATUS.equals(previousRepairStatus)) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_REPAIR_STATUS_OPERATION_NOT_ALLOWED);
+        }
+
+        Set<String> allowedNextStatuses = switch (previousRepairStatus) {
+            case "REPORTED" -> Set.of("ASSIGNED", REPAIRING_STATUS, FINISHED_STATUS, CANCELLED_STATUS);
+            case "ASSIGNED" -> Set.of(REPAIRING_STATUS, FINISHED_STATUS, CANCELLED_STATUS);
+            case "REPAIRING" -> Set.of(FINISHED_STATUS, CANCELLED_STATUS);
+            default -> Set.of();
+        };
+        if (!allowedNextStatuses.contains(nextRepairStatus)) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_REPAIR_STATUS_OPERATION_NOT_ALLOWED);
         }
     }
 
@@ -264,11 +313,22 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
      * @param repairOrder 报修任务实体
      */
     private void fillTimeByRepairStatus(EquipmentRepairOrderEntity repairOrder) {
+        fillTimeByRepairStatus(repairOrder, null);
+    }
+
+    /**
+     * 根据报修状态变化补充关键时间字段。
+     *
+     * @param repairOrder          报修任务实体
+     * @param previousRepairStatus 当前状态，创建时传 null
+     */
+    private void fillTimeByRepairStatus(EquipmentRepairOrderEntity repairOrder, String previousRepairStatus) {
         LocalDateTime now = LocalDateTime.now();
-        if (REPAIRING_STATUS.equals(repairOrder.getRepairStatus()) && repairOrder.getRepairStartTime() == null) {
+        boolean statusChanged = previousRepairStatus == null || !previousRepairStatus.equals(repairOrder.getRepairStatus());
+        if (statusChanged && REPAIRING_STATUS.equals(repairOrder.getRepairStatus()) && repairOrder.getRepairStartTime() == null) {
             repairOrder.setRepairStartTime(now);
         }
-        if (FINISHED_STATUS.equals(repairOrder.getRepairStatus())) {
+        if (statusChanged && FINISHED_STATUS.equals(repairOrder.getRepairStatus())) {
             if (repairOrder.getRepairStartTime() == null) {
                 repairOrder.setRepairStartTime(now);
             }
@@ -276,9 +336,19 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
                 repairOrder.setRepairEndTime(now);
             }
         }
-        if (CANCELLED_STATUS.equals(repairOrder.getRepairStatus())) {
+        if (statusChanged && CANCELLED_STATUS.equals(repairOrder.getRepairStatus())) {
             repairOrder.setRepairEndTime(null);
         }
+    }
+
+    /**
+     * 判断是否为报修单号唯一约束冲突。
+     *
+     * @param exception 数据库约束异常
+     * @return true 是报修单号重复，false 不是
+     */
+    private boolean isDuplicateRepairNoException(DataIntegrityViolationException exception) {
+        return exception.getMessage() != null && exception.getMessage().contains("uk_repair_no");
     }
 
     /**

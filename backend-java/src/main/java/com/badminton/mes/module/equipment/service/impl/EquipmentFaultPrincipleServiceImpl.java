@@ -130,14 +130,22 @@ public class EquipmentFaultPrincipleServiceImpl implements EquipmentFaultPrincip
             existing.setStatus(reqVO.getStatus());
         }
 
-        faultPrincipleRepository.save(existing);
+        try {
+            faultPrincipleRepository.saveAndFlush(existing);
+        } catch (DataIntegrityViolationException e) {
+            if (isDuplicateFaultCodeException(e)) {
+                throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_CODE_DUPLICATE);
+            }
+            throw e;
+        }
         logger.info("[修改设备故障原理] id: {}, faultCode: {}", id, reqVO.getFaultCode());
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentFaultPrinciple(Long id) {
-        EquipmentFaultPrincipleEntity faultPrinciple = validateFaultPrincipleExists(id);
+        EquipmentFaultPrincipleEntity faultPrinciple = faultPrincipleRepository.findByIdAndDeletedFalseForUpdate(id)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_NOT_EXISTS));
         long repairOrderCount = repairOrderRepository.countByFaultPrincipleIdAndDeletedFalse(id);
         if (repairOrderCount > 0) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_FAULT_PRINCIPLE_HAS_REPAIR_ORDER);
@@ -221,6 +229,16 @@ public class EquipmentFaultPrincipleServiceImpl implements EquipmentFaultPrincip
         if (!exists) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_NOT_EXISTS);
         }
+    }
+
+    /**
+     * 判断是否为故障编码唯一约束冲突。
+     *
+     * @param exception 数据库约束异常
+     * @return true 是故障编码重复，false 不是
+     */
+    private boolean isDuplicateFaultCodeException(DataIntegrityViolationException exception) {
+        return exception.getMessage() != null && exception.getMessage().contains("uk_fault_code");
     }
 
     /**

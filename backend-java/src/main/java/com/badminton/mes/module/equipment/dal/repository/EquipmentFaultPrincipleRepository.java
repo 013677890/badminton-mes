@@ -6,6 +6,11 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentFaultPrincipleEnti
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * 设备故障原理 JPA Repository。
@@ -23,6 +28,16 @@ public interface EquipmentFaultPrincipleRepository extends JpaRepository<Equipme
      * @return 故障原理实体
      */
     Optional<EquipmentFaultPrincipleEntity> findByIdAndDeletedFalse(Long id);
+
+    /**
+     * 按主键查询未删除的故障原理，并对记录加写锁。
+     *
+     * @param id 故障原理主键
+     * @return 故障原理实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select faultPrinciple from EquipmentFaultPrincipleEntity faultPrinciple where faultPrinciple.id = :id and faultPrinciple.deleted = false")
+    Optional<EquipmentFaultPrincipleEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
 
     /**
      * 判断未删除故障原理中是否已存在指定故障编码。
