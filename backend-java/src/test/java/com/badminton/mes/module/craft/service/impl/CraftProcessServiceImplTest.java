@@ -25,6 +25,7 @@ import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
+import com.badminton.mes.module.craft.service.CraftProcessWageReferenceQuery;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 
 import org.junit.jupiter.api.AfterEach;
@@ -88,13 +89,16 @@ class CraftProcessServiceImplTest {
     @Mock
     private CraftCache craftCache;
 
+    @Mock
+    private CraftProcessWageReferenceQuery wageReferenceQuery;
+
     private CraftProcessServiceImpl processService;
 
     @BeforeEach
     void setUp() {
         processService = new CraftProcessServiceImpl(processRepository, changeLogRepository,
                 sopRepository, defectReasonRepository, routeDetailRepository, qualityPlanRepository,
-                equipmentCategoryRepository, auditService, craftCache);
+                equipmentCategoryRepository, auditService, craftCache, wageReferenceQuery);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
         SecurityContextHolder.set("unit-test-token", loginUser);
@@ -177,6 +181,41 @@ class CraftProcessServiceImplTest {
     }
 
     @Test
+    @DisplayName("停用工序：仍被启用计件规则引用时拒绝状态变更")
+    void disableProcessRejectsEnabledWageRuleReference() {
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
+                .thenReturn(Optional.of(buildProcess(0)));
+        when(wageReferenceQuery.hasEnabledPieceRateRule(PROCESS_ID)).thenReturn(true);
+        CraftProcessStatusReqVO reqVO = new CraftProcessStatusReqVO();
+        reqVO.setVersion(0);
+        reqVO.setStatus(0);
+        reqVO.setReason("工序淘汰");
+
+        assertThatThrownBy(() -> processService.updateProcessStatus(PROCESS_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ENABLED_WAGE_RULE));
+        verify(processRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("修改工序：存在启用计件规则时拒绝关闭计件")
+    void updateProcessRejectsDisablingPieceRateWithEnabledRule() {
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
+                .thenReturn(Optional.of(buildProcess(0)));
+        when(wageReferenceQuery.hasEnabledPieceRateRule(PROCESS_ID)).thenReturn(true);
+        CraftProcessUpdateReqVO reqVO = buildUpdateReqVO();
+        reqVO.setVersion(0);
+        reqVO.setPieceRateEnabled(false);
+
+        assertThatThrownBy(() -> processService.updateProcess(PROCESS_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ENABLED_WAGE_RULE));
+        verify(processRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("创建工序：检验方案不存在或未启用时拒绝保存")
     void createProcessRejectsUnavailableQualityPlan() {
         CraftProcessSaveReqVO reqVO = buildSaveReqVO();
@@ -215,6 +254,20 @@ class CraftProcessServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class, exception ->
                         assertThat(exception.getErrorCode())
                                 .isSameAs(CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ROUTE));
+        verify(processRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("删除工序：仍被启用计件规则引用时拒绝删除")
+    void deleteProcessRejectsEnabledWageRuleReference() {
+        when(processRepository.findByIdAndDeletedFalseForUpdate(PROCESS_ID))
+                .thenReturn(Optional.of(buildProcess(0)));
+        when(wageReferenceQuery.hasEnabledPieceRateRule(PROCESS_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> processService.deleteProcess(PROCESS_ID, 0))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ENABLED_WAGE_RULE));
         verify(processRepository, never()).saveAndFlush(any());
     }
 

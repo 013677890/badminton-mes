@@ -31,6 +31,7 @@ import com.badminton.mes.module.craft.enums.CraftProcessChangeTypeEnum;
 import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.craft.service.CraftProcessAuditService;
 import com.badminton.mes.module.craft.service.CraftProcessService;
+import com.badminton.mes.module.craft.service.CraftProcessWageReferenceQuery;
 import com.badminton.mes.module.craft.service.dto.CraftProcessSnapshotDTO;
 import com.badminton.mes.module.craft.service.support.CraftPersistenceExceptionTranslator;
 import com.badminton.mes.module.craft.service.support.CraftVersionValidator;
@@ -84,6 +85,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
 
     private final CraftCache craftCache;
 
+    private final CraftProcessWageReferenceQuery wageReferenceQuery;
+
     /**
      * 构造器注入。
      *
@@ -96,6 +99,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      * @param equipmentCategoryRepository 设备类别 Repository
      * @param auditService                工序变更审计服务
      * @param craftCache                  工艺 Redis 缓存
+     * @param wageReferenceQuery          计件工资规则反向引用查询
      */
     public CraftProcessServiceImpl(CraftProcessRepository processRepository,
                                    CraftProcessChangeLogRepository changeLogRepository,
@@ -105,7 +109,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
                                    CraftQualityPlanReferenceRepository qualityPlanRepository,
                                    EquipmentCategoryRepository equipmentCategoryRepository,
                                    CraftProcessAuditService auditService,
-                                   CraftCache craftCache) {
+                                   CraftCache craftCache,
+                                   CraftProcessWageReferenceQuery wageReferenceQuery) {
         this.processRepository = processRepository;
         this.changeLogRepository = changeLogRepository;
         this.sopRepository = sopRepository;
@@ -115,6 +120,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         this.equipmentCategoryRepository = equipmentCategoryRepository;
         this.auditService = auditService;
         this.craftCache = craftCache;
+        this.wageReferenceQuery = wageReferenceQuery;
     }
 
     @Override
@@ -150,6 +156,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         validateProcessCode(reqVO.getProcessCode(), id);
         validateAssociations(reqVO.getQualityRequired(), reqVO.getQualityPlanId(),
                 reqVO.getEquipmentCategoryId());
+        validateWageRuleChange(process, reqVO);
         validateEffectiveRouteRuleChange(process, reqVO);
 
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
@@ -169,6 +176,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         CraftVersionValidator.validate(process.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
         validateNoReferences(id);
+        validateNoEnabledWageRuleReferences(id);
 
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
@@ -194,6 +202,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
                     process.getEquipmentCategoryId());
         } else {
             validateNoEffectiveRouteReferences(id);
+            validateNoEnabledWageRuleReferences(id);
         }
 
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
@@ -298,6 +307,31 @@ public class CraftProcessServiceImpl implements CraftProcessService {
                 || !Objects.equals(process.getQualityPlanId(), reqVO.getQualityPlanId());
         if (controlRuleChanged) {
             validateNoEffectiveRouteReferences(process.getId());
+        }
+    }
+
+    /**
+     * 关闭工序计件能力前校验不存在启用计件规则。
+     *
+     * @param process 当前工序
+     * @param reqVO   修改请求
+     */
+    private void validateWageRuleChange(CraftProcessEntity process, CraftProcessUpdateReqVO reqVO) {
+        boolean disablesPieceRate = Boolean.TRUE.equals(process.getPieceRateEnabled())
+                && Boolean.FALSE.equals(reqVO.getPieceRateEnabled());
+        if (disablesPieceRate) {
+            validateNoEnabledWageRuleReferences(process.getId());
+        }
+    }
+
+    /**
+     * 校验工序不存在启用计件规则引用。
+     *
+     * @param processId 工序主键
+     */
+    private void validateNoEnabledWageRuleReferences(Long processId) {
+        if (wageReferenceQuery.hasEnabledPieceRateRule(processId)) {
+            throw new ServiceException(CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ENABLED_WAGE_RULE);
         }
     }
 

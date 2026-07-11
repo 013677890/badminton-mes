@@ -36,6 +36,10 @@ public final class CraftErrorCodeConstants {
     public static final ErrorCode PROCESS_REFERENCED_BY_ROUTE =
             new ErrorCode("A0440", "工序已被工艺路线引用", "请先从工艺路线中移除该工序");
 
+    /** 工序仍被启用计件规则引用 */
+    public static final ErrorCode PROCESS_REFERENCED_BY_ENABLED_WAGE_RULE =
+            new ErrorCode("A0440", "工序仍被启用计件规则引用", "请先停用或删除关联的计件规则");
+
     /** 工序未启用，不可供新业务引用 */
     public static final ErrorCode PROCESS_NOT_ENABLED =
             new ErrorCode("A0440", "工序未启用", "请选择已启用的工序");
