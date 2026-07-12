@@ -25,6 +25,7 @@ public class EquipmentLedgerSaveReqVO {
     /** 设备编码，唯一 */
     @NotBlank(message = "设备编码不能为空")
     @Size(max = 32, message = "设备编码长度不能超过 32")
+    @Pattern(regexp = "^(?!__DELETED_).+$", message = "设备编码不能使用系统保留前缀")
     private String equipmentCode;
 
     /** 设备名称 */

@@ -56,6 +56,9 @@ public interface EquipmentLedgerRepository extends JpaRepository<EquipmentLedger
      */
     boolean existsByEquipmentCodeAndIdNotAndDeletedFalse(String equipmentCode, Long id);
 
+    /** 判断全表是否存在指定设备编码，包括已逻辑删除记录。 */
+    boolean existsByEquipmentCode(String equipmentCode);
+
     /**
      * 统计指定设备类别下的未删除设备数量。
      *

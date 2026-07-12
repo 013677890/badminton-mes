@@ -63,6 +63,10 @@ services:
       MES_DB_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
       MES_REDIS_HOST: redis
       MES_REDIS_PORT: "6379"
+      # 本地接口联调显式关闭认证；生产部署不得设置为 true
+      MES_SECURITY_AUTH_DISABLED: "true"
+      # 测试数据仅从开发专用位置加载，生产环境使用默认 db/migration
+      MES_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/dev-migration
     ports:
       - "8080:8080"
     depends_on:

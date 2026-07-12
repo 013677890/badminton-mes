@@ -14,6 +14,8 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentLedgerEntity;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerSpecifications;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentMaintenancePlanRepository;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentMaintenanceRecordRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentRepairOrderRepository;
 import com.badminton.mes.module.equipment.service.EquipmentLedgerService;
@@ -50,14 +52,14 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     /** 新建设备默认空闲 */
     private static final String DEFAULT_EQUIPMENT_STATUS = "IDLE";
 
-    /** 设备编码数据库字段最大长度 */
-    private static final int EQUIPMENT_CODE_MAX_LENGTH = 32;
-
-    /** 逻辑删除编码后缀前缀，用于释放原设备编码唯一约束 */
-    private static final String DELETED_CODE_SUFFIX_PREFIX = "_D";
+    /** 逻辑删除编码保留前缀，用于释放原设备编码唯一约束 */
+    private static final String DELETED_EQUIPMENT_CODE_PREFIX = "__DELETED_";
 
     /** 设备存在处理中的报修任务，不允许删除 */
     private static final Set<String> ACTIVE_REPAIR_STATUSES = Set.of("REPORTED", "ASSIGNED", "REPAIRING");
+
+    /** 进行中的设备保养任务状态 */
+    private static final Set<String> IN_PROGRESS_MAINTENANCE_STATUS = Set.of("IN_PROGRESS");
 
     private final EquipmentLedgerRepository ledgerRepository;
 
@@ -66,6 +68,10 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     private final EquipmentManufacturerRepository manufacturerRepository;
 
     private final EquipmentRepairOrderRepository repairOrderRepository;
+
+    private final EquipmentMaintenancePlanRepository maintenancePlanRepository;
+
+    private final EquipmentMaintenanceRecordRepository maintenanceRecordRepository;
 
     /**
      * 构造器注入，保证依赖不可变。
@@ -78,11 +84,15 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     public EquipmentLedgerServiceImpl(EquipmentLedgerRepository ledgerRepository,
                                       EquipmentCategoryRepository categoryRepository,
                                       EquipmentManufacturerRepository manufacturerRepository,
-                                      EquipmentRepairOrderRepository repairOrderRepository) {
+                                      EquipmentRepairOrderRepository repairOrderRepository,
+                                      EquipmentMaintenancePlanRepository maintenancePlanRepository,
+                                      EquipmentMaintenanceRecordRepository maintenanceRecordRepository) {
         this.ledgerRepository = ledgerRepository;
         this.categoryRepository = categoryRepository;
         this.manufacturerRepository = manufacturerRepository;
         this.repairOrderRepository = repairOrderRepository;
+        this.maintenancePlanRepository = maintenancePlanRepository;
+        this.maintenanceRecordRepository = maintenanceRecordRepository;
     }
 
     @Override
@@ -117,10 +127,24 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentLedger(Long id, EquipmentLedgerSaveReqVO reqVO) {
-        EquipmentLedgerEntity existing = validateLedgerExists(id);
+        EquipmentLedgerEntity existing = ledgerRepository.findByIdAndDeletedFalseForUpdate(id)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_NOT_EXISTS));
         validateEquipmentCode(reqVO.getEquipmentCode(), id);
         validateCategoryAvailable(reqVO.getCategoryId());
         validateManufacturerAvailable(reqVO.getManufacturerId());
+
+        long inProgressMaintenanceCount =
+                maintenanceRecordRepository.countByEquipmentIdAndRecordStatusInAndDeletedFalse(
+                        id, IN_PROGRESS_MAINTENANCE_STATUS);
+        String requestedEquipmentStatus = reqVO.getEquipmentStatus();
+        if (inProgressMaintenanceCount > 0
+                && requestedEquipmentStatus != null
+                && !"MAINTAINING".equals(requestedEquipmentStatus)) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED);
+        }
+        if (inProgressMaintenanceCount == 0 && "MAINTAINING".equals(requestedEquipmentStatus)) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_STATUS_OPERATION_NOT_ALLOWED);
+        }
 
         existing.setEquipmentCode(reqVO.getEquipmentCode());
         existing.setEquipmentName(reqVO.getEquipmentName());
@@ -161,7 +185,16 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_HAS_REPAIR_ORDER);
         }
 
-        String deletedCode = buildDeletedEquipmentCode(equipmentLedger.getEquipmentCode(), equipmentLedger.getId());
+        long maintenancePlanCount = maintenancePlanRepository.countByEquipmentIdAndDeletedFalse(id);
+        long maintenanceRecordCount = maintenanceRecordRepository.countByEquipmentIdAndDeletedFalse(id);
+        if (maintenancePlanCount > 0 || maintenanceRecordCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_HAS_MAINTENANCE);
+        }
+
+        String deletedCode = buildDeletedEquipmentCode(equipmentLedger.getId());
+        if (ledgerRepository.existsByEquipmentCode(deletedCode)) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_CODE_DUPLICATE);
+        }
         equipmentLedger.setEquipmentCode(deletedCode);
         equipmentLedger.setDeleted(true);
         ledgerRepository.save(equipmentLedger);
@@ -255,23 +288,12 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     /**
      * 构造逻辑删除后的设备编码。
      *
-     * <p>设备编码字段长度为 32，删除时必须先截断原编码再拼接确定性短后缀，避免长编码删除失败。
-     * 后缀包含设备主键，保证同一张表内逻辑删除编码稳定且不与其他删除记录冲突。
+     * <p>删除态编码使用业务请求不可占用的保留前缀，并包含设备主键，确保全表唯一且长度稳定。
      *
-     * @param originalEquipmentCode 原设备编码
-     * @param equipmentId           设备主键
+     * @param equipmentId 设备主键
      * @return 长度不超过 32 的删除态设备编码
      */
-    private String buildDeletedEquipmentCode(String originalEquipmentCode, Long equipmentId) {
-        String deletedCodeSuffix = DELETED_CODE_SUFFIX_PREFIX + Long.toString(equipmentId, 36).toUpperCase();
-        int preservedPrefixLength = EQUIPMENT_CODE_MAX_LENGTH - deletedCodeSuffix.length();
-        if (preservedPrefixLength <= 0) {
-            return deletedCodeSuffix.substring(0, EQUIPMENT_CODE_MAX_LENGTH);
-        }
-
-        String preservedOriginalCode = originalEquipmentCode.length() <= preservedPrefixLength
-                ? originalEquipmentCode
-                : originalEquipmentCode.substring(0, preservedPrefixLength);
-        return preservedOriginalCode + deletedCodeSuffix;
+    private String buildDeletedEquipmentCode(Long equipmentId) {
+        return DELETED_EQUIPMENT_CODE_PREFIX + Long.toString(equipmentId, 36).toUpperCase();
     }
 }

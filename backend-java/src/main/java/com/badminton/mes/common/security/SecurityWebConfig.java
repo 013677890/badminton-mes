@@ -1,6 +1,7 @@
 package com.badminton.mes.common.security;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -18,23 +19,24 @@ public class SecurityWebConfig implements WebMvcConfigurer {
     /** 登录接口路径，唯一免登录白名单 */
     public static final String LOGIN_PATH = "/api/system/auth/login";
 
-    /** 开发阶段临时关闭登录鉴权，功能联调完成后改回 false */
-    private static final boolean AUTH_DISABLED_FOR_DEVELOPMENT = true;
-
     private final AuthInterceptor authInterceptor;
+
+    private final boolean authDisabled;
 
     /**
      * 构造器注入，依赖不可变。
      *
      * @param authInterceptor 登录鉴权拦截器
      */
-    public SecurityWebConfig(AuthInterceptor authInterceptor) {
+    public SecurityWebConfig(AuthInterceptor authInterceptor,
+                             @Value("${mes.security.auth-disabled:false}") boolean authDisabled) {
         this.authInterceptor = authInterceptor;
+        this.authDisabled = authDisabled;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        if (AUTH_DISABLED_FOR_DEVELOPMENT) {
+        if (authDisabled) {
             return;
         }
 
