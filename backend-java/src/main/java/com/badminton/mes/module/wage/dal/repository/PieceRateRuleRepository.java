@@ -66,4 +66,10 @@ public interface PieceRateRuleRepository extends JpaRepository<PieceRateRuleEnti
             @Param("status") Integer status,
             @Param("periodStart") LocalDate periodStart,
             @Param("periodEnd") LocalDate periodEnd);
+
+    /** 判断产品是否被任意计件规则引用。 */
+    boolean existsByProductIdAndDeletedFalse(Long productId);
+
+    /** 判断产品是否被启用计件规则引用。 */
+    boolean existsByProductIdAndStatusAndDeletedFalse(Long productId, Integer status);
 }

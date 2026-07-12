@@ -166,6 +166,90 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode DISPATCH_ADJUST_REASON_REQUIRED =
             new ErrorCode("A0402", "下发后调整必须填写原因", "请填写调整原因后重试");
 
+    /** 产品主档不存在 */
+    public static final ErrorCode PRODUCT_MASTER_NOT_EXISTS =
+            new ErrorCode("A0402", "产品不存在", "产品不存在或已删除，请刷新后重试");
+
+    /** 产品编码重复 */
+    public static final ErrorCode PRODUCT_CODE_DUPLICATE =
+            new ErrorCode("A0506", "产品编码已存在", "产品编码重复，请更换后重试");
+
+    /** 产品主档并发修改 */
+    public static final ErrorCode PRODUCT_CONCURRENT_MODIFICATION =
+            new ErrorCode("A0440", "产品已被其他用户修改", "产品数据已变化，请刷新后重试");
+
+    /** 产品存在当前业务引用，不能停用 */
+    public static final ErrorCode PRODUCT_ACTIVE_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "产品仍被当前生产业务引用", "请先结束工单并停用 BOM、路线和计件规则");
+
+    /** 产品存在历史业务引用，不能删除 */
+    public static final ErrorCode PRODUCT_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "产品已有业务引用", "已使用产品只能停用，不能删除");
+
+    /** 计量单位不可用 */
+    public static final ErrorCode UNIT_NOT_AVAILABLE =
+            new ErrorCode("A0402", "计量单位不存在或未启用", "请选择已启用的计量单位");
+
+    /** 物料主档不存在 */
+    public static final ErrorCode MATERIAL_NOT_EXISTS =
+            new ErrorCode("A0402", "物料不存在", "物料不存在或已删除，请刷新后重试");
+
+    /** 物料编码重复 */
+    public static final ErrorCode MATERIAL_CODE_DUPLICATE =
+            new ErrorCode("A0506", "物料编码已存在", "物料编码重复，请更换后重试");
+
+    /** 物料主档并发修改 */
+    public static final ErrorCode MATERIAL_CONCURRENT_MODIFICATION =
+            new ErrorCode("A0440", "物料已被其他用户修改", "物料数据已变化，请刷新后重试");
+
+    /** 物料存在当前业务引用，不能停用 */
+    public static final ErrorCode MATERIAL_ACTIVE_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "物料仍被生效 BOM 或未结束工单引用", "请先处理相关 BOM 和生产工单");
+
+    /** 物料存在历史业务引用，不能删除 */
+    public static final ErrorCode MATERIAL_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "物料已有业务引用", "已使用物料只能停用，不能删除");
+
+    /** 被使用物料不允许改变计量单位 */
+    public static final ErrorCode MATERIAL_UNIT_IMMUTABLE =
+            new ErrorCode("A0440", "已使用物料不能修改计量单位", "请保留原计量单位或新建物料编码");
+
+    /** BOM 主档不存在 */
+    public static final ErrorCode BOM_NOT_EXISTS =
+            new ErrorCode("A0402", "BOM 不存在", "BOM 不存在或已删除，请刷新后重试");
+
+    /** BOM 编码重复 */
+    public static final ErrorCode BOM_CODE_DUPLICATE =
+            new ErrorCode("A0506", "BOM 编码已存在", "BOM 编码重复，请更换后重试");
+
+    /** 产品 BOM 版本重复 */
+    public static final ErrorCode BOM_PRODUCT_VERSION_DUPLICATE =
+            new ErrorCode("A0506", "产品 BOM 版本已存在", "请为该产品填写新的 BOM 版本");
+
+    /** BOM 并发修改 */
+    public static final ErrorCode BOM_CONCURRENT_MODIFICATION =
+            new ErrorCode("A0440", "BOM 已被其他用户修改", "BOM 数据已变化，请刷新后重试");
+
+    /** 只有 BOM 草稿允许修改删除 */
+    public static final ErrorCode BOM_NOT_DRAFT =
+            new ErrorCode("A0440", "只有草稿 BOM 允许修改或删除", "请创建新版本后再修改");
+
+    /** BOM 状态不支持当前操作 */
+    public static final ErrorCode BOM_STATUS_INVALID =
+            new ErrorCode("A0440", "当前 BOM 状态不支持该操作", "请刷新 BOM 状态后重试");
+
+    /** BOM 明细业务校验失败 */
+    public static final ErrorCode BOM_DETAIL_INVALID =
+            new ErrorCode("A0420", "BOM 明细不完整或包含重复物料", "请检查物料、标准用量和损耗率");
+
+    /** BOM 明细引用的物料不可用 */
+    public static final ErrorCode BOM_MATERIAL_NOT_AVAILABLE =
+            new ErrorCode("A0402", "BOM 明细物料不存在或未启用", "请选择已启用的物料");
+
+    /** BOM 已被工单引用 */
+    public static final ErrorCode BOM_REFERENCED_BY_WORK_ORDER =
+            new ErrorCode("A0440", "BOM 已被生产工单引用", "已使用 BOM 不能删除");
+
     private ProductionErrorCodeConstants() {
     }
 }

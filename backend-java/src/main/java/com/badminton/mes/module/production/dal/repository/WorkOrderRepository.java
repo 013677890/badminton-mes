@@ -295,4 +295,14 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
      * @return true 表示存在历史或当前工单引用
      */
     boolean existsByRoutingIdAndDeletedFalse(Long routingId);
+
+    /** 判断产品是否被任意工单引用。 */
+    boolean existsByProductIdAndDeletedFalse(Long productId);
+
+    /** 判断产品是否被指定状态工单引用。 */
+    boolean existsByProductIdAndOrderStatusInAndDeletedFalse(
+            Long productId, Collection<Integer> orderStatuses);
+
+    /** 判断 BOM 是否被任意工单引用。 */
+    boolean existsByBomIdAndDeletedFalse(Long bomId);
 }

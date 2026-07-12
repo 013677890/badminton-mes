@@ -21,6 +21,9 @@ import org.springframework.data.repository.query.Param;
  */
 public interface KitAnalysisRepository extends JpaRepository<KitAnalysisEntity, Long> {
 
+    /** 判断物料是否存在齐套分析记录。 */
+    boolean existsByMaterialIdAndDeletedFalse(Long materialId);
+
     /**
      * 查询指定工单最新一次齐套分析结果。
      *

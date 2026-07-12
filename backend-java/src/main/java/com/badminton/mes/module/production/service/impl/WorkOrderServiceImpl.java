@@ -50,6 +50,7 @@ import com.badminton.mes.module.production.enums.WorkOrderChangeTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderSourceTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
 import com.badminton.mes.module.production.service.WorkOrderService;
+import com.badminton.mes.module.production.service.support.BomDetailManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,6 +101,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private final WorkOrderNoSequence workOrderNoSequence;
 
+    private final BomDetailManager bomDetailManager;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
@@ -115,6 +118,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param workOrderStatusLogRepository 工单状态日志 Repository
      * @param workOrderCache               工单缓存组件
      * @param workOrderNoSequence          工单号流水生成器
+     * @param bomDetailManager             BOM 明细锁定与校验组件
      */
     public WorkOrderServiceImpl(WorkOrderRepository workOrderRepository, ProductRepository productRepository,
                                 CraftRouteRepository routeRepository,
@@ -123,7 +127,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
                                 BomDetailRepository bomDetailRepository, MaterialRepository materialRepository,
                                 WorkOrderMaterialRepository workOrderMaterialRepository,
                                 WorkOrderStatusLogRepository workOrderStatusLogRepository,
-                                WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence) {
+                                WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence,
+                                BomDetailManager bomDetailManager) {
         this.workOrderRepository = workOrderRepository;
         this.productRepository = productRepository;
         this.routeRepository = routeRepository;
@@ -136,6 +141,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         this.workOrderStatusLogRepository = workOrderStatusLogRepository;
         this.workOrderCache = workOrderCache;
         this.workOrderNoSequence = workOrderNoSequence;
+        this.bomDetailManager = bomDetailManager;
     }
 
     @Override
@@ -478,6 +484,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         if (workOrderMaterialRepository.existsByWorkOrderIdAndDeletedFalse(workOrder.getId())) {
             return;
         }
+        // 与物料停用共用主档行锁；按主键升序加锁，保持全局锁顺序一致。
+        bomDetailManager.validateAndLockExisting(details);
 
         BigDecimal planQuantity = BigDecimal.valueOf(workOrder.getPlanQuantity());
         List<WorkOrderMaterialEntity> materials = details.stream().map(detail -> {
@@ -665,7 +673,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @return 产品档案，用于冗余字段回填
      */
     private ProductEntity validateProduct(Long productId) {
-        ProductEntity product = productRepository.findByIdAndDeletedFalse(productId)
+        ProductEntity product = productRepository.findByIdAndDeletedFalseForUpdate(productId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.PRODUCT_NOT_EXISTS));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(product.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.PRODUCT_NOT_EXISTS);

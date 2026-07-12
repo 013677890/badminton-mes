@@ -44,6 +44,23 @@ public interface CraftRouteProductRepository extends JpaRepository<CraftRoutePro
      */
     boolean existsByRouteIdAndProductIdAndDeletedFalse(Long routeId, Long productId);
 
+    /** 判断产品是否被任意路线关系引用。 */
+    boolean existsByProductIdAndDeletedFalse(Long productId);
+
+    /** 判断产品是否被生效路线引用。 */
+    @Query("""
+            SELECT CASE WHEN COUNT(relation) > 0 THEN true ELSE false END
+            FROM CraftRouteProductEntity relation, CraftRouteEntity route
+            WHERE route.id = relation.routeId
+              AND relation.productId = :productId
+              AND route.routeStatus = :routeStatus
+              AND route.deleted = false
+              AND relation.deleted = false
+            """)
+    boolean existsEffectiveRouteByProductId(
+            @Param("productId") Long productId,
+            @Param("routeStatus") Integer routeStatus);
+
     /**
      * 逻辑删除路线全部产品关系。
      *

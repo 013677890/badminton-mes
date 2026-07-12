@@ -1,5 +1,8 @@
 package com.badminton.mes.module.production.enums;
 
+import java.util.Arrays;
+import java.util.List;
+
 import lombok.Getter;
 
 /**
@@ -42,8 +45,25 @@ public enum WorkOrderStatusEnum {
     /** 状态描述，用于展示与日志(避免与枚举内置 name() 混淆，不命名为 name) */
     private final String description;
 
+    /** 非终态工单状态，用于主数据活动引用校验。 */
+    private static final List<Integer> ACTIVE_STATUSES = Arrays.stream(values())
+            .filter(status -> status != CLOSED && status != CANCELLED)
+            .map(WorkOrderStatusEnum::getStatus)
+            .toList();
+
     WorkOrderStatusEnum(Integer status, String description) {
         this.status = status;
         this.description = description;
+    }
+
+    /**
+     * 返回全部非终态状态值。
+     *
+     * <p>集合按枚举定义顺序稳定返回且不可修改；新增中间状态会自动纳入。
+     *
+     * @return 非已关闭、非已作废状态值
+     */
+    public static List<Integer> activeStatuses() {
+        return ACTIVE_STATUSES;
     }
 }

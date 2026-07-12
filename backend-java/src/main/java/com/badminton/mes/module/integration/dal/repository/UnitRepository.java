@@ -27,6 +27,11 @@ public interface UnitRepository extends JpaRepository<UnitEntity, Long> {
      */
     Optional<UnitEntity> findByIdAndDeletedFalse(Long id);
 
+    /** 按主键写锁查询未删除单位，供基础资料写入校验。 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT unit FROM UnitEntity unit WHERE unit.id = :id AND unit.deleted = false")
+    Optional<UnitEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
+
     /**
      * 按编码查询有效单位。
      *

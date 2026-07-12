@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface MaterialStockRepository extends JpaRepository<MaterialStockEntity, Long> {
 
+    /** 判断物料是否存在库存记录。 */
+    boolean existsByMaterialIdAndDeletedFalse(Long materialId);
+
     /**
      * 按物料主键集合批量查询未删除库存快照，一次分析只查一趟避免 N+1。
      *

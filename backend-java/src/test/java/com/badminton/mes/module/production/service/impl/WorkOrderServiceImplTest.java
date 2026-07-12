@@ -40,6 +40,7 @@ import com.badminton.mes.module.production.enums.BomStatusEnum;
 import com.badminton.mes.module.production.enums.WorkOrderChangeTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderSourceTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
+import com.badminton.mes.module.production.service.support.BomDetailManager;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -130,6 +131,9 @@ class WorkOrderServiceImplTest {
     @Mock
     private WorkOrderNoSequence workOrderNoSequence;
 
+    @Mock
+    private BomDetailManager bomDetailManager;
+
     private WorkOrderServiceImpl workOrderService;
 
     @BeforeEach
@@ -137,7 +141,8 @@ class WorkOrderServiceImplTest {
         workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository,
                 routeRepository, routeProductRepository, workshopRepository, bomRepository,
                 bomDetailRepository, materialRepository, workOrderMaterialRepository,
-                workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
+                workOrderStatusLogRepository, workOrderCache, workOrderNoSequence,
+                bomDetailManager);
         // Service 从登录上下文取操作人，单测手工构造上下文并在用后清理
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
@@ -154,7 +159,8 @@ class WorkOrderServiceImplTest {
     @DisplayName("创建工单：自动生成单号，冗余字段按产品档案回填")
     void createWorkOrderGeneratesNoAndFillsRedundancy() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
         when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderNoSequence.nextNo()).thenReturn("WO202607080001");
         doAnswer(invocation -> {
@@ -196,7 +202,8 @@ class WorkOrderServiceImplTest {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         ProductEntity disabled = buildEnabledProduct();
         disabled.setStatus(0);
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(disabled));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(disabled));
 
         assertThatThrownBy(() -> workOrderService.createWorkOrder(reqVO))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
@@ -208,7 +215,8 @@ class WorkOrderServiceImplTest {
     void createWorkOrderRejectsDuplicateNo() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         reqVO.setWorkOrderNo("WO202607080001");
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
         when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080001")).thenReturn(true);
 
@@ -224,7 +232,8 @@ class WorkOrderServiceImplTest {
     void createWorkOrderTranslatesDataIntegrityViolationException() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         reqVO.setWorkOrderNo("WO202607080002");
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
         when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080002")).thenReturn(false);
         when(workOrderRepository.saveAndFlush(any(WorkOrderEntity.class)))
@@ -365,7 +374,8 @@ class WorkOrderServiceImplTest {
     void updateWorkOrderFailsWhenCasMiss() {
         when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
         when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(0);
@@ -380,7 +390,8 @@ class WorkOrderServiceImplTest {
     void updateWorkOrderEvictsCacheOnSuccess() {
         when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
         when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(1);
@@ -427,6 +438,7 @@ class WorkOrderServiceImplTest {
         workOrderService.releaseWorkOrder(WORK_ORDER_ID);
 
         // 计划 1000 × 用量 16 ×(1 + 5%) = 16800
+        verify(bomDetailManager).validateAndLockExisting(any());
         ArgumentCaptor<List<WorkOrderMaterialEntity>> materialCaptor = ArgumentCaptor.captor();
         verify(workOrderMaterialRepository).saveAll(materialCaptor.capture());
         List<WorkOrderMaterialEntity> materials = materialCaptor.getValue();

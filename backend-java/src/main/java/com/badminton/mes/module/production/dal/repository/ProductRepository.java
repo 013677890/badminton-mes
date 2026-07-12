@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.badminton.mes.module.production.dal.entity.ProductEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +20,8 @@ import jakarta.persistence.LockModeType;
  * @author 张竹灏
  * @date 2026/07/08
  */
-public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
+public interface ProductRepository extends JpaRepository<ProductEntity, Long>,
+        JpaSpecificationExecutor<ProductEntity> {
 
     /**
      * 按主键查询未删除的产品。
@@ -29,6 +31,11 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
      */
     Optional<ProductEntity> findByIdAndDeletedFalse(Long id);
 
+    /** 按主键写锁查询未删除产品。 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT product FROM ProductEntity product WHERE product.id = :id AND product.deleted = false")
+    Optional<ProductEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
+
     /**
      * 按产品编码查询未删除产品。
      *
@@ -36,6 +43,12 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
      * @return 产品实体
      */
     Optional<ProductEntity> findByProductCodeAndDeletedFalse(String productCode);
+
+    /** 判断有效产品编码是否存在。 */
+    boolean existsByProductCodeAndDeletedFalse(String productCode);
+
+    /** 判断有效产品编码是否存在，排除指定主键。 */
+    boolean existsByProductCodeAndIdNotAndDeletedFalse(String productCode, Long id);
 
     /**
      * 判断计量单位是否已被有效产品引用。
