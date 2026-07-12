@@ -1,5 +1,8 @@
 package com.badminton.mes.module.production.enums;
 
+import java.util.Arrays;
+import java.util.List;
+
 import lombok.Getter;
 
 /**
@@ -38,8 +41,23 @@ public enum DispatchStatusEnum {
     /** 状态描述 */
     private final String description;
 
+    /** 未结束的派工状态，用于产线停用前引用校验。 */
+    private static final List<Integer> ACTIVE_STATUSES = Arrays.stream(values())
+            .filter(status -> status != FINISHED && status != CANCELLED)
+            .map(DispatchStatusEnum::getStatus)
+            .toList();
+
     DispatchStatusEnum(Integer status, String description) {
         this.status = status;
         this.description = description;
+    }
+
+    /**
+     * 返回全部未结束派工状态。
+     *
+     * @return 非已完成、非已取消状态值
+     */
+    public static List<Integer> activeStatuses() {
+        return ACTIVE_STATUSES;
     }
 }

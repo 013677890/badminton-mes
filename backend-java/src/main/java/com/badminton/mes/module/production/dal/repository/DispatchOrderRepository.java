@@ -2,6 +2,7 @@ package com.badminton.mes.module.production.dal.repository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,6 +28,24 @@ import jakarta.persistence.LockModeType;
  */
 public interface DispatchOrderRepository extends JpaRepository<DispatchOrderEntity, Long>,
         JpaSpecificationExecutor<DispatchOrderEntity> {
+
+    /**
+     * 判断产线是否被任意未删除派工单引用。
+     *
+     * @param lineId 产线主键
+     * @return true 表示存在派工引用
+     */
+    boolean existsByLineIdAndDeletedFalse(Long lineId);
+
+    /**
+     * 判断产线是否被指定状态的未删除派工单引用。
+     *
+     * @param lineId 产线主键
+     * @param dispatchStatuses 派工状态集合
+     * @return true 表示存在匹配派工
+     */
+    boolean existsByLineIdAndDispatchStatusInAndDeletedFalse(
+            Long lineId, Collection<Integer> dispatchStatuses);
 
     /**
      * 按主键查询未删除的派工单。

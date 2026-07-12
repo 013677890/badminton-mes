@@ -195,7 +195,7 @@ class IntegrationWriteCommandServiceTest {
         unit.setId(1L);
         unit.setStatus(1);
         when(unitRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(unit));
-        when(workshopRepository.findByWorkshopCodeAndDeletedFalse("WS001"))
+        when(workshopRepository.findByWorkshopCodeAndDeletedFalseForUpdate("WS001"))
                 .thenReturn(Optional.of(workshop));
         when(bomRepository.findByIdAndDeletedFalse(30L)).thenReturn(Optional.of(bom));
         when(routeRepository.findByIdAndDeletedFalse(40L)).thenReturn(Optional.of(route));
@@ -241,7 +241,7 @@ class IntegrationWriteCommandServiceTest {
         unit.setId(1L);
         unit.setStatus(1);
         when(unitRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(unit));
-        when(workshopRepository.findByWorkshopCodeAndDeletedFalse("WS001"))
+        when(workshopRepository.findByWorkshopCodeAndDeletedFalseForUpdate("WS001"))
                 .thenReturn(Optional.of(buildWorkshop()));
         when(bomRepository.findByIdAndDeletedFalse(30L)).thenReturn(Optional.of(buildBom()));
         when(routeRepository.findByIdAndDeletedFalse(40L)).thenReturn(Optional.of(buildRoute()));

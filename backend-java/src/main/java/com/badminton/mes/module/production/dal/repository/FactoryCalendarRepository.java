@@ -36,4 +36,12 @@ public interface FactoryCalendarRepository extends JpaRepository<FactoryCalendar
      */
     List<FactoryCalendarEntity> findByWorkshopIdAndCalendarDateBetweenAndDeletedFalse(
             Long workshopId, LocalDate startDate, LocalDate endDate);
+
+    /**
+     * 判断车间是否存在未删除日历记录。
+     *
+     * @param workshopId 车间主键
+     * @return true 表示存在日历引用
+     */
+    boolean existsByWorkshopIdAndDeletedFalse(Long workshopId);
 }

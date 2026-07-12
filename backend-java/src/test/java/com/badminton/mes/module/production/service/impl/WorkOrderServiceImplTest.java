@@ -161,7 +161,8 @@ class WorkOrderServiceImplTest {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
                 .thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderNoSequence.nextNo()).thenReturn("WO202607080001");
         doAnswer(invocation -> {
             WorkOrderEntity entity = invocation.getArgument(0);
@@ -217,7 +218,8 @@ class WorkOrderServiceImplTest {
         reqVO.setWorkOrderNo("WO202607080001");
         when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
                 .thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080001")).thenReturn(true);
 
         assertThatThrownBy(() -> workOrderService.createWorkOrder(reqVO))
@@ -234,7 +236,8 @@ class WorkOrderServiceImplTest {
         reqVO.setWorkOrderNo("WO202607080002");
         when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
                 .thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080002")).thenReturn(false);
         when(workOrderRepository.saveAndFlush(any(WorkOrderEntity.class)))
                 .thenThrow(new DataIntegrityViolationException("uk_work_order_no"));
@@ -376,7 +379,8 @@ class WorkOrderServiceImplTest {
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
         when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
                 .thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(0);
 
@@ -392,7 +396,8 @@ class WorkOrderServiceImplTest {
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
         when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
                 .thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(1);
 

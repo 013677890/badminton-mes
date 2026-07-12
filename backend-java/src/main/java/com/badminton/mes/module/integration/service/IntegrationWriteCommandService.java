@@ -305,7 +305,7 @@ public class IntegrationWriteCommandService {
      */
     private WorkshopEntity requireWorkshop(String workshopCode) {
         WorkshopEntity workshop = workshopRepository
-                .findByWorkshopCodeAndDeletedFalse(normalizeCode(workshopCode))
+                .findByWorkshopCodeAndDeletedFalseForUpdate(normalizeCode(workshopCode))
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.EXTERNAL_WORKSHOP_NOT_AVAILABLE));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {

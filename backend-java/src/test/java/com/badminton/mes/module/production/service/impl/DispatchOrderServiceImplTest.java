@@ -175,7 +175,7 @@ class DispatchOrderServiceImplTest {
     /** 打通创建校验链路的公共桩：工单锁、产线、班次(2 个启用班次→班次产能 2500)、工作日 */
     private void stubCreatePath(WorkOrderEntity workOrder) {
         when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID)).thenReturn(Optional.of(workOrder));
-        lenient().when(productionLineRepository.findByIdAndDeletedFalse(LINE_ID))
+        lenient().when(productionLineRepository.findByIdAndDeletedFalseForUpdate(LINE_ID))
                 .thenReturn(Optional.of(buildLine()));
         lenient().when(shiftRepository.findByIdAndDeletedFalse(SHIFT_ID))
                 .thenReturn(Optional.of(buildShift(SHIFT_ID, "白班")));

@@ -166,6 +166,58 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode DISPATCH_ADJUST_REASON_REQUIRED =
             new ErrorCode("A0402", "下发后调整必须填写原因", "请填写调整原因后重试");
 
+    /** 车间基础资料不存在 */
+    public static final ErrorCode WORKSHOP_MASTER_NOT_EXISTS =
+            new ErrorCode("A0402", "车间不存在", "车间不存在或已删除，请刷新后重试");
+
+    /** 车间编码重复 */
+    public static final ErrorCode WORKSHOP_CODE_DUPLICATE =
+            new ErrorCode("A0506", "车间编码已存在", "车间编码重复，请更换后重试");
+
+    /** 车间主管用户不可用 */
+    public static final ErrorCode WORKSHOP_MANAGER_NOT_AVAILABLE =
+            new ErrorCode("A0402", "车间主管不存在或未启用", "请选择已启用的车间主管");
+
+    /** 车间并发修改 */
+    public static final ErrorCode WORKSHOP_CONCURRENT_MODIFICATION =
+            new ErrorCode("A0440", "车间已被其他用户修改", "车间数据已变化，请刷新后重试");
+
+    /** 车间存在当前业务引用，不能停用 */
+    public static final ErrorCode WORKSHOP_ACTIVE_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "车间仍被当前业务引用", "请先停用产线、结束工单并调整启用用户");
+
+    /** 车间存在历史业务引用，不能删除 */
+    public static final ErrorCode WORKSHOP_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "车间已有业务引用", "已使用车间只能停用，不能删除");
+
+    /** 产线基础资料不存在 */
+    public static final ErrorCode PRODUCTION_LINE_NOT_EXISTS =
+            new ErrorCode("A0402", "产线不存在", "产线不存在或已删除，请刷新后重试");
+
+    /** 产线编码重复 */
+    public static final ErrorCode PRODUCTION_LINE_CODE_DUPLICATE =
+            new ErrorCode("A0506", "产线编码已存在", "产线编码重复，请更换后重试");
+
+    /** 产线所属车间不可用 */
+    public static final ErrorCode PRODUCTION_LINE_WORKSHOP_NOT_AVAILABLE =
+            new ErrorCode("A0402", "产线所属车间不存在或未启用", "请选择已启用的车间");
+
+    /** 产线所属车间不允许修改 */
+    public static final ErrorCode PRODUCTION_LINE_WORKSHOP_IMMUTABLE =
+            new ErrorCode("A0440", "产线所属车间不允许修改", "如需调整归属，请停用旧产线后新建产线");
+
+    /** 产线并发修改 */
+    public static final ErrorCode PRODUCTION_LINE_CONCURRENT_MODIFICATION =
+            new ErrorCode("A0440", "产线已被其他用户修改", "产线数据已变化，请刷新后重试");
+
+    /** 产线存在当前业务引用，不能停用 */
+    public static final ErrorCode PRODUCTION_LINE_ACTIVE_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "产线仍被当前派工或人员引用", "请先结束派工并调整启用用户");
+
+    /** 产线存在历史业务引用，不能删除 */
+    public static final ErrorCode PRODUCTION_LINE_REFERENCE_EXISTS =
+            new ErrorCode("A0440", "产线已有业务引用", "已使用产线只能停用，不能删除");
+
     /** 产品主档不存在 */
     public static final ErrorCode PRODUCT_MASTER_NOT_EXISTS =
             new ErrorCode("A0402", "产品不存在", "产品不存在或已删除，请刷新后重试");

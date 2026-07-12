@@ -716,7 +716,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param workshopId 车间 id
      */
     private void validateWorkshop(Long workshopId) {
-        WorkshopEntity workshop = workshopRepository.findByIdAndDeletedFalse(workshopId)
+        WorkshopEntity workshop = workshopRepository.findByIdAndDeletedFalseForUpdate(workshopId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS);

@@ -16,6 +16,7 @@ import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.common.util.DesensitizeUtils;
+import com.badminton.mes.module.production.service.ProductionOrganizationReferenceQuery;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
@@ -68,6 +69,8 @@ public class UserServiceImpl implements UserService {
 
     private final PasswordEncoder passwordEncoder;
 
+    private final ProductionOrganizationReferenceQuery organizationReferenceQuery;
+
     /**
      * 构造器注入，依赖不可变。
      *
@@ -76,15 +79,18 @@ public class UserServiceImpl implements UserService {
      * @param roleRepository       角色 Repository
      * @param loginSessionRedisDAO 登录会话 DAO
      * @param passwordEncoder      密码编码器
+     * @param organizationReferenceQuery 生产组织引用查询契约
      */
     public UserServiceImpl(UserRepository userRepository, UserRoleRepository userRoleRepository,
                            RoleRepository roleRepository, LoginSessionRedisDAO loginSessionRedisDAO,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder,
+                           ProductionOrganizationReferenceQuery organizationReferenceQuery) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.loginSessionRedisDAO = loginSessionRedisDAO;
         this.passwordEncoder = passwordEncoder;
+        this.organizationReferenceQuery = organizationReferenceQuery;
     }
 
     @Override
@@ -98,6 +104,7 @@ public class UserServiceImpl implements UserService {
             throw new ServiceException(SystemErrorCodeConstants.USER_NO_DUPLICATE);
         }
         validateRolesUsable(reqVO.getRoleIds());
+        validateOrganization(reqVO.getWorkshopId(), reqVO.getLineId());
 
         UserEntity user = new UserEntity();
         user.setUserNo(reqVO.getUserNo());
@@ -125,6 +132,7 @@ public class UserServiceImpl implements UserService {
     public void updateUser(Long id, UserSaveReqVO reqVO) {
         UserEntity user = validateUserExists(id);
         validateRolesUsable(reqVO.getRoleIds());
+        validateOrganization(reqVO.getWorkshopId(), reqVO.getLineId());
 
         // 工号不允许修改，密码走专用接口，两个字段均忽略
         user.setUserName(reqVO.getUserName());
@@ -166,6 +174,9 @@ public class UserServiceImpl implements UserService {
             validateNotCurrentUser(id);
         }
         UserEntity user = validateUserExists(id);
+        if (CommonStatusEnum.ENABLED.getStatus().equals(status)) {
+            validateOrganization(user.getWorkshopId(), user.getLineId());
+        }
         user.setStatus(status);
         userRepository.save(user);
         if (CommonStatusEnum.DISABLED.getStatus().equals(status)) {
@@ -261,6 +272,21 @@ public class UserServiceImpl implements UserService {
                 .allMatch(role -> CommonStatusEnum.ENABLED.getStatus().equals(role.getStatus()));
         if (!allEnabled) {
             throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_INVALID);
+        }
+    }
+
+    /**
+     * 校验用户所属车间与产线存在、启用且层级一致。
+     *
+     * @param workshopId 车间主键，可空
+     * @param lineId 产线主键，可空
+     */
+    private void validateOrganization(Long workshopId, Long lineId) {
+        if (workshopId == null && lineId == null) {
+            return;
+        }
+        if (!organizationReferenceQuery.lockAndCheckAssignment(workshopId, lineId)) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_ORGANIZATION_INVALID);
         }
     }
 

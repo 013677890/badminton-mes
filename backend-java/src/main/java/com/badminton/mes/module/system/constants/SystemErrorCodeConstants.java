@@ -49,6 +49,10 @@ public final class SystemErrorCodeConstants {
     public static final ErrorCode USER_ROLE_INVALID =
             new ErrorCode("A0402", "所选角色不存在或已停用", "所选角色不可用，请重新选择");
 
+    /** 用户所属车间或产线不存在、未启用或层级不一致 */
+    public static final ErrorCode USER_ORGANIZATION_INVALID =
+            new ErrorCode("A0402", "用户所属车间或产线不可用", "请选择层级一致的启用车间和产线");
+
     /** 角色不存在或已删除(按角色反查用户等接口) */
     public static final ErrorCode ROLE_NOT_EXISTS =
             new ErrorCode("A0402", "角色不存在", "角色不存在或已被删除，请刷新后重试");

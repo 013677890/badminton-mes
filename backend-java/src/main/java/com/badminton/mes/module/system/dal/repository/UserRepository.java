@@ -48,4 +48,38 @@ public interface UserRepository extends JpaRepository<UserEntity, Long>, JpaSpec
      * @return true 已占用
      */
     boolean existsByUserNoAndDeletedFalse(String userNo);
+
+    /**
+     * 判断车间是否被任意未删除用户引用。
+     *
+     * @param workshopId 车间主键
+     * @return true 表示存在用户引用
+     */
+    boolean existsByWorkshopIdAndDeletedFalse(Long workshopId);
+
+    /**
+     * 判断车间是否被指定状态的未删除用户引用。
+     *
+     * @param workshopId 车间主键
+     * @param status 用户状态
+     * @return true 表示存在匹配用户
+     */
+    boolean existsByWorkshopIdAndStatusAndDeletedFalse(Long workshopId, Integer status);
+
+    /**
+     * 判断产线是否被任意未删除用户引用。
+     *
+     * @param lineId 产线主键
+     * @return true 表示存在用户引用
+     */
+    boolean existsByLineIdAndDeletedFalse(Long lineId);
+
+    /**
+     * 判断产线是否被指定状态的未删除用户引用。
+     *
+     * @param lineId 产线主键
+     * @param status 用户状态
+     * @return true 表示存在匹配用户
+     */
+    boolean existsByLineIdAndStatusAndDeletedFalse(Long lineId, Integer status);
 }

@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.Data;
 
-/** 产品与物料状态变更请求。 */
+/** 生产基础资料状态变更请求。 */
 @Data
 public class ProductionStatusReqVO {
     /** 客户端读取时的版本 */

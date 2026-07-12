@@ -303,6 +303,24 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
     boolean existsByProductIdAndOrderStatusInAndDeletedFalse(
             Long productId, Collection<Integer> orderStatuses);
 
+    /**
+     * 判断车间是否被任意未删除工单引用。
+     *
+     * @param workshopId 车间主键
+     * @return true 表示存在工单引用
+     */
+    boolean existsByWorkshopIdAndDeletedFalse(Long workshopId);
+
+    /**
+     * 判断车间是否被指定状态的未删除工单引用。
+     *
+     * @param workshopId 车间主键
+     * @param orderStatuses 工单状态集合
+     * @return true 表示存在匹配工单
+     */
+    boolean existsByWorkshopIdAndOrderStatusInAndDeletedFalse(
+            Long workshopId, Collection<Integer> orderStatuses);
+
     /** 判断 BOM 是否被任意工单引用。 */
     boolean existsByBomIdAndDeletedFalse(Long bomId);
 }

@@ -441,7 +441,7 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
      * @return 产线实体
      */
     private ProductionLineEntity validateLine(Long lineId) {
-        ProductionLineEntity line = productionLineRepository.findByIdAndDeletedFalse(lineId)
+        ProductionLineEntity line = productionLineRepository.findByIdAndDeletedFalseForUpdate(lineId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.DISPATCH_LINE_NOT_AVAILABLE));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(line.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.DISPATCH_LINE_NOT_AVAILABLE);
