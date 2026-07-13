@@ -66,6 +66,46 @@ public final class IntegrationErrorCodeConstants {
     public static final ErrorCode WRITE_CONFLICT =
             new ErrorCode("B0001", "接口写入发生数据库冲突", "写入失败，请稍后重试或联系管理员");
 
+    /** ERP 同步：产品编码不存在 */
+    public static final ErrorCode ERP_PRODUCT_NOT_AVAILABLE =
+            new ErrorCode("A0402", "产品编码不存在", "ERP 产品编码在 MES 中不存在或未启用");
+
+    /** ERP 同步：计划数量必须大于 0 */
+    public static final ErrorCode ERP_TASK_QUANTITY_INVALID =
+            new ErrorCode("A0420", "计划数量必须大于 0", "ERP 任务单数量不合法");
+
+    /** ERP 同步：车间不存在或未启用 */
+    public static final ErrorCode ERP_TASK_WORKSHOP_NOT_AVAILABLE =
+            new ErrorCode("A0402", "车间不存在或未启用", "ERP 任务单车间在 MES 中不存在或未启用");
+
+    /** ERP 同步：计划完成时间不能早于计划开始时间 */
+    public static final ErrorCode ERP_TASK_PLAN_TIME_INVALID =
+            new ErrorCode("A0420", "计划完成时间不能早于计划开始时间", "请检查 ERP 任务单计划时间");
+
+    /** ERP 同步：来源数据关键字段不完整 */
+    public static final ErrorCode ERP_SOURCE_DATA_INVALID =
+            new ErrorCode("A0420", "ERP 来源数据不完整", "请检查来源单号、编码、名称和时间等关键字段");
+
+    /** ERP 工艺同步并发重复 */
+    public static final ErrorCode ERP_CRAFT_DUPLICATE =
+            new ErrorCode("A0506", "ERP 工艺版本已同步", "该 ERP 工艺版本已处理，请勿重复同步");
+
+    /** ERP 同步：工序编码不存在 */
+    public static final ErrorCode ERP_CRAFT_PROCESS_NOT_AVAILABLE =
+            new ErrorCode("A0402", "工序编码不存在", "ERP 工序编码在 MES 中不存在或未启用");
+
+    /** ERP 同步：工序顺序不完整或重复 */
+    public static final ErrorCode ERP_CRAFT_SEQUENCE_INVALID =
+            new ErrorCode("A0420", "工序顺序不完整或重复", "工序顺序号必须从 1 开始连续且不重复");
+
+    /** ERP 同步：待确认数据不存在 */
+    public static final ErrorCode ERP_CRAFT_PENDING_NOT_EXISTS =
+            new ErrorCode("A0402", "待确认工艺数据不存在", "数据不存在或已被删除");
+
+    /** ERP 同步：待确认数据状态不允许确认 */
+    public static final ErrorCode ERP_CRAFT_PENDING_STATUS_INVALID =
+            new ErrorCode("A0440", "当前状态不允许确认", "只有待确认状态的数据才能确认");
+
     private IntegrationErrorCodeConstants() {
     }
 }

@@ -51,6 +51,14 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
     boolean existsByProcessCodeAndDeletedFalse(String processCode);
 
     /**
+     * 按编码查询未删除工序，供 ERP 工艺同步通过编码查找工序主键。
+     *
+     * @param processCode 工序编码
+     * @return 工序实体
+     */
+    Optional<CraftProcessEntity> findByProcessCodeAndDeletedFalse(String processCode);
+
+    /**
      * 判断未删除工序中是否存在指定编码，排除当前工序。
      *
      * @param processCode 工序编码

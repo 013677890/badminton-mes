@@ -136,6 +136,42 @@ public class IntegrationAuditService {
     }
 
     /**
+     * 在当前业务事务中记录已保留失败业务数据的审计结果。
+     *
+     * <p>适用于失败数据本身也需要落库的场景，使失败业务记录与日志原子提交；
+     * 已回滚命令仍使用 {@link #recordFailure} 在独立事务中记录。
+     *
+     * @param interfaceType 接口类型
+     * @param sourceSystem  来源系统
+     * @param businessKey   来源业务键
+     * @param snapshot      请求快照
+     * @param resultId      失败业务记录主键
+     * @param resultNo      失败业务记录编号
+     * @param errorCode     业务错误码
+     * @param errorMessage  失败原因
+     * @return 日志主键
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long recordFailureInCurrentTransaction(
+            IntegrationInterfaceTypeEnum interfaceType,
+            String sourceSystem,
+            String businessKey,
+            String snapshot,
+            Long resultId,
+            String resultNo,
+            ErrorCode errorCode,
+            String errorMessage) {
+        IntegrationWriteLogEntity log = buildLog(
+                interfaceType, sourceSystem, businessKey, snapshot,
+                IntegrationWriteStatusEnum.FAILED);
+        log.setResultId(resultId);
+        log.setResultNo(resultNo);
+        log.setErrorCode(errorCode.code());
+        log.setErrorMessage(truncate(errorMessage));
+        return writeLogRepository.saveAndFlush(log).getId();
+    }
+
+    /**
      * 构造日志公共字段。
      *
      * @param interfaceType 接口类型

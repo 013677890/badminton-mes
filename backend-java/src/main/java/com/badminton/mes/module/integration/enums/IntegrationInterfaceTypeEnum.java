@@ -18,7 +18,13 @@ public enum IntegrationInterfaceTypeEnum {
     WORK_ORDER_WRITE("WORK_ORDER_WRITE"),
 
     /** 生产任务单（派工单）写入 */
-    DISPATCH_ORDER_WRITE("DISPATCH_ORDER_WRITE");
+    DISPATCH_ORDER_WRITE("DISPATCH_ORDER_WRITE"),
+
+    /** ERP 生产任务单同步 */
+    ERP_TASK_SYNC("ERP_TASK_SYNC"),
+
+    /** ERP 工艺数据同步 */
+    ERP_CRAFT_SYNC("ERP_CRAFT_SYNC");
 
     /** 数据库存储值 */
     private final String value;

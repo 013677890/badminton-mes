@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * V8 外部写入接口迁移关键约束测试。
+ * 外部接口数据库迁移关键约束测试。
  *
  * @author 张竹灏
  * @date 2026/07/11
@@ -39,6 +39,29 @@ class IntegrationMigrationContractTest {
         assertThat(auditMigration).contains("ADD COLUMN `update_time` datetime NOT NULL");
         assertThat(auditMigration).contains(
                 "ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间' AFTER `create_time`");
+    }
+
+    @Test
+    @DisplayName("ERP 工艺暂存：来源系统、路线编码和版本由唯一键防重")
+    void erpCraftPendingUsesSourceVersionUniqueKey() throws IOException {
+        String migration = readMigration("V14__erp_craft_pending.sql");
+
+        assertThat(migration).contains("UNIQUE KEY `uk_source_code_version`");
+        assertThat(migration).contains(
+                "(`source_system`, `erp_routing_code`, `erp_routing_version`)");
+    }
+
+    @Test
+    @DisplayName("ERP 工艺种子：仅跳过已存在工序且不忽略其他 SQL 错误")
+    void erpCraftSeedDataUsesExplicitExistenceChecks() throws IOException {
+        String migration = readMigration("V14__erp_craft_pending.sql");
+
+        assertThat(migration).doesNotContain("INSERT IGNORE");
+        assertThat(migration).contains("WHERE NOT EXISTS (");
+        assertThat(migration).contains(
+                "SELECT 1 FROM `craft_process` WHERE `process_code` = 'PR001'");
+        assertThat(migration).contains(
+                "SELECT 1 FROM `craft_process` WHERE `process_code` = 'PR005'");
     }
 
     /**
