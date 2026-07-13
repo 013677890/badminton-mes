@@ -40,10 +40,10 @@ public class BomEntity {
     private String version;
 
     /** 状态：0 草稿 1 生效 2 停用 */
-    @Column(name = "bom_status")
+    @Column(name = "bom_status", columnDefinition = "tinyint unsigned")
     private Integer bomStatus;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

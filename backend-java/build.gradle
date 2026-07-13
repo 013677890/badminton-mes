@@ -31,7 +31,7 @@ dependencies {
     // 仅取 BCrypt 密码哈希工具，无自动配置与过滤器链；版本由 Boot BOM 仲裁
     implementation 'org.springframework.security:spring-security-crypto'
     runtimeOnly 'org.flywaydb:flyway-mysql'
-    runtimeOnly 'org.mariadb.jdbc:mariadb-java-client'
+    runtimeOnly 'com.mysql:mysql-connector-j'
 
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
@@ -42,7 +42,20 @@ dependencies {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'integration'
+    }
+}
+
+tasks.register('integrationTest', Test) {
+    description = 'Runs tests that require the external MySQL and Redis test infrastructure.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'integration'
+    }
+    shouldRunAfter tasks.named('test')
 }
 
 tasks.withType(JavaCompile).configureEach {

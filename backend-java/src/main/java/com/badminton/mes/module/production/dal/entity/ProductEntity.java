@@ -44,10 +44,10 @@ public class ProductEntity {
     private Long unitId;
 
     /** 状态：1 启用 0 停用 */
-    @Column(name = "status")
+    @Column(name = "status", columnDefinition = "tinyint unsigned")
     private Integer status;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

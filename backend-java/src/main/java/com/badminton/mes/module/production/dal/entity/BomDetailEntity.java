@@ -38,14 +38,14 @@ public class BomDetailEntity {
     private Long materialId;
 
     /** 标准用量(单位产品) */
-    @Column(name = "quantity")
+    @Column(name = "quantity", precision = 12, scale = 4)
     private BigDecimal quantity;
 
     /** 损耗率(%) */
-    @Column(name = "loss_rate")
+    @Column(name = "loss_rate", precision = 5, scale = 2)
     private BigDecimal lossRate;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

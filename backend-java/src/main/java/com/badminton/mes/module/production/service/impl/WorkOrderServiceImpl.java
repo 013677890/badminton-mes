@@ -34,6 +34,8 @@ import com.badminton.mes.module.production.dal.redis.WorkOrderCache;
 import com.badminton.mes.module.production.dal.redis.WorkOrderNoSequence;
 import com.badminton.mes.module.production.dal.repository.BomDetailRepository;
 import com.badminton.mes.module.production.dal.repository.BomRepository;
+import com.badminton.mes.module.production.dal.repository.CraftRoutingRelationRepository;
+import com.badminton.mes.module.production.dal.repository.CraftRoutingRelationRepository.RoutingRelationSnapshot;
 import com.badminton.mes.module.production.dal.repository.MaterialRepository;
 import com.badminton.mes.module.production.dal.repository.ProductRepository;
 import com.badminton.mes.module.production.dal.repository.WorkOrderMaterialRepository;
@@ -86,6 +88,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private final MaterialRepository materialRepository;
 
+    private final CraftRoutingRelationRepository craftRoutingRelationRepository;
+
     private final WorkOrderMaterialRepository workOrderMaterialRepository;
 
     private final WorkOrderStatusLogRepository workOrderStatusLogRepository;
@@ -103,6 +107,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param bomRepository                BOM Repository
      * @param bomDetailRepository          BOM 明细 Repository
      * @param materialRepository           物料 Repository
+     * @param craftRoutingRelationRepository 工艺路线关系只读 Repository
      * @param workOrderMaterialRepository  工单物料需求 Repository
      * @param workOrderStatusLogRepository 工单状态日志 Repository
      * @param workOrderCache               工单缓存组件
@@ -111,6 +116,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     public WorkOrderServiceImpl(WorkOrderRepository workOrderRepository, ProductRepository productRepository,
                                 WorkshopRepository workshopRepository, BomRepository bomRepository,
                                 BomDetailRepository bomDetailRepository, MaterialRepository materialRepository,
+                                CraftRoutingRelationRepository craftRoutingRelationRepository,
                                 WorkOrderMaterialRepository workOrderMaterialRepository,
                                 WorkOrderStatusLogRepository workOrderStatusLogRepository,
                                 WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence) {
@@ -120,6 +126,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         this.bomRepository = bomRepository;
         this.bomDetailRepository = bomDetailRepository;
         this.materialRepository = materialRepository;
+        this.craftRoutingRelationRepository = craftRoutingRelationRepository;
         this.workOrderMaterialRepository = workOrderMaterialRepository;
         this.workOrderStatusLogRepository = workOrderStatusLogRepository;
         this.workOrderCache = workOrderCache;
@@ -455,15 +462,13 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param workOrder 已下达的工单数据
      */
     private void generateWorkOrderMaterials(WorkOrderEntity workOrder) {
-        BomEntity bom = bomRepository.findByIdAndDeletedFalse(workOrder.getBomId())
-                .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE));
-        if (!BomStatusEnum.EFFECTIVE.getStatus().equals(bom.getBomStatus())) {
-            throw new ServiceException(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE);
-        }
+        BomEntity bom = validateAvailableBom(workOrder);
         List<BomDetailEntity> details = bomDetailRepository.findByBomIdAndDeletedFalse(bom.getId());
         if (details.isEmpty()) {
             throw new ServiceException(ProductionErrorCodeConstants.BOM_DETAIL_EMPTY);
         }
+        validateAvailableMaterials(details);
+        validateAvailableRouting(workOrder);
         if (workOrderMaterialRepository.existsByWorkOrderIdAndDeletedFalse(workOrder.getId())) {
             return;
         }
@@ -477,6 +482,67 @@ public class WorkOrderServiceImpl implements WorkOrderService {
             return material;
         }).toList();
         workOrderMaterialRepository.saveAll(materials);
+    }
+
+    /**
+     * 校验工单引用的 BOM 已生效且属于当前产品。
+     *
+     * @param workOrder 工单数据
+     * @return 可用于生成物料需求的 BOM
+     */
+    private BomEntity validateAvailableBom(WorkOrderEntity workOrder) {
+        BomEntity bom = bomRepository.findByIdAndDeletedFalse(workOrder.getBomId())
+                .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE));
+        boolean available = BomStatusEnum.EFFECTIVE.getStatus().equals(bom.getBomStatus())
+                && workOrder.getProductId().equals(bom.getProductId());
+        if (!available) {
+            throw new ServiceException(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE);
+        }
+        return bom;
+    }
+
+    /**
+     * 校验 BOM 明细引用的全部物料存在且处于启用状态。
+     *
+     * @param details BOM 明细
+     */
+    private void validateAvailableMaterials(List<BomDetailEntity> details) {
+        List<Long> materialIds = details.stream().map(BomDetailEntity::getMaterialId).distinct().toList();
+        Set<Long> availableMaterialIds = materialRepository.findByIdInAndDeletedFalse(materialIds).stream()
+                .filter(material -> CommonStatusEnum.ENABLED.getStatus().equals(material.getStatus()))
+                .map(MaterialEntity::getId)
+                .collect(Collectors.toSet());
+        if (!availableMaterialIds.containsAll(materialIds)) {
+            throw new ServiceException(ProductionErrorCodeConstants.MATERIAL_NOT_AVAILABLE);
+        }
+    }
+
+    /**
+     * 校验工艺路线已生效、绑定当前产品，并且有效明细中的工序与 SOP 均可用。
+     *
+     * @param workOrder 工单数据
+     */
+    private void validateAvailableRouting(WorkOrderEntity workOrder) {
+        RoutingRelationSnapshot snapshot = craftRoutingRelationRepository.findRelationSnapshot(
+                workOrder.getRoutingId(), workOrder.getProductId());
+        if (!snapshot.routingAvailable()) {
+            throw new ServiceException(ProductionErrorCodeConstants.ROUTING_NOT_AVAILABLE);
+        }
+        if (!snapshot.productBound()) {
+            throw new ServiceException(ProductionErrorCodeConstants.ROUTING_PRODUCT_NOT_MATCH);
+        }
+        boolean sequenceContinuous = snapshot.detailCount() > 0
+                && Integer.valueOf(1).equals(snapshot.minimumSequence())
+                && Integer.valueOf(snapshot.detailCount()).equals(snapshot.maximumSequence());
+        if (!sequenceContinuous) {
+            throw new ServiceException(ProductionErrorCodeConstants.ROUTING_DETAIL_INVALID);
+        }
+        if (snapshot.unavailableProcessCount() > 0) {
+            throw new ServiceException(ProductionErrorCodeConstants.ROUTING_PROCESS_NOT_AVAILABLE);
+        }
+        if (snapshot.unavailableSopCount() > 0) {
+            throw new ServiceException(ProductionErrorCodeConstants.ROUTING_SOP_NOT_AVAILABLE);
+        }
     }
 
     /**

@@ -1,6 +1,11 @@
 package com.badminton.mes.common.security;
 
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -20,13 +25,29 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
     private final AuthInterceptor authInterceptor;
 
+    private final List<String> allowedOrigins;
+
     /**
      * 构造器注入，依赖不可变。
      *
      * @param authInterceptor 登录鉴权拦截器
+     * @param allowedOrigins  前端允许来源列表
      */
-    public SecurityWebConfig(AuthInterceptor authInterceptor) {
+    public SecurityWebConfig(AuthInterceptor authInterceptor,
+                             @Value("${mes.web.cors.allowed-origins:http://localhost:5173}")
+                             List<String> allowedOrigins) {
         this.authInterceptor = authInterceptor;
+        this.allowedOrigins = List.copyOf(allowedOrigins);
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/api/**")
+                .allowedOrigins(allowedOrigins.toArray(String[]::new))
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedHeaders(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE)
+                .allowCredentials(false)
+                .maxAge(3600);
     }
 
     @Override

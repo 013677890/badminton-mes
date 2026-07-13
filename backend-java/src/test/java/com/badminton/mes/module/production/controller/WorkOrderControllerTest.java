@@ -27,8 +27,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -57,6 +59,29 @@ class WorkOrderControllerTest {
     @BeforeEach
     void permitAllRequests() throws Exception {
         when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("CORS 预检：允许本地前端携带 Authorization 请求头")
+    void corsPreflightAllowsConfiguredFrontendOrigin() throws Exception {
+        mockMvc.perform(options("/api/production/work_orders/page")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "Authorization,Content-Type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.containsStringIgnoringCase("Authorization")));
+    }
+
+    @Test
+    @DisplayName("CORS 预检：拒绝未配置的来源")
+    void corsPreflightRejectsUnknownOrigin() throws Exception {
+        mockMvc.perform(options("/api/production/work_orders/page")
+                        .header("Origin", "https://untrusted.example.com")
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
 
     @Test

@@ -1,21 +1,10 @@
-# 羽毛球 MES 后端配置(样例)
-# 敏感信息通过环境变量注入，配置文件不落明文密码(安全规约：敏感数据禁止明文存储)
+# 羽毛球 MES 后端公共配置，仅保留与运行环境无关的选项。
+# 本地默认启用 dev；部署环境必须显式设置 SPRING_PROFILES_ACTIVE=prod。
 spring:
   application:
     name: badminton-mes
-  datasource:
-    # MySQL 8.4 LTS，驱动使用 MariaDB Connector/J
-    # 容器/多环境部署时通过 MES_DB_URL 覆盖主机名，见 docker-compose.yml
-    # allowPublicKeyRetrieval=true: 允许从服务器获取RSA公钥，解决MySQL 8.x caching_sha2_password认证问题
-    url: ${MES_DB_URL:jdbc:mariadb://localhost:3306/badminton_mes?allowPublicKeyRetrieval=true&useSSL=false}
-    username: ${MES_DB_USERNAME:root}
-    password: ${MES_DB_PASSWORD:root}
-    driver-class-name: org.mariadb.jdbc.Driver
-  data:
-    redis:
-      # 工单详情缓存与工单号流水生成使用，Key 见 dal.redis.ProductionRedisKeyConstants
-      host: ${MES_REDIS_HOST:localhost}
-      port: ${MES_REDIS_PORT:6379}
+  profiles:
+    default: dev
   flyway:
     # 数据库结构统一由 Flyway 迁移脚本管理，禁止手工改库
     locations: classpath:db/migration
@@ -26,4 +15,4 @@ spring:
     open-in-view: false
 
 server:
-  port: 8080
+  port: ${MES_SERVER_PORT:8080}

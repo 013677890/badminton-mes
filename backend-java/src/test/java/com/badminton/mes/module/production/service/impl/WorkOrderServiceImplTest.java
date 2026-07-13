@@ -26,6 +26,8 @@ import com.badminton.mes.module.production.dal.redis.WorkOrderCache;
 import com.badminton.mes.module.production.dal.redis.WorkOrderNoSequence;
 import com.badminton.mes.module.production.dal.repository.BomDetailRepository;
 import com.badminton.mes.module.production.dal.repository.BomRepository;
+import com.badminton.mes.module.production.dal.repository.CraftRoutingRelationRepository;
+import com.badminton.mes.module.production.dal.repository.CraftRoutingRelationRepository.RoutingRelationSnapshot;
 import com.badminton.mes.module.production.dal.repository.MaterialRepository;
 import com.badminton.mes.module.production.dal.repository.ProductRepository;
 import com.badminton.mes.module.production.dal.repository.WorkOrderMaterialRepository;
@@ -108,6 +110,9 @@ class WorkOrderServiceImplTest {
     private MaterialRepository materialRepository;
 
     @Mock
+    private CraftRoutingRelationRepository craftRoutingRelationRepository;
+
+    @Mock
     private WorkOrderMaterialRepository workOrderMaterialRepository;
 
     @Mock
@@ -124,7 +129,8 @@ class WorkOrderServiceImplTest {
     @BeforeEach
     void setUp() {
         workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository, workshopRepository,
-                bomRepository, bomDetailRepository, materialRepository, workOrderMaterialRepository,
+                bomRepository, bomDetailRepository, materialRepository, craftRoutingRelationRepository,
+                workOrderMaterialRepository,
                 workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
         // Service 从登录上下文取操作人，单测手工构造上下文并在用后清理
         LoginUser loginUser = new LoginUser();
@@ -411,6 +417,10 @@ class WorkOrderServiceImplTest {
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
+        when(materialRepository.findByIdInAndDeletedFalse(List.of(MATERIAL_ID)))
+                .thenReturn(List.of(buildEnabledMaterial()));
+        when(craftRoutingRelationRepository.findRelationSnapshot(any(), any()))
+                .thenReturn(new RoutingRelationSnapshot(true, true, 1, 1, 1, 0, 0));
         when(workOrderMaterialRepository.existsByWorkOrderIdAndDeletedFalse(WORK_ORDER_ID)).thenReturn(false);
 
         workOrderService.releaseWorkOrder(WORK_ORDER_ID);
@@ -441,6 +451,45 @@ class WorkOrderServiceImplTest {
         assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
                         .isSameAs(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE));
+        verify(workOrderMaterialRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("下达工单：BOM 不属于工单产品，抛 BOM 不可用异常")
+    void releaseWorkOrderRejectsBomOfAnotherProduct() {
+        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
+                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
+        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
+        BomEntity anotherProductBom = buildBom(BomStatusEnum.EFFECTIVE.getStatus());
+        anotherProductBom.setProductId(PRODUCT_ID + 1);
+        when(bomRepository.findByIdAndDeletedFalse(BOM_ID)).thenReturn(Optional.of(anotherProductBom));
+
+        assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
+                .isInstanceOfSatisfying(ServiceException.class, exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(ProductionErrorCodeConstants.BOM_NOT_AVAILABLE));
+        verify(bomDetailRepository, never()).findByBomIdAndDeletedFalse(any());
+        verify(workOrderMaterialRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("下达工单：BOM 明细引用停用物料，抛物料不可用异常")
+    void releaseWorkOrderRejectsDisabledMaterial() {
+        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
+                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
+        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
+        when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
+                .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
+        when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
+        MaterialEntity disabledMaterial = buildEnabledMaterial();
+        disabledMaterial.setStatus(0);
+        when(materialRepository.findByIdInAndDeletedFalse(List.of(MATERIAL_ID)))
+                .thenReturn(List.of(disabledMaterial));
+
+        assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
+                .isInstanceOfSatisfying(ServiceException.class, exception -> assertThat(exception.getErrorCode())
+                        .isSameAs(ProductionErrorCodeConstants.MATERIAL_NOT_AVAILABLE));
         verify(workOrderMaterialRepository, never()).saveAll(any());
     }
 
@@ -893,6 +942,19 @@ class WorkOrderServiceImplTest {
         bom.setBomStatus(bomStatus);
         bom.setDeleted(false);
         return bom;
+    }
+
+    /**
+     * 构造启用状态的物料档案。
+     */
+    private MaterialEntity buildEnabledMaterial() {
+        MaterialEntity material = new MaterialEntity();
+        material.setId(MATERIAL_ID);
+        material.setMaterialCode("M002");
+        material.setMaterialName("鹅毛羽片");
+        material.setStatus(1);
+        material.setDeleted(false);
+        return material;
     }
 
     /**

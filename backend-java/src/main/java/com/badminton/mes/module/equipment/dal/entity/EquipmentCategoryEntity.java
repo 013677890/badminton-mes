@@ -53,7 +53,7 @@ public class EquipmentCategoryEntity {
     private String remark;
 
     /** 状态：1 启用 0 停用 */
-    @Column(name = "status")
+    @Column(name = "status", columnDefinition = "tinyint")
     private Integer status;
 
     /** 创建人用户 id */
