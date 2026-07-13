@@ -1,6 +1,7 @@
 package com.badminton.mes.module.integration.service;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
@@ -30,6 +31,14 @@ public interface IntegrationService {
      * @return 写入结果
      */
     IntegrationWriteResultRespVO writeWorkOrder(ExternalWorkOrderWriteReqVO reqVO);
+
+    /**
+     * 按来源系统和外部任务单号幂等写入生产任务单（派工单）。
+     *
+     * @param reqVO 外部任务单写入请求
+     * @return 写入结果
+     */
+    IntegrationWriteResultRespVO writeDispatchOrder(ExternalDispatchOrderWriteReqVO reqVO);
 
     /**
      * 分页查询外部接口写入结果。

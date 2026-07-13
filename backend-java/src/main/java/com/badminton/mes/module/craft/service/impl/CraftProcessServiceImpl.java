@@ -1,7 +1,11 @@
 package com.badminton.mes.module.craft.service.impl;
 
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.badminton.mes.common.core.GlobalErrorCodeConstants;
 import com.badminton.mes.common.core.PageResult;
@@ -13,6 +17,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogPageReq
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
@@ -227,6 +232,37 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         CraftProcessRespVO result = CraftProcessConvert.toRespVO(requireProcess(id));
         craftCache.putProcess(result);
         return result;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CraftProcessRuleRespVO> getProcessRules(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> distinctIds = ids.stream()
+                .filter(id -> id != null && id > 0)
+                .distinct()
+                .toList();
+        if (distinctIds.isEmpty()) {
+            return List.of();
+        }
+
+        // JPA 的 IN 查询不保证结果顺序，先构建索引，再按调用方请求顺序稳定返回。
+        Map<Long, CraftProcessEntity> processById = processRepository
+                .findByIdInAndStatusAndDeletedFalse(
+                        distinctIds, CommonStatusEnum.ENABLED.getStatus())
+                .stream()
+                .collect(Collectors.toMap(
+                        CraftProcessEntity::getId,
+                        Function.identity(),
+                        (firstProcess, ignoredProcess) -> firstProcess));
+        return distinctIds.stream()
+                .map(processById::get)
+                .filter(Objects::nonNull)
+                .map(CraftProcessConvert::toRuleRespVO)
+                .toList();
     }
 
     @Override

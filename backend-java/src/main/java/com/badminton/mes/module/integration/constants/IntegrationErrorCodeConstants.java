@@ -46,6 +46,22 @@ public final class IntegrationErrorCodeConstants {
     public static final ErrorCode EXTERNAL_ROUTE_NOT_AVAILABLE =
             new ErrorCode("A0402", "工艺路线未生效或未绑定当前产品", "请检查工艺路线与产品");
 
+    /** 外部任务单关联的工单不存在或不可派工 */
+    public static final ErrorCode EXTERNAL_DISPATCH_WORK_ORDER_NOT_AVAILABLE =
+            new ErrorCode("A0402", "工单不存在或当前状态不允许派工", "请检查工单号与工单状态");
+
+    /** 外部任务单产线不存在或未启用 */
+    public static final ErrorCode EXTERNAL_DISPATCH_LINE_NOT_AVAILABLE =
+            new ErrorCode("A0402", "产线不存在或未启用", "请检查产线编码");
+
+    /** 外部任务单班次不存在或未启用 */
+    public static final ErrorCode EXTERNAL_DISPATCH_SHIFT_NOT_AVAILABLE =
+            new ErrorCode("A0402", "班次不存在或未启用", "请检查班次编码");
+
+    /** 外部任务单计划时间不合法 */
+    public static final ErrorCode EXTERNAL_DISPATCH_PLAN_TIME_INVALID =
+            new ErrorCode("A0420", "计划完成时间不能早于计划开始时间", "请检查计划开始与完成时间");
+
     /** 接口写入发生无法归类的数据库冲突 */
     public static final ErrorCode WRITE_CONFLICT =
             new ErrorCode("B0001", "接口写入发生数据库冲突", "写入失败，请稍后重试或联系管理员");

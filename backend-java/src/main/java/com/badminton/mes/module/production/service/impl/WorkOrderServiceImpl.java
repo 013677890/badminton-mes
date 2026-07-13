@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -22,6 +23,7 @@ import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
@@ -441,6 +443,66 @@ public class WorkOrderServiceImpl implements WorkOrderService {
             workOrderCache.put(workOrder);
             return WorkOrderConvert.toRespVO(workOrder);
         });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WorkOrderProgressRespVO> getWorkOrderProgress(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinctIds = ids.stream().filter(id -> id != null && id > 0).distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkOrderEntity> workOrderById = workOrderRepository
+                .findByIdInAndDeletedFalse(distinctIds).stream()
+                .collect(Collectors.toMap(WorkOrderEntity::getId, Function.identity()));
+        return distinctIds.stream()
+                .map(workOrderById::get)
+                .filter(Objects::nonNull)
+                .map(this::toProgressRespVO)
+                .toList();
+    }
+
+    /**
+     * 工单实体转进度响应。
+     *
+     * @param workOrder 工单实体
+     * @return 进度响应
+     */
+    private WorkOrderProgressRespVO toProgressRespVO(WorkOrderEntity workOrder) {
+        WorkOrderProgressRespVO respVO = new WorkOrderProgressRespVO();
+        respVO.setId(workOrder.getId());
+        respVO.setWorkOrderNo(workOrder.getWorkOrderNo());
+        respVO.setProductName(workOrder.getProductName());
+        respVO.setPlanQuantity(workOrder.getPlanQuantity());
+        respVO.setDispatchedQuantity(workOrder.getDispatchedQuantity());
+        respVO.setInputQuantity(workOrder.getInputQuantity());
+        respVO.setFinishQuantity(workOrder.getFinishQuantity());
+        respVO.setDefectQuantity(workOrder.getDefectQuantity());
+        respVO.setReworkQuantity(workOrder.getReworkQuantity());
+        respVO.setOrderStatus(workOrder.getOrderStatus());
+        respVO.setProgressPercent(calculateProgressPercent(
+                workOrder.getFinishQuantity(), workOrder.getPlanQuantity()));
+        return respVO;
+    }
+
+    /**
+     * 计算完工进度百分比，保留两位小数。
+     *
+     * @param finishQuantity 完工数量
+     * @param planQuantity   计划数量
+     * @return 进度百分比
+     */
+    private BigDecimal calculateProgressPercent(Integer finishQuantity, Integer planQuantity) {
+        if (planQuantity == null || planQuantity <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        int finish = finishQuantity == null ? 0 : finishQuantity;
+        return BigDecimal.valueOf(finish)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(planQuantity), 2, RoundingMode.HALF_UP);
     }
 
     @Override

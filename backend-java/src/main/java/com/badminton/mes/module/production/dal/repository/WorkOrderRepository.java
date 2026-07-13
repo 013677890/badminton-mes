@@ -323,4 +323,12 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
 
     /** 判断 BOM 是否被任意工单引用。 */
     boolean existsByBomIdAndDeletedFalse(Long bomId);
+
+    /**
+     * 按工单号查询未删除工单，外部任务单写入时解析工单号用。
+     *
+     * @param workOrderNo 工单号
+     * @return 工单实体
+     */
+    Optional<WorkOrderEntity> findByWorkOrderNoAndDeletedFalse(String workOrderNo);
 }

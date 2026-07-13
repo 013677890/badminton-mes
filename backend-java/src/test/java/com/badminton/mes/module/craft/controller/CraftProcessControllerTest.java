@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.security.AuthInterceptor;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.service.CraftProcessDefectReasonService;
 import com.badminton.mes.module.craft.service.CraftProcessService;
@@ -137,6 +138,36 @@ class CraftProcessControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.list").isArray())
                 .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
+    @DisplayName("工序规则批量查询：返回规则列表并转发主键顺序")
+    void getProcessRulesReturnsRuleList() throws Exception {
+        CraftProcessRuleRespVO rule = new CraftProcessRuleRespVO();
+        rule.setId(100L);
+        rule.setProcessCode("FEATHER-FIX");
+        when(processService.getProcessRules(List.of(100L, 200L)))
+                .thenReturn(List.of(rule));
+
+        mockMvc.perform(get("/api/craft/processes/rules")
+                        .param("ids", "100", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data[0].processCode").value("FEATHER-FIX"));
+        verify(processService).getProcessRules(List.of(100L, 200L));
+    }
+
+    @Test
+    @DisplayName("工序规则批量查询：超过 100 个主键时拒绝请求")
+    void getProcessRulesRejectsOversizedBatch() throws Exception {
+        String[] ids = java.util.stream.LongStream.rangeClosed(1, 101)
+                .mapToObj(String::valueOf)
+                .toArray(String[]::new);
+
+        mockMvc.perform(get("/api/craft/processes/rules").param("ids", ids))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(processService, never()).getProcessRules(any());
     }
 
     @Test

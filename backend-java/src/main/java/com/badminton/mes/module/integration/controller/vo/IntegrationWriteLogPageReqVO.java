@@ -20,7 +20,7 @@ import lombok.EqualsAndHashCode;
 public class IntegrationWriteLogPageReqVO extends PageParam {
 
     /** 接口类型 */
-    @Pattern(regexp = "^(UNIT_WRITE|WORK_ORDER_WRITE)$", message = "接口类型不合法")
+    @Pattern(regexp = "^(UNIT_WRITE|WORK_ORDER_WRITE|DISPATCH_ORDER_WRITE)$", message = "接口类型不合法")
     private String interfaceType;
 
     /** 来源系统 */

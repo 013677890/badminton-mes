@@ -15,7 +15,10 @@ public enum IntegrationInterfaceTypeEnum {
     UNIT_WRITE("UNIT_WRITE"),
 
     /** 生产工单写入 */
-    WORK_ORDER_WRITE("WORK_ORDER_WRITE");
+    WORK_ORDER_WRITE("WORK_ORDER_WRITE"),
+
+    /** 生产任务单（派工单）写入 */
+    DISPATCH_ORDER_WRITE("DISPATCH_ORDER_WRITE");
 
     /** 数据库存储值 */
     private final String value;

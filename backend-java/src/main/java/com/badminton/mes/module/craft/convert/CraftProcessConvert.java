@@ -5,6 +5,7 @@ import java.util.List;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessDefectReasonRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSopRespVO;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessChangeLogEntity;
@@ -92,6 +93,30 @@ public final class CraftProcessConvert {
      */
     public static List<CraftProcessRespVO> toRespVOList(List<CraftProcessEntity> processes) {
         return processes.stream().map(CraftProcessConvert::toRespVO).toList();
+    }
+
+    /**
+     * 工序实体转执行规则响应。
+     *
+     * @param process 工序实体
+     * @return 工序规则响应
+     */
+    public static CraftProcessRuleRespVO toRuleRespVO(CraftProcessEntity process) {
+        CraftProcessRuleRespVO respVO = new CraftProcessRuleRespVO();
+        respVO.setId(process.getId());
+        respVO.setProcessCode(process.getProcessCode());
+        respVO.setProcessName(process.getProcessName());
+        respVO.setProcessType(process.getProcessType());
+        respVO.setStandardTimeSeconds(process.getStandardTimeSeconds());
+        respVO.setKeyProcess(process.getKeyProcess());
+        respVO.setReportRequired(process.getKeyProcess());
+        respVO.setPersonnelRequired(process.getKeyProcess());
+        respVO.setQualityRequired(process.getQualityRequired());
+        respVO.setScanRequired(process.getScanRequired());
+        respVO.setPieceRateEnabled(process.getPieceRateEnabled());
+        respVO.setEquipmentCategoryId(process.getEquipmentCategoryId());
+        respVO.setQualityPlanId(process.getQualityPlanId());
+        return respVO;
     }
 
     /**

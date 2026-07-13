@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.SecurityContextHolder;
@@ -11,6 +12,7 @@ import com.badminton.mes.module.craft.constants.CraftErrorCodeConstants;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
@@ -309,6 +311,27 @@ class CraftProcessServiceImplTest {
 
         assertThat(result.getId()).isEqualTo(PROCESS_ID);
         verify(craftCache).putProcess(result);
+    }
+
+    @Test
+    @DisplayName("工序规则批量查询：去重并按请求顺序返回启用工序")
+    void getProcessRulesReturnsDistinctResultsInRequestOrder() {
+        CraftProcessEntity firstProcess = buildProcess(0);
+        CraftProcessEntity secondProcess = buildProcess(0);
+        secondProcess.setId(200L);
+        secondProcess.setProcessCode("ASSEMBLY");
+        secondProcess.setProcessName("装配");
+        when(processRepository.findByIdInAndStatusAndDeletedFalse(
+                List.of(PROCESS_ID, 200L), CommonStatusEnum.ENABLED.getStatus()))
+                .thenReturn(List.of(secondProcess, firstProcess));
+
+        List<CraftProcessRuleRespVO> result = processService.getProcessRules(
+                List.of(PROCESS_ID, 200L, PROCESS_ID));
+
+        assertThat(result).extracting(CraftProcessRuleRespVO::getId)
+                .containsExactly(PROCESS_ID, 200L);
+        assertThat(result.getFirst().getReportRequired()).isTrue();
+        assertThat(result.getFirst().getPersonnelRequired()).isTrue();
     }
 
     @Test

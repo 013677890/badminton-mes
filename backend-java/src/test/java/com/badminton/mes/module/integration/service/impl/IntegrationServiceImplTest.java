@@ -7,6 +7,7 @@ import java.util.Optional;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
+import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
@@ -16,6 +17,7 @@ import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
 import com.badminton.mes.module.integration.service.IntegrationAuditService;
+import com.badminton.mes.module.integration.service.IntegrationDispatchWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationWriteCommandService;
 import com.badminton.mes.module.integration.service.dto.IntegrationCommandResult;
 import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
@@ -50,6 +52,9 @@ class IntegrationServiceImplTest {
     private IntegrationWriteCommandService commandService;
 
     @Mock
+    private IntegrationDispatchWriteCommandService dispatchCommandService;
+
+    @Mock
     private IntegrationAuditService auditService;
 
     @Mock
@@ -60,7 +65,7 @@ class IntegrationServiceImplTest {
     @BeforeEach
     void setUp() {
         integrationService = new IntegrationServiceImpl(
-                commandService, auditService, writeLogRepository);
+                commandService, dispatchCommandService, auditService, writeLogRepository);
     }
 
     @Test
@@ -157,6 +162,48 @@ class IntegrationServiceImplTest {
     }
 
     @Test
+    @DisplayName("任务单写入：命令成功时返回派工单业务结果")
+    void writeDispatchOrderReturnsCommandResult() {
+        ExternalDispatchOrderWriteReqVO reqVO = buildDispatchReqVO();
+        when(auditService.serializeRequest(reqVO)).thenReturn("{}");
+        when(dispatchCommandService.writeDispatchOrder(reqVO, "{}"))
+                .thenReturn(new IntegrationCommandResult(
+                        80L, "DO202607130001", false, 504L));
+
+        IntegrationWriteResultRespVO result = integrationService.writeDispatchOrder(reqVO);
+
+        assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.getBusinessId()).isEqualTo(80L);
+        assertThat(result.getBusinessNo()).isEqualTo("DO202607130001");
+        assertThat(result.getLogId()).isEqualTo(504L);
+    }
+
+    @Test
+    @DisplayName("任务单写入：命令校验失败时记录失败日志")
+    void writeDispatchOrderRecordsBusinessFailure() {
+        ExternalDispatchOrderWriteReqVO reqVO = buildDispatchReqVO();
+        when(auditService.serializeRequest(reqVO)).thenReturn("{}");
+        when(dispatchCommandService.writeDispatchOrder(reqVO, "{}"))
+                .thenThrow(new ServiceException(
+                        IntegrationErrorCodeConstants.EXTERNAL_DISPATCH_LINE_NOT_AVAILABLE));
+        when(dispatchCommandService.findExternalDispatchLog("ERP-MAIN", "ERP-DO-001"))
+                .thenReturn(Optional.empty());
+        when(auditService.recordFailure(any(), any(), any(), any(),
+                any(), any(), any(), any())).thenReturn(505L);
+
+        IntegrationWriteResultRespVO result = integrationService.writeDispatchOrder(reqVO);
+
+        assertThat(result.getStatus()).isEqualTo("FAILED");
+        assertThat(result.getErrorCode()).isEqualTo("A0402");
+        assertThat(result.getLogId()).isEqualTo(505L);
+        verify(auditService).recordFailure(
+                eq(IntegrationInterfaceTypeEnum.DISPATCH_ORDER_WRITE),
+                eq("ERP-MAIN"), eq("ERP-DO-001"), eq("{}"),
+                eq(null), eq(null),
+                eq(IntegrationErrorCodeConstants.EXTERNAL_DISPATCH_LINE_NOT_AVAILABLE), any());
+    }
+
+    @Test
     @DisplayName("日志查询：请求页码超界时返回最后一页")
     @SuppressWarnings("unchecked")
     void getWriteLogPageNormalizesOverflowPage() {
@@ -190,6 +237,13 @@ class IntegrationServiceImplTest {
         reqVO.setUnitName("个");
         reqVO.setDecimalPrecision(0);
         reqVO.setStatus(1);
+        return reqVO;
+    }
+
+    private ExternalDispatchOrderWriteReqVO buildDispatchReqVO() {
+        ExternalDispatchOrderWriteReqVO reqVO = new ExternalDispatchOrderWriteReqVO();
+        reqVO.setSourceSystem("ERP-MAIN");
+        reqVO.setExternalDispatchOrderNo("ERP-DO-001");
         return reqVO;
     }
 }

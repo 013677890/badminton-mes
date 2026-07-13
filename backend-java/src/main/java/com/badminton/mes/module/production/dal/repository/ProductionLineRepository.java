@@ -101,4 +101,12 @@ public interface ProductionLineRepository extends JpaRepository<ProductionLineEn
      * @return true 表示存在匹配产线
      */
     boolean existsByWorkshopIdAndStatusAndDeletedFalse(Long workshopId, Integer status);
+
+    /**
+     * 按产线编码查询未删除产线，外部任务单写入时解析编码用。
+     *
+     * @param lineCode 产线编码
+     * @return 产线实体
+     */
+    Optional<ProductionLineEntity> findByLineCodeAndDeletedFalse(String lineCode);
 }

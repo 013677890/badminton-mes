@@ -5,6 +5,7 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.security.RequiresRoles;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
@@ -66,6 +67,18 @@ public class IntegrationController {
     public CommonResult<IntegrationWriteResultRespVO> writeWorkOrder(
             @Valid @RequestBody ExternalWorkOrderWriteReqVO reqVO) {
         return CommonResult.success(integrationService.writeWorkOrder(reqVO));
+    }
+
+    /**
+     * 幂等写入外部生产任务单（派工单）。
+     *
+     * @param reqVO 外部任务单写入请求
+     * @return 写入结果
+     */
+    @PostMapping("/dispatch_orders")
+    public CommonResult<IntegrationWriteResultRespVO> writeDispatchOrder(
+            @Valid @RequestBody ExternalDispatchOrderWriteReqVO reqVO) {
+        return CommonResult.success(integrationService.writeDispatchOrder(reqVO));
     }
 
     /**

@@ -16,6 +16,7 @@ import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.dal.entity.BomDetailEntity;
@@ -560,6 +561,29 @@ class WorkOrderServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
                         .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         verify(workOrderCache, never()).put(any());
+    }
+
+    @Test
+    @DisplayName("工单进度批量查询：按请求顺序去重并计算完成百分比")
+    void getWorkOrderProgressReturnsDistinctResultsInRequestOrder() {
+        WorkOrderEntity firstWorkOrder = buildWorkOrder(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
+        firstWorkOrder.setPlanQuantity(1000);
+        firstWorkOrder.setFinishQuantity(250);
+        WorkOrderEntity secondWorkOrder = buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus());
+        secondWorkOrder.setId(200L);
+        secondWorkOrder.setWorkOrderNo("WO202607080002");
+        secondWorkOrder.setPlanQuantity(400);
+        secondWorkOrder.setFinishQuantity(100);
+        when(workOrderRepository.findByIdInAndDeletedFalse(List.of(WORK_ORDER_ID, 200L)))
+                .thenReturn(List.of(secondWorkOrder, firstWorkOrder));
+
+        List<WorkOrderProgressRespVO> result = workOrderService.getWorkOrderProgress(
+                List.of(WORK_ORDER_ID, 200L, WORK_ORDER_ID));
+
+        assertThat(result).extracting(WorkOrderProgressRespVO::getId)
+                .containsExactly(WORK_ORDER_ID, 200L);
+        assertThat(result).extracting(WorkOrderProgressRespVO::getProgressPercent)
+                .containsExactly(new BigDecimal("25.00"), new BigDecimal("25.00"));
     }
 
     @Test

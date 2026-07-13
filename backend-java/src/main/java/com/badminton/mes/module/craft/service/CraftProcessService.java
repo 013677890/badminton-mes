@@ -1,10 +1,13 @@
 package com.badminton.mes.module.craft.service;
 
+import java.util.List;
+
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
@@ -56,6 +59,14 @@ public interface CraftProcessService {
      * @return 工序详情
      */
     CraftProcessRespVO getProcess(Long id);
+
+    /**
+     * 按主键集合批量查询启用工序的执行规则。
+     *
+     * @param ids 工序主键集合
+     * @return 工序规则列表，不存在、停用或已删除的工序不返回
+     */
+    List<CraftProcessRuleRespVO> getProcessRules(List<Long> ids);
 
     /**
      * 分页查询工序。

@@ -1,5 +1,7 @@
 package com.badminton.mes.module.craft.controller;
 
+import java.util.List;
+
 import com.badminton.mes.common.core.CommonResult;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.security.RequiresRoles;
@@ -8,6 +10,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogPageReq
 import com.badminton.mes.module.craft.controller.vo.CraftProcessChangeLogRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessPageReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessRespVO;
+import com.badminton.mes.module.craft.controller.vo.CraftProcessRuleRespVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessSaveReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /**
  * 工序主档 Controller。
@@ -119,6 +123,20 @@ public class CraftProcessController {
     @GetMapping("/{id}")
     public CommonResult<CraftProcessRespVO> getProcess(@PathVariable("id") @Positive Long id) {
         return CommonResult.success(processService.getProcess(id));
+    }
+
+    /**
+     * 按主键集合批量查询启用工序的执行规则。
+     *
+     * @param ids 工序主键集合，单次最多查询 100 个
+     * @return 工序规则列表
+     */
+    @GetMapping("/rules")
+    public CommonResult<List<CraftProcessRuleRespVO>> getProcessRules(
+            @RequestParam("ids")
+            @Size(min = 1, max = 100, message = "工序数量必须在 1 到 100 之间")
+            List<@Positive Long> ids) {
+        return CommonResult.success(processService.getProcessRules(ids));
     }
 
     /**

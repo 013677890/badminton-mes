@@ -6,6 +6,7 @@ import java.util.Optional;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
+import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
@@ -17,6 +18,7 @@ import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogSp
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
 import com.badminton.mes.module.integration.enums.IntegrationWriteStatusEnum;
 import com.badminton.mes.module.integration.service.IntegrationAuditService;
+import com.badminton.mes.module.integration.service.IntegrationDispatchWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationService;
 import com.badminton.mes.module.integration.service.IntegrationWriteCommandService;
 import com.badminton.mes.module.integration.service.dto.IntegrationCommandResult;
@@ -43,6 +45,8 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     private final IntegrationWriteCommandService commandService;
 
+    private final IntegrationDispatchWriteCommandService dispatchCommandService;
+
     private final IntegrationAuditService auditService;
 
     private final IntegrationWriteLogRepository writeLogRepository;
@@ -50,14 +54,17 @@ public class IntegrationServiceImpl implements IntegrationService {
     /**
      * 构造外部接口门面。
      *
-     * @param commandService     写入命令服务
-     * @param auditService       接口审计服务
-     * @param writeLogRepository 写入日志 Repository
+     * @param commandService         单位与生产工单写入命令服务
+     * @param dispatchCommandService 生产任务单写入命令服务
+     * @param auditService           接口审计服务
+     * @param writeLogRepository     写入日志 Repository
      */
     public IntegrationServiceImpl(IntegrationWriteCommandService commandService,
+                                  IntegrationDispatchWriteCommandService dispatchCommandService,
                                   IntegrationAuditService auditService,
                                   IntegrationWriteLogRepository writeLogRepository) {
         this.commandService = commandService;
+        this.dispatchCommandService = dispatchCommandService;
         this.auditService = auditService;
         this.writeLogRepository = writeLogRepository;
     }
@@ -126,6 +133,27 @@ public class IntegrationServiceImpl implements IntegrationService {
                     exception,
                     existing.map(WorkOrderEntity::getId).orElse(null),
                     existing.map(WorkOrderEntity::getWorkOrderNo).orElse(null));
+        }
+    }
+
+    @Override
+    public IntegrationWriteResultRespVO writeDispatchOrder(ExternalDispatchOrderWriteReqVO reqVO) {
+        String snapshot = auditService.serializeRequest(reqVO);
+        String sourceSystem = normalizeCode(reqVO.getSourceSystem());
+        String externalNo = reqVO.getExternalDispatchOrderNo().trim();
+        try {
+            return toSuccess(dispatchCommandService.writeDispatchOrder(reqVO, snapshot));
+        } catch (ServiceException exception) {
+            Optional<IntegrationWriteLogEntity> existing =
+                    dispatchCommandService.findExternalDispatchLog(sourceSystem, externalNo);
+            return recordFailure(
+                    IntegrationInterfaceTypeEnum.DISPATCH_ORDER_WRITE,
+                    sourceSystem,
+                    externalNo,
+                    snapshot,
+                    exception,
+                    existing.map(IntegrationWriteLogEntity::getResultId).orElse(null),
+                    existing.map(IntegrationWriteLogEntity::getResultNo).orElse(null));
         }
     }
 

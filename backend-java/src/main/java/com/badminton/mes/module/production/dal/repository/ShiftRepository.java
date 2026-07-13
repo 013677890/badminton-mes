@@ -30,4 +30,12 @@ public interface ShiftRepository extends JpaRepository<ShiftEntity, Long> {
      * @return 班次列表，无数据时为空集合
      */
     List<ShiftEntity> findByStatusAndDeletedFalseOrderByIdAsc(Integer status);
+
+    /**
+     * 按班次编码查询未删除班次，外部任务单写入时解析编码用。
+     *
+     * @param shiftCode 班次编码
+     * @return 班次实体
+     */
+    Optional<ShiftEntity> findByShiftCodeAndDeletedFalse(String shiftCode);
 }

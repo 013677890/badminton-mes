@@ -96,6 +96,37 @@ class IntegrationControllerTest {
     }
 
     @Test
+    @DisplayName("外部任务单写入：合法请求转发并返回派工单结果")
+    void writeDispatchOrderReturnsTraceableResult() throws Exception {
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(30L);
+        result.setStatus("SUCCESS");
+        result.setBusinessId(40L);
+        result.setBusinessNo("DO202607130001");
+        when(integrationService.writeDispatchOrder(any())).thenReturn(result);
+
+        mockMvc.perform(post("/api/integration/dispatch_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDispatchOrderJson()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.logId").value(30))
+                .andExpect(jsonPath("$.data.businessNo").value("DO202607130001"));
+    }
+
+    @Test
+    @DisplayName("外部任务单写入：缺少产线编码时返回参数错误")
+    void writeDispatchOrderRejectsMissingLineCode() throws Exception {
+        mockMvc.perform(post("/api/integration/dispatch_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDispatchOrderJson().replace(
+                                "\"lineCode\": \"LINE-01\",", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeDispatchOrder(any());
+    }
+
+    @Test
     @DisplayName("日志查询：pageSize 超过上限时返回参数错误")
     void getWriteLogsRejectsOversizedPage() throws Exception {
         mockMvc.perform(get("/api/integration/write_logs")
@@ -118,6 +149,22 @@ class IntegrationControllerTest {
                   "planQuantity": 1000,
                   "planStartTime": "2026-07-12 08:00:00",
                   "planEndTime": "2026-07-15 18:00:00"
+                }
+                """;
+    }
+
+    private String validDispatchOrderJson() {
+        return """
+                {
+                  "sourceSystem": "ERP-MAIN",
+                  "externalDispatchOrderNo": "ERP-DO-001",
+                  "workOrderNo": "WO202607110001",
+                  "lineCode": "LINE-01",
+                  "shiftCode": "DAY",
+                  "planDate": "2026-07-13",
+                  "planQuantity": 100,
+                  "planStartTime": "2026-07-13 08:00:00",
+                  "planEndTime": "2026-07-13 12:00:00"
                 }
                 """;
     }
