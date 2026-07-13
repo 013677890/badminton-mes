@@ -2,6 +2,8 @@ package com.badminton.mes.module.integration.service;
 
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncReqVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingPageReqVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingRespVO;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncRespVO;
 import com.badminton.mes.module.integration.controller.vo.ErpSyncLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpTaskSyncReqVO;
@@ -47,4 +49,10 @@ public interface ErpSyncService {
      * @return 新生成的工艺路线主键
      */
     Long confirmPendingCraft(Long id);
+
+    /** 分页查询 ERP 工艺待确认及异常数据。 */
+    PageResult<ErpCraftPendingRespVO> getPendingCraftPage(ErpCraftPendingPageReqVO reqVO);
+
+    /** 驳回一条待确认 ERP 工艺。 */
+    void rejectPendingCraft(Long id, String reason);
 }

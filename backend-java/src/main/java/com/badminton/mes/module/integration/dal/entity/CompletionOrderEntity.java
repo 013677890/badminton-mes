@@ -36,6 +36,10 @@ public class CompletionOrderEntity {
     @Column(name = "completion_no")
     private String completionNo;
 
+    /** 现场生产任务主键 */
+    @Column(name = "production_task_id")
+    private Long productionTaskId;
+
     /** 生产工单主键 */
     @Column(name = "work_order_id")
     private Long workOrderId;

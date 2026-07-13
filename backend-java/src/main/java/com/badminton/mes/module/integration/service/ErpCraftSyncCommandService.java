@@ -109,7 +109,8 @@ public class ErpCraftSyncCommandService {
                 .findBySourceSystemAndErpRoutingCodeAndErpRoutingVersion(
                         sourceSystem, routingCode, routingVersion);
         if (existing.isPresent()
-                && !ErpCraftPendingStatusEnum.FAILED.getStatus().equals(existing.get().getStatus())) {
+                && !ErpCraftPendingStatusEnum.FAILED.getStatus().equals(existing.get().getStatus())
+                && !ErpCraftPendingStatusEnum.REJECTED.getStatus().equals(existing.get().getStatus())) {
             Long logId = auditService.recordResult(
                     IntegrationInterfaceTypeEnum.ERP_CRAFT_SYNC,
                     sourceSystem, businessKey, snapshot,
@@ -203,6 +204,27 @@ public class ErpCraftSyncCommandService {
     @Transactional(readOnly = true)
     public Optional<ErpCraftPendingEntity> findPending(Long id) {
         return pendingRepository.findById(id);
+    }
+
+    /**
+     * 驳回一条待确认 ERP 工艺。
+     *
+     * @param id 待确认数据主键
+     * @param reason 驳回原因
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void rejectCraft(Long id, String reason) {
+        ErpCraftPendingEntity pending = pendingRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ServiceException(
+                        IntegrationErrorCodeConstants.ERP_CRAFT_PENDING_NOT_EXISTS));
+        if (!ErpCraftPendingStatusEnum.PENDING.getStatus().equals(pending.getStatus())) {
+            throw new ServiceException(
+                    IntegrationErrorCodeConstants.ERP_CRAFT_PENDING_STATUS_INVALID);
+        }
+        pending.setStatus(ErpCraftPendingStatusEnum.REJECTED.getStatus());
+        pending.setErrorCode("A0440");
+        pending.setErrorMessage(reason.trim());
+        pendingRepository.save(pending);
     }
 
     /**

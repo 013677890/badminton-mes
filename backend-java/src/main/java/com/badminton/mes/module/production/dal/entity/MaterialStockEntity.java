@@ -17,7 +17,7 @@ import jakarta.persistence.Table;
 /**
  * 物料库存可用量实体，对应表 material_stock。
  *
- * <p>一物料一条快照，数据由 WMS/ERP 同步(本期同步接口未建，仅种子数据)。
+ * <p>一物料一条快照，数据由 WMS/ERP 批量同步。
  * 齐套分析只读该表，不做库存扣减。
  *
  * @author 张竹灏
@@ -37,6 +37,10 @@ public class MaterialStockEntity {
     /** 物料 id(唯一) */
     @Column(name = "material_id")
     private Long materialId;
+
+    /** 来源系统 */
+    @Column(name = "source_system")
+    private String sourceSystem;
 
     /** 可用数量 */
     @Column(name = "available_quantity")

@@ -31,6 +31,8 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
      */
     Optional<CraftProcessEntity> findByIdAndDeletedFalse(Long id);
 
+    Optional<CraftProcessEntity> findByIdAndStatusAndDeletedFalse(Long id, Integer status);
+
     /**
      * 以写锁查询未删除工序，和路线审核的引用锁串行化。
      *

@@ -6,6 +6,9 @@ import com.badminton.mes.common.security.RequiresRoles;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncRespVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingPageReqVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingRespVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftRejectReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpSyncLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpTaskSyncReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpTaskSyncRespVO;
@@ -97,5 +100,23 @@ public class ErpSyncController {
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.CRAFT_ENGINEER})
     public CommonResult<Long> confirmPendingCraft(@PathVariable Long id) {
         return CommonResult.success(erpSyncService.confirmPendingCraft(id));
+    }
+
+    /** 分页查询待确认、已确认、异常和已驳回工艺数据。 */
+    @GetMapping("/crafts/pending")
+    @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.CRAFT_ENGINEER})
+    public CommonResult<PageResult<ErpCraftPendingRespVO>> getPendingCraftPage(
+            @Valid @ModelAttribute ErpCraftPendingPageReqVO reqVO) {
+        return CommonResult.success(erpSyncService.getPendingCraftPage(reqVO));
+    }
+
+    /** 驳回一条待确认工艺数据。 */
+    @PutMapping("/crafts/pending/{id}/reject")
+    @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.CRAFT_ENGINEER})
+    public CommonResult<Boolean> rejectPendingCraft(
+            @PathVariable Long id,
+            @Valid @RequestBody ErpCraftRejectReqVO reqVO) {
+        erpSyncService.rejectPendingCraft(id, reqVO.getReason());
+        return CommonResult.success(true);
     }
 }

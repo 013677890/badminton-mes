@@ -24,7 +24,19 @@ public enum DeviceCountExceptionTypeEnum {
     COUNT_NON_POSITIVE("COUNT_NON_POSITIVE", "计数值必须大于零"),
 
     /** 累计计数值小于最近一次记录 */
-    COUNT_ROLLBACK("COUNT_ROLLBACK", "计数值发生倒退");
+    COUNT_ROLLBACK("COUNT_ROLLBACK", "计数值发生倒退"),
+
+    /** 设备未维护有效绑定 */
+    EQUIPMENT_NOT_BOUND("EQUIPMENT_NOT_BOUND", "设备不存在或未启用"),
+
+    /** 设备未绑定当前派工产线 */
+    LINE_MISMATCH("LINE_MISMATCH", "设备与派工产线不匹配"),
+
+    /** 设备未绑定当前工序 */
+    PROCESS_MISMATCH("PROCESS_MISMATCH", "设备与工序不匹配"),
+
+    /** 单次计数增量超过配置阈值 */
+    COUNT_JUMP("COUNT_JUMP", "计数增量异常跳变");
 
     /** 数据库存储值 */
     private final String value;

@@ -25,6 +25,8 @@ public interface UserRepository extends JpaRepository<UserEntity, Long>, JpaSpec
      */
     Optional<UserEntity> findByIdAndDeletedFalse(Long id);
 
+    Optional<UserEntity> findByIdAndStatusAndDeletedFalse(Long id, Integer status);
+
     /**
      * 按主键集合批量查询未删除用户，按角色反查用户等场景使用。
      *

@@ -8,9 +8,10 @@ import com.badminton.mes.module.integration.service.dto.ErpCraftStepDTO;
 import com.badminton.mes.module.integration.service.dto.ErpTaskDTO;
 
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
- * ERP Mock 数据源，模拟 ERP 系统返回的生产任务单和工艺路线数据。
+ * ERP 数据源门面。远程模式委托 HTTP 客户端，默认模式返回演示数据。
  *
  * <p>硬编码示例数据，覆盖正常、异常（产品不存在/数量非法/工序顺序问题）和重复场景。
  * 后续可替换为真实 ERP 客户端实现。
@@ -19,16 +20,18 @@ import org.springframework.stereotype.Component;
  * @date 2026/07/13
  */
 @Component
-public class ErpMockDataSource {
+@ConditionalOnProperty(name = "mes.erp.mode", havingValue = "mock", matchIfMissing = true)
+public class ErpMockDataSource implements ErpDataSource {
 
     /** 默认来源系统标识 */
-    public static final String DEFAULT_SOURCE_SYSTEM = "ERP";
+    public static final String DEFAULT_SOURCE_SYSTEM = ErpDataSource.DEFAULT_SOURCE_SYSTEM;
 
     /**
      * 模拟从 ERP 拉取生产任务单列表。
      *
      * @return ERP 任务单列表
      */
+    @Override
     public List<ErpTaskDTO> fetchTasks() {
         LocalDateTime baseTime = LocalDateTime.of(2026, 7, 13, 8, 0, 0);
         return List.of(
@@ -55,6 +58,7 @@ public class ErpMockDataSource {
      *
      * @return ERP 工艺路线列表
      */
+    @Override
     public List<ErpCraftDTO> fetchCrafts() {
         return List.of(
                 // 正常工艺：产品 P001，工序顺序 1-5 完整

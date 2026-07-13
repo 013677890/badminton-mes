@@ -43,6 +43,8 @@ public class DeviceCountExceptionRespVO {
     /** 原始请求 JSON */
     private String requestSnapshot;
 
+    private String retryRequestSnapshot;
+
     /** 异常类型 */
     private String exceptionType;
 
@@ -54,6 +56,20 @@ public class DeviceCountExceptionRespVO {
 
     /** 处理状态 */
     private Integer handleStatus;
+
+    /** 处理人 */
+    private Long handleBy;
+
+    /** 处理时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime handleTime;
+
+    /** 处理说明 */
+    private String handleRemark;
+
+    private Long retryLogId;
+
+    private Long retryRecordId;
 
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")

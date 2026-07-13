@@ -2,6 +2,8 @@ package com.badminton.mes.module.integration.service;
 
 import com.badminton.mes.common.core.ErrorCode;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
@@ -168,6 +170,34 @@ public class IntegrationAuditService {
         log.setResultNo(resultNo);
         log.setErrorCode(errorCode.code());
         log.setErrorMessage(truncate(errorMessage));
+        return writeLogRepository.saveAndFlush(log).getId();
+    }
+
+    /**
+     * 将设备计数原失败日志原子替换为最后一次重试结果。
+     *
+     * <p>设备计数日志的来源幂等键具有唯一约束，原幂等键修正重试时不能追加新日志，
+     * 因此保留日志主键并更新请求快照和最终业务结果。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Long replaceFailureResult(Long logId,
+                                     String snapshot,
+                                     IntegrationWriteStatusEnum status,
+                                     Long resultId,
+                                     String resultNo,
+                                     ErrorCode errorCode) {
+        IntegrationWriteLogEntity log = writeLogRepository.findById(logId)
+                .orElseThrow(() -> new ServiceException(
+                        IntegrationErrorCodeConstants.WRITE_CONFLICT));
+        if (!IntegrationWriteStatusEnum.FAILED.getStatus().equals(log.getWriteStatus())) {
+            throw new ServiceException(IntegrationErrorCodeConstants.WRITE_CONFLICT);
+        }
+        log.setRequestSnapshot(snapshot);
+        log.setWriteStatus(status.getStatus());
+        log.setResultId(resultId);
+        log.setResultNo(resultNo);
+        log.setErrorCode(errorCode == null ? null : errorCode.code());
+        log.setErrorMessage(errorCode == null ? null : truncate(errorCode.message()));
         return writeLogRepository.saveAndFlush(log).getId();
     }
 

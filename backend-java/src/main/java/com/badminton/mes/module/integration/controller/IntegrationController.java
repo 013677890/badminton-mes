@@ -13,6 +13,9 @@ import com.badminton.mes.module.integration.controller.vo.CompletionReadLogRespV
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionRespVO;
 import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.DeviceExceptionActionReqVO;
+import com.badminton.mes.module.integration.controller.vo.EquipmentBindingSaveReqVO;
+import com.badminton.mes.module.integration.controller.vo.MaterialStockBatchReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
@@ -20,13 +23,19 @@ import com.badminton.mes.module.integration.controller.vo.UnitWriteReqVO;
 import com.badminton.mes.module.integration.service.IntegrationService;
 import com.badminton.mes.module.integration.service.CompletionOrderReadService;
 import com.badminton.mes.module.integration.service.DeviceCountWriteCommandService;
+import com.badminton.mes.module.integration.service.EquipmentBindingService;
+import com.badminton.mes.module.integration.service.MaterialStockSyncService;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 
 import jakarta.validation.Valid;
 
@@ -49,6 +58,10 @@ public class IntegrationController {
 
     private final CompletionOrderReadService completionOrderReadService;
 
+    private final EquipmentBindingService equipmentBindingService;
+
+    private final MaterialStockSyncService materialStockSyncService;
+
     /**
      * 构造外部接口 Controller。
      *
@@ -56,13 +69,46 @@ public class IntegrationController {
      * @param deviceCountWriteCommandService 设备计数写入命令服务
      * @param completionOrderReadService 完工单读取服务
      */
+    @Autowired
+    public IntegrationController(
+            IntegrationService integrationService,
+            DeviceCountWriteCommandService deviceCountWriteCommandService,
+            CompletionOrderReadService completionOrderReadService,
+            ObjectProvider<EquipmentBindingService> equipmentBindingServiceProvider,
+            ObjectProvider<MaterialStockSyncService> materialStockSyncServiceProvider) {
+        this.integrationService = integrationService;
+        this.deviceCountWriteCommandService = deviceCountWriteCommandService;
+        this.completionOrderReadService = completionOrderReadService;
+        this.equipmentBindingService = equipmentBindingServiceProvider.getIfAvailable();
+        this.materialStockSyncService = materialStockSyncServiceProvider.getIfAvailable();
+    }
+
+    /** 兼容既有 Controller 聚焦测试。 */
     public IntegrationController(
             IntegrationService integrationService,
             DeviceCountWriteCommandService deviceCountWriteCommandService,
             CompletionOrderReadService completionOrderReadService) {
-        this.integrationService = integrationService;
-        this.deviceCountWriteCommandService = deviceCountWriteCommandService;
-        this.completionOrderReadService = completionOrderReadService;
+        this(integrationService, deviceCountWriteCommandService,
+                completionOrderReadService, emptyProvider(), emptyProvider());
+    }
+
+    private static <T> ObjectProvider<T> emptyProvider() {
+        return new ObjectProvider<>() {
+            @Override
+            public T getObject(Object... args) {
+                return null;
+            }
+
+            @Override
+            public T getIfAvailable() {
+                return null;
+            }
+
+            @Override
+            public T getObject() {
+                return null;
+            }
+        };
     }
 
     /**
@@ -123,6 +169,39 @@ public class IntegrationController {
     public CommonResult<PageResult<DeviceCountExceptionRespVO>> getDeviceCountExceptionPage(
             @Valid @ModelAttribute DeviceCountExceptionPageReqVO reqVO) {
         return CommonResult.success(deviceCountWriteCommandService.getExceptionPage(reqVO));
+    }
+
+    /** 保存设备报工绑定配置。 */
+    @PostMapping("/equipment_bindings")
+    public CommonResult<Long> saveEquipmentBinding(
+            @Valid @RequestBody EquipmentBindingSaveReqVO reqVO) {
+        return CommonResult.success(equipmentBindingService.saveBinding(reqVO));
+    }
+
+    /** 批量同步 WMS/ERP 库存与在途快照。 */
+    @PostMapping("/material_stocks/batch")
+    public CommonResult<Integer> syncMaterialStocks(
+            @Valid @RequestBody MaterialStockBatchReqVO reqVO) {
+        return CommonResult.success(materialStockSyncService.sync(reqVO));
+    }
+
+    /** 忽略一条待处理设备计数异常。 */
+    @PutMapping("/device_counts/exceptions/{id}/ignore")
+    public CommonResult<Boolean> ignoreDeviceCountException(
+            @PathVariable Long id,
+            @Valid @RequestBody(required = false) DeviceExceptionActionReqVO reqVO) {
+        deviceCountWriteCommandService.ignoreException(
+                id, reqVO == null ? null : reqVO.getRemark());
+        return CommonResult.success(true);
+    }
+
+    /** 使用修正后的请求重新处理设备计数异常。 */
+    @PutMapping("/device_counts/exceptions/{id}/retry")
+    public CommonResult<IntegrationWriteResultRespVO> retryDeviceCountException(
+            @PathVariable Long id,
+            @Valid @RequestBody DeviceCountWriteReqVO reqVO) {
+        return CommonResult.success(
+                deviceCountWriteCommandService.retryException(id, reqVO));
     }
 
     /**

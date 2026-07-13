@@ -30,6 +30,8 @@ public interface ProductionLineRepository extends JpaRepository<ProductionLineEn
      */
     Optional<ProductionLineEntity> findByIdAndDeletedFalse(Long id);
 
+    Optional<ProductionLineEntity> findByIdAndStatusAndDeletedFalse(Long id, Integer status);
+
     /**
      * 仅查询产线所属车间主键，按统一锁序加锁前使用。
      *

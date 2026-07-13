@@ -10,7 +10,7 @@ import lombok.Data;
 /**
  * ERP 生产任务单同步触发请求。
  *
- * <p>所有字段可选：不传参数时同步全部 Mock 数据；传 erpOrderNo 时仅同步指定单号。
+ * <p>所有字段可选：不传参数时同步数据源全部数据；可按单号或计划开始时间范围筛选。
  *
  * @author 张竹灏
  * @date 2026/07/13
@@ -26,11 +26,11 @@ public class ErpTaskSyncReqVO {
     @Size(max = 64, message = "ERP 任务单号长度不能超过 64")
     private String erpOrderNo;
 
-    /** 同步起始时间（Mock 场景下仅做参数占位） */
+    /** 同步起始时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
 
-    /** 同步截止时间（Mock 场景下仅做参数占位） */
+    /** 同步截止时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime endTime;
 }

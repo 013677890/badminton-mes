@@ -288,6 +288,22 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
             """)
     int decreaseDispatchedQuantity(@Param("id") Long id, @Param("quantity") Integer quantity);
 
+    /** 原子累加已审核完工和不良数量，不得超过工单允许超产上限。 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.finishQuantity = workOrder.finishQuantity + :completionQuantity,
+                workOrder.defectQuantity = workOrder.defectQuantity + :defectQuantity,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+              AND workOrder.finishQuantity + :completionQuantity
+                  <= FLOOR(workOrder.planQuantity * (1 + COALESCE(workOrder.overRatio, 0) / 100))
+            """)
+    int increaseCompletionQuantity(@Param("id") Long id,
+                                   @Param("completionQuantity") Integer completionQuantity,
+                                   @Param("defectQuantity") Integer defectQuantity);
+
     /**
      * 判断工艺路线是否已被生产工单引用。
      *

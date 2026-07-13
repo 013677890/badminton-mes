@@ -42,6 +42,7 @@ import com.badminton.mes.module.production.enums.DispatchAdjustTypeEnum;
 import com.badminton.mes.module.production.enums.DispatchStatusEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
 import com.badminton.mes.module.production.service.DispatchOrderService;
+import com.badminton.mes.module.scene.service.SceneTaskService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +98,8 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
 
     private final WorkOrderCache workOrderCache;
 
+    private final SceneTaskService sceneTaskService;
+
     /**
      * 构造器注入，依赖不可变。
      *
@@ -108,6 +111,7 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
      * @param factoryCalendarRepository   工厂日历 Repository
      * @param dispatchNoSequence          派工单号生成器
      * @param workOrderCache              工单详情缓存
+     * @param sceneTaskService            现场任务下发服务
      */
     public DispatchOrderServiceImpl(DispatchOrderRepository dispatchOrderRepository,
                                     DispatchAdjustLogRepository dispatchAdjustLogRepository,
@@ -116,7 +120,8 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
                                     ShiftRepository shiftRepository,
                                     FactoryCalendarRepository factoryCalendarRepository,
                                     DispatchNoSequence dispatchNoSequence,
-                                    WorkOrderCache workOrderCache) {
+                                    WorkOrderCache workOrderCache,
+                                    SceneTaskService sceneTaskService) {
         this.dispatchOrderRepository = dispatchOrderRepository;
         this.dispatchAdjustLogRepository = dispatchAdjustLogRepository;
         this.workOrderRepository = workOrderRepository;
@@ -125,6 +130,7 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
         this.factoryCalendarRepository = factoryCalendarRepository;
         this.dispatchNoSequence = dispatchNoSequence;
         this.workOrderCache = workOrderCache;
+        this.sceneTaskService = sceneTaskService;
     }
 
     @Override
@@ -361,6 +367,7 @@ public class DispatchOrderServiceImpl implements DispatchOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void issueDispatch(Long id) {
         DispatchOrderEntity dispatch = requireDispatch(id);
+        sceneTaskService.issueDispatch(dispatch);
         int updated = dispatchOrderRepository.updateStatus(id,
                 DispatchStatusEnum.AUDITED.getStatus(), DispatchStatusEnum.ISSUED.getStatus());
         if (updated == 0) {

@@ -17,10 +17,12 @@ import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
 import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
 import com.badminton.mes.module.integration.dal.entity.DeviceCountRecordEntity;
+import com.badminton.mes.module.integration.dal.entity.EquipmentBindingEntity;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountExceptionRepository;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountExceptionSpecifications;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountRecordRepository;
+import com.badminton.mes.module.integration.dal.repository.EquipmentBindingRepository;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.DeviceCountExceptionTypeEnum;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
@@ -28,10 +30,12 @@ import com.badminton.mes.module.integration.enums.IntegrationWriteStatusEnum;
 import com.badminton.mes.module.production.dal.entity.DispatchOrderEntity;
 import com.badminton.mes.module.production.dal.repository.DispatchOrderRepository;
 import com.badminton.mes.module.production.enums.DispatchStatusEnum;
+import com.badminton.mes.module.scene.service.SceneWorkReportService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -74,6 +78,10 @@ public class DeviceCountWriteCommandService {
 
     private final IntegrationAuditService auditService;
 
+    private final EquipmentBindingRepository equipmentBindingRepository;
+
+    private final SceneWorkReportService sceneWorkReportService;
+
     /**
      * 构造设备计数写入命令服务。
      *
@@ -84,6 +92,27 @@ public class DeviceCountWriteCommandService {
      * @param craftProcessRepository 工序 Repository
      * @param auditService           接口审计服务
      */
+    @Autowired
+    public DeviceCountWriteCommandService(
+            DeviceCountRecordRepository recordRepository,
+            DeviceCountExceptionRepository exceptionRepository,
+            IntegrationWriteLogRepository writeLogRepository,
+            DispatchOrderRepository dispatchOrderRepository,
+            CraftProcessRepository craftProcessRepository,
+            IntegrationAuditService auditService,
+            EquipmentBindingRepository equipmentBindingRepository,
+            SceneWorkReportService sceneWorkReportService) {
+        this.recordRepository = recordRepository;
+        this.exceptionRepository = exceptionRepository;
+        this.writeLogRepository = writeLogRepository;
+        this.dispatchOrderRepository = dispatchOrderRepository;
+        this.craftProcessRepository = craftProcessRepository;
+        this.auditService = auditService;
+        this.equipmentBindingRepository = equipmentBindingRepository;
+        this.sceneWorkReportService = sceneWorkReportService;
+    }
+
+    /** 兼容既有聚焦单测的构造入口。 */
     public DeviceCountWriteCommandService(
             DeviceCountRecordRepository recordRepository,
             DeviceCountExceptionRepository exceptionRepository,
@@ -91,12 +120,8 @@ public class DeviceCountWriteCommandService {
             DispatchOrderRepository dispatchOrderRepository,
             CraftProcessRepository craftProcessRepository,
             IntegrationAuditService auditService) {
-        this.recordRepository = recordRepository;
-        this.exceptionRepository = exceptionRepository;
-        this.writeLogRepository = writeLogRepository;
-        this.dispatchOrderRepository = dispatchOrderRepository;
-        this.craftProcessRepository = craftProcessRepository;
-        this.auditService = auditService;
+        this(recordRepository, exceptionRepository, writeLogRepository,
+                dispatchOrderRepository, craftProcessRepository, auditService, null, null);
     }
 
     /**
@@ -113,7 +138,7 @@ public class DeviceCountWriteCommandService {
         String externalKey = normalizeCode(reqVO.getExternalKey());
 
         try {
-            return processDeviceCount(reqVO, snapshot, sourceSystem, externalKey);
+            return processDeviceCount(reqVO, snapshot, sourceSystem, externalKey, null);
         } catch (DataIntegrityViolationException exception) {
             if (isIdempotencyConflict(exception)) {
                 throw new ServiceException(IntegrationErrorCodeConstants.DEVICE_COUNT_DUPLICATE);
@@ -172,7 +197,8 @@ public class DeviceCountWriteCommandService {
             DeviceCountWriteReqVO reqVO,
             String snapshot,
             String sourceSystem,
-            String externalKey) {
+            String externalKey,
+            RetryContext retryContext) {
         String equipmentCode = normalizeCode(reqVO.getEquipmentCode());
         String dispatchNo = normalizeCode(reqVO.getDispatchNo());
         String processCode = normalizeCode(reqVO.getProcessCode());
@@ -183,12 +209,14 @@ public class DeviceCountWriteCommandService {
             return saveException(reqVO, snapshot, sourceSystem, externalKey,
                     equipmentCode, dispatchNo, processCode, null, null,
                     DeviceCountExceptionTypeEnum.DISPATCH_NOT_FOUND,
-                    IntegrationErrorCodeConstants.DEVICE_COUNT_DISPATCH_NOT_FOUND);
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_DISPATCH_NOT_FOUND, retryContext);
         }
 
         Optional<IntegrationWriteLogEntity> existing =
                 findProcessedLog(sourceSystem, externalKey);
-        if (existing.isPresent()) {
+        if (existing.isPresent()
+                && (retryContext == null
+                || !existing.get().getId().equals(retryContext.log().getId()))) {
             return toDuplicateResult(existing.get());
         }
 
@@ -196,7 +224,8 @@ public class DeviceCountWriteCommandService {
             return saveException(reqVO, snapshot, sourceSystem, externalKey,
                     equipmentCode, dispatchNo, processCode, dispatchOrder.getId(), null,
                     DeviceCountExceptionTypeEnum.DISPATCH_STATUS_INVALID,
-                    IntegrationErrorCodeConstants.DEVICE_COUNT_DISPATCH_STATUS_INVALID);
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_DISPATCH_STATUS_INVALID,
+                    retryContext);
         }
 
         CraftProcessEntity process = craftProcessRepository
@@ -206,14 +235,22 @@ public class DeviceCountWriteCommandService {
             return saveException(reqVO, snapshot, sourceSystem, externalKey,
                     equipmentCode, dispatchNo, processCode, dispatchOrder.getId(), null,
                     DeviceCountExceptionTypeEnum.PROCESS_NOT_FOUND,
-                    IntegrationErrorCodeConstants.DEVICE_COUNT_PROCESS_NOT_FOUND);
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_PROCESS_NOT_FOUND, retryContext);
         }
+
+        BindingValidation bindingValidation = validateEquipmentBinding(
+                reqVO, snapshot, sourceSystem, externalKey, equipmentCode,
+                dispatchOrder, process, dispatchNo, processCode, retryContext);
+        if (bindingValidation.failureResult() != null) {
+            return bindingValidation.failureResult();
+        }
+        EquipmentBindingEntity binding = bindingValidation.binding();
 
         if (reqVO.getCountValue() <= 0L) {
             return saveException(reqVO, snapshot, sourceSystem, externalKey,
                     equipmentCode, dispatchNo, processCode, dispatchOrder.getId(), process.getId(),
                     DeviceCountExceptionTypeEnum.COUNT_NON_POSITIVE,
-                    IntegrationErrorCodeConstants.DEVICE_COUNT_NON_POSITIVE);
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_NON_POSITIVE, retryContext);
         }
 
         Optional<DeviceCountRecordEntity> previous = recordRepository
@@ -224,14 +261,20 @@ public class DeviceCountWriteCommandService {
             return saveException(reqVO, snapshot, sourceSystem, externalKey,
                     equipmentCode, dispatchNo, processCode, dispatchOrder.getId(), process.getId(),
                     DeviceCountExceptionTypeEnum.COUNT_ROLLBACK,
-                    IntegrationErrorCodeConstants.DEVICE_COUNT_ROLLBACK);
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_ROLLBACK, retryContext);
         }
 
         long incrementValue = previous
                 .map(record -> reqVO.getCountValue() - record.getCountValue())
                 .orElse(reqVO.getCountValue());
+        if (binding != null && incrementValue > binding.getMaxIncrement()) {
+            return saveException(reqVO, snapshot, sourceSystem, externalKey,
+                    equipmentCode, dispatchNo, processCode, dispatchOrder.getId(), process.getId(),
+                    DeviceCountExceptionTypeEnum.COUNT_JUMP,
+                    IntegrationErrorCodeConstants.DEVICE_COUNT_JUMP, retryContext);
+        }
         return saveSuccess(reqVO, snapshot, sourceSystem, externalKey,
-                equipmentCode, dispatchOrder, process, incrementValue);
+                equipmentCode, dispatchOrder, process, incrementValue, binding, retryContext);
     }
 
     private IntegrationWriteResultRespVO saveSuccess(
@@ -242,7 +285,9 @@ public class DeviceCountWriteCommandService {
             String equipmentCode,
             DispatchOrderEntity dispatchOrder,
             CraftProcessEntity process,
-            long incrementValue) {
+            long incrementValue,
+            EquipmentBindingEntity binding,
+            RetryContext retryContext) {
         DeviceCountRecordEntity record = new DeviceCountRecordEntity();
         record.setSourceSystem(sourceSystem);
         record.setExternalKey(externalKey);
@@ -257,14 +302,20 @@ public class DeviceCountWriteCommandService {
         record.setCreateBy(SecurityContextHolder.getRequiredLoginUserId());
         recordRepository.saveAndFlush(record);
 
-        Long logId = auditService.recordResult(
-                IntegrationInterfaceTypeEnum.DEVICE_COUNT_WRITE,
-                sourceSystem,
-                externalKey,
-                snapshot,
-                IntegrationWriteStatusEnum.SUCCESS,
-                record.getId(),
-                externalKey);
+        if (binding != null && sceneWorkReportService != null) {
+            Long reportId = sceneWorkReportService.createDeviceReport(record, binding, dispatchOrder);
+            record.setWorkReportId(reportId);
+            recordRepository.save(record);
+        }
+
+        Long logId = retryContext == null
+                ? auditService.recordResult(
+                        IntegrationInterfaceTypeEnum.DEVICE_COUNT_WRITE,
+                        sourceSystem, externalKey, snapshot,
+                        IntegrationWriteStatusEnum.SUCCESS, record.getId(), externalKey)
+                : auditService.replaceFailureResult(
+                        retryContext.log().getId(), snapshot,
+                        IntegrationWriteStatusEnum.SUCCESS, record.getId(), externalKey, null);
         IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
         result.setLogId(logId);
         result.setStatus(IntegrationWriteStatusEnum.SUCCESS.getCode());
@@ -272,6 +323,70 @@ public class DeviceCountWriteCommandService {
         result.setBusinessNo(externalKey);
         result.setMessage("设备计数写入成功");
         return result;
+    }
+
+    private BindingValidation validateEquipmentBinding(
+            DeviceCountWriteReqVO reqVO,
+            String snapshot,
+            String sourceSystem,
+            String externalKey,
+            String equipmentCode,
+            DispatchOrderEntity dispatchOrder,
+            CraftProcessEntity process,
+            String dispatchNo,
+            String processCode,
+            RetryContext retryContext) {
+        if (equipmentBindingRepository == null) {
+            return new BindingValidation(null, null);
+        }
+        EquipmentBindingEntity binding = equipmentBindingRepository
+                .findByEquipmentCodeAndDeletedFalse(equipmentCode)
+                .filter(item -> Integer.valueOf(1).equals(item.getStatus()))
+                .orElse(null);
+        if (binding == null) {
+            return failedBinding(reqVO, snapshot, sourceSystem, externalKey, equipmentCode,
+                    dispatchNo, processCode, dispatchOrder, process,
+                    DeviceCountExceptionTypeEnum.EQUIPMENT_NOT_BOUND,
+                    IntegrationErrorCodeConstants.DEVICE_BINDING_NOT_AVAILABLE, retryContext);
+        }
+        if (!binding.getLineId().equals(dispatchOrder.getLineId())) {
+            return failedBinding(reqVO, snapshot, sourceSystem, externalKey, equipmentCode,
+                    dispatchNo, processCode, dispatchOrder, process,
+                    DeviceCountExceptionTypeEnum.LINE_MISMATCH,
+                    IntegrationErrorCodeConstants.DEVICE_BINDING_LINE_MISMATCH, retryContext);
+        }
+        if (binding.getProcessId() != null && !binding.getProcessId().equals(process.getId())) {
+            return failedBinding(reqVO, snapshot, sourceSystem, externalKey, equipmentCode,
+                    dispatchNo, processCode, dispatchOrder, process,
+                    DeviceCountExceptionTypeEnum.PROCESS_MISMATCH,
+                    IntegrationErrorCodeConstants.DEVICE_BINDING_PROCESS_MISMATCH, retryContext);
+        }
+        return new BindingValidation(binding, null);
+    }
+
+    private BindingValidation failedBinding(
+            DeviceCountWriteReqVO reqVO,
+            String snapshot,
+            String sourceSystem,
+            String externalKey,
+            String equipmentCode,
+            String dispatchNo,
+            String processCode,
+            DispatchOrderEntity dispatchOrder,
+            CraftProcessEntity process,
+            DeviceCountExceptionTypeEnum exceptionType,
+            ErrorCode errorCode,
+            RetryContext retryContext) {
+        IntegrationWriteResultRespVO result = saveException(
+                reqVO, snapshot, sourceSystem, externalKey, equipmentCode,
+                dispatchNo, processCode, dispatchOrder.getId(), process.getId(),
+                exceptionType, errorCode, retryContext);
+        return new BindingValidation(null, result);
+    }
+
+    private record BindingValidation(
+            EquipmentBindingEntity binding,
+            IntegrationWriteResultRespVO failureResult) {
     }
 
     private IntegrationWriteResultRespVO saveException(
@@ -285,7 +400,13 @@ public class DeviceCountWriteCommandService {
             Long dispatchOrderId,
             Long processId,
             DeviceCountExceptionTypeEnum exceptionType,
-            ErrorCode errorCode) {
+            ErrorCode errorCode,
+            RetryContext retryContext) {
+        if (retryContext != null) {
+            return refreshRetryFailure(reqVO, snapshot, sourceSystem, externalKey,
+                    equipmentCode, dispatchNo, processCode, dispatchOrderId, processId,
+                    exceptionType, errorCode, retryContext);
+        }
         DeviceCountExceptionEntity exception = new DeviceCountExceptionEntity();
         exception.setSourceSystem(sourceSystem);
         exception.setExternalKey(externalKey);
@@ -323,6 +444,45 @@ public class DeviceCountWriteCommandService {
         return result;
     }
 
+    private IntegrationWriteResultRespVO refreshRetryFailure(
+            DeviceCountWriteReqVO reqVO,
+            String snapshot,
+            String sourceSystem,
+            String externalKey,
+            String equipmentCode,
+            String dispatchNo,
+            String processCode,
+            Long dispatchOrderId,
+            Long processId,
+            DeviceCountExceptionTypeEnum exceptionType,
+            ErrorCode errorCode,
+            RetryContext retryContext) {
+        DeviceCountExceptionEntity exception = retryContext.exception();
+        exception.setEquipmentCode(equipmentCode);
+        exception.setDispatchOrderId(dispatchOrderId);
+        exception.setDispatchNo(dispatchNo);
+        exception.setProcessId(processId);
+        exception.setProcessCode(processCode);
+        exception.setCollectTime(reqVO.getCollectTime());
+        exception.setCountValue(reqVO.getCountValue());
+        exception.setRetryRequestSnapshot(snapshot);
+        exception.setExceptionType(exceptionType.getValue());
+        exception.setErrorCode(errorCode.code());
+        exception.setErrorMessage(errorCode.message());
+        exceptionRepository.save(exception);
+        Long logId = auditService.replaceFailureResult(
+                retryContext.log().getId(), snapshot, IntegrationWriteStatusEnum.FAILED,
+                exception.getId(), externalKey, errorCode);
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(logId);
+        result.setStatus(IntegrationWriteStatusEnum.FAILED.getCode());
+        result.setBusinessId(exception.getId());
+        result.setBusinessNo(externalKey);
+        result.setErrorCode(errorCode.code());
+        result.setMessage(errorCode.message());
+        return result;
+    }
+
     private IntegrationWriteResultRespVO toDuplicateResult(IntegrationWriteLogEntity log) {
         IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
         result.setLogId(log.getId());
@@ -345,10 +505,16 @@ public class DeviceCountWriteCommandService {
         response.setCollectTime(entity.getCollectTime());
         response.setCountValue(entity.getCountValue());
         response.setRequestSnapshot(entity.getRequestSnapshot());
+        response.setRetryRequestSnapshot(entity.getRetryRequestSnapshot());
         response.setExceptionType(entity.getExceptionType());
         response.setErrorCode(entity.getErrorCode());
         response.setErrorMessage(entity.getErrorMessage());
         response.setHandleStatus(entity.getHandleStatus());
+        response.setHandleBy(entity.getHandleBy());
+        response.setHandleTime(entity.getHandleTime());
+        response.setHandleRemark(entity.getHandleRemark());
+        response.setRetryLogId(entity.getRetryLogId());
+        response.setRetryRecordId(entity.getRetryRecordId());
         response.setCreateTime(entity.getCreateTime());
         response.setUpdateTime(entity.getUpdateTime());
         return response;
@@ -385,6 +551,72 @@ public class DeviceCountWriteCommandService {
             throw new ServiceException(
                     IntegrationErrorCodeConstants.DEVICE_EXCEPTION_TIME_RANGE_INVALID);
         }
+    }
+
+    /** 将待处理异常标记为忽略。 */
+    @Transactional(rollbackFor = Exception.class)
+    public void ignoreException(Long id, String remark) {
+        DeviceCountExceptionEntity exception = requirePendingException(id);
+        exception.setHandleStatus(2);
+        exception.setHandleBy(SecurityContextHolder.getRequiredLoginUserId());
+        exception.setHandleTime(LocalDateTime.now());
+        exception.setHandleRemark(remark);
+        exceptionRepository.save(exception);
+    }
+
+    /** 使用修正后的请求重新处理异常，成功后关闭原异常。 */
+    @Transactional(rollbackFor = Exception.class)
+    public IntegrationWriteResultRespVO retryException(Long id, DeviceCountWriteReqVO reqVO) {
+        return retryException(id, reqVO, auditService.serializeRequest(reqVO));
+    }
+
+    /** 使用指定审计快照重新处理异常，保留供聚焦测试调用。 */
+    @Transactional(rollbackFor = Exception.class)
+    public IntegrationWriteResultRespVO retryException(
+            Long id, DeviceCountWriteReqVO reqVO, String snapshot) {
+        DeviceCountExceptionEntity exception = requirePendingException(id);
+        String sourceSystem = normalizeCode(reqVO.getSourceSystem());
+        String externalKey = normalizeCode(reqVO.getExternalKey());
+        Optional<IntegrationWriteLogEntity> existingLog = findProcessedLog(
+                sourceSystem, externalKey);
+        boolean retriesOriginalFailure = sourceSystem.equals(exception.getSourceSystem())
+                && externalKey.equals(exception.getExternalKey())
+                && existingLog.isPresent()
+                && IntegrationWriteStatusEnum.FAILED.getStatus()
+                        .equals(existingLog.get().getWriteStatus());
+        IntegrationWriteResultRespVO result = retriesOriginalFailure
+                ? processDeviceCount(reqVO, snapshot, sourceSystem, externalKey,
+                        new RetryContext(exception, existingLog.get()))
+                : writeDeviceCount(reqVO, snapshot);
+        boolean processed = IntegrationWriteStatusEnum.SUCCESS.getCode().equals(result.getStatus())
+                || (IntegrationWriteStatusEnum.DUPLICATE.getCode().equals(result.getStatus())
+                && result.getErrorCode() == null);
+        if (processed) {
+            exception.setHandleStatus(1);
+            exception.setHandleBy(SecurityContextHolder.getRequiredLoginUserId());
+            exception.setHandleTime(LocalDateTime.now());
+            exception.setHandleRemark("修正后重新处理成功");
+            exception.setRetryRequestSnapshot(snapshot);
+            exception.setRetryLogId(result.getLogId());
+            exception.setRetryRecordId(result.getBusinessId());
+            exceptionRepository.save(exception);
+        }
+        return result;
+    }
+
+    private record RetryContext(
+            DeviceCountExceptionEntity exception,
+            IntegrationWriteLogEntity log) {
+    }
+
+    private DeviceCountExceptionEntity requirePendingException(Long id) {
+        DeviceCountExceptionEntity exception = exceptionRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ServiceException(
+                        IntegrationErrorCodeConstants.DEVICE_EXCEPTION_NOT_EXISTS));
+        if (!Integer.valueOf(0).equals(exception.getHandleStatus())) {
+            throw new ServiceException(IntegrationErrorCodeConstants.DEVICE_EXCEPTION_STATUS_INVALID);
+        }
+        return exception;
     }
 
     private int normalizePageNo(int requestedPageNo, int pageSize, long total) {

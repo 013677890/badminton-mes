@@ -4,6 +4,11 @@ import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntit
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * 设备计数异常池 Repository。
@@ -14,4 +19,11 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 public interface DeviceCountExceptionRepository
         extends JpaRepository<DeviceCountExceptionEntity, Long>,
         JpaSpecificationExecutor<DeviceCountExceptionEntity> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT exception FROM DeviceCountExceptionEntity exception
+            WHERE exception.id = :id AND exception.deleted = false
+            """)
+    java.util.Optional<DeviceCountExceptionEntity> findByIdForUpdate(@Param("id") Long id);
 }

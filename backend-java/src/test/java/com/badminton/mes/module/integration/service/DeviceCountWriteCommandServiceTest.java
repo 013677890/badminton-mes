@@ -209,6 +209,71 @@ class DeviceCountWriteCommandServiceTest {
     }
 
     @Test
+    @DisplayName("设备异常重试：原幂等键的失败日志被原子替换为成功结果")
+    void retryExceptionReusesOriginalFailedIdempotencyKey() {
+        DeviceCountExceptionEntity exception = buildPendingException();
+        IntegrationWriteLogEntity failedLog = new IntegrationWriteLogEntity();
+        failedLog.setId(91L);
+        failedLog.setWriteStatus(IntegrationWriteStatusEnum.FAILED.getStatus());
+        when(exceptionRepository.findByIdForUpdate(90L)).thenReturn(Optional.of(exception));
+        when(writeLogRepository
+                .findFirstByInterfaceTypeAndSourceSystemAndBusinessKeyOrderByIdDesc(
+                        "DEVICE_COUNT_WRITE", "DEVICE-GATEWAY", "COUNT-001"))
+                .thenReturn(Optional.of(failedLog));
+        when(dispatchOrderRepository.findByDispatchNoForUpdate("DO202607130001"))
+                .thenReturn(Optional.of(buildDispatch(DispatchStatusEnum.ISSUED.getStatus())));
+        when(craftProcessRepository.findByProcessCodeAndDeletedFalseForUpdate("PR001"))
+                .thenReturn(Optional.of(buildProcess()));
+        doAnswer(invocation -> {
+            DeviceCountRecordEntity entity = invocation.getArgument(0);
+            entity.setId(92L);
+            return entity;
+        }).when(recordRepository).saveAndFlush(any(DeviceCountRecordEntity.class));
+        when(auditService.replaceFailureResult(
+                91L, "{\"countValue\":130}", IntegrationWriteStatusEnum.SUCCESS,
+                92L, "COUNT-001", null)).thenReturn(91L);
+
+        IntegrationWriteResultRespVO result = commandService.retryException(
+                90L, buildReqVO(130L), "{\"countValue\":130}");
+
+        assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        assertThat(exception.getHandleStatus()).isEqualTo(1);
+        assertThat(exception.getRetryLogId()).isEqualTo(91L);
+        assertThat(exception.getRetryRecordId()).isEqualTo(92L);
+        verify(auditService).replaceFailureResult(
+                91L, "{\"countValue\":130}", IntegrationWriteStatusEnum.SUCCESS,
+                92L, "COUNT-001", null);
+    }
+
+    @Test
+    @DisplayName("设备异常重试：修正为已成功的新幂等键时只关闭异常不重复写入")
+    void retryExceptionAcceptsDuplicateOnlyWhenOriginalResultSucceeded() {
+        DeviceCountExceptionEntity exception = buildPendingException();
+        IntegrationWriteLogEntity successLog = new IntegrationWriteLogEntity();
+        successLog.setId(93L);
+        successLog.setWriteStatus(IntegrationWriteStatusEnum.SUCCESS.getStatus());
+        successLog.setResultId(94L);
+        successLog.setResultNo("COUNT-002");
+        when(exceptionRepository.findByIdForUpdate(90L)).thenReturn(Optional.of(exception));
+        when(writeLogRepository
+                .findFirstByInterfaceTypeAndSourceSystemAndBusinessKeyOrderByIdDesc(
+                        "DEVICE_COUNT_WRITE", "DEVICE-GATEWAY", "COUNT-002"))
+                .thenReturn(Optional.of(successLog));
+        when(dispatchOrderRepository.findByDispatchNoForUpdate("DO202607130001"))
+                .thenReturn(Optional.of(buildDispatch(DispatchStatusEnum.ISSUED.getStatus())));
+        DeviceCountWriteReqVO request = buildReqVO(130L);
+        request.setExternalKey("COUNT-002");
+
+        IntegrationWriteResultRespVO result = commandService.retryException(
+                90L, request, "{\"externalKey\":\"COUNT-002\"}");
+
+        assertThat(result.getStatus()).isEqualTo("DUPLICATE");
+        assertThat(exception.getHandleStatus()).isEqualTo(1);
+        assertThat(exception.getRetryRecordId()).isEqualTo(94L);
+        verify(recordRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("设备异常分页：无匹配数据时不执行分页查询")
     @SuppressWarnings("unchecked")
     void getExceptionPageSkipsQueryWhenCountIsZero() {
@@ -243,6 +308,15 @@ class DeviceCountWriteCommandServiceTest {
         reqVO.setCollectTime(LocalDateTime.of(2026, 7, 13, 10, 30));
         reqVO.setCountValue(countValue);
         return reqVO;
+    }
+
+    private DeviceCountExceptionEntity buildPendingException() {
+        DeviceCountExceptionEntity exception = new DeviceCountExceptionEntity();
+        exception.setId(90L);
+        exception.setSourceSystem("DEVICE-GATEWAY");
+        exception.setExternalKey("COUNT-001");
+        exception.setHandleStatus(0);
+        return exception;
     }
 
     private DispatchOrderEntity buildDispatch(Integer status) {

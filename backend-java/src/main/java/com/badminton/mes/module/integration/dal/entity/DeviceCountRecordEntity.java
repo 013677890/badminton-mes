@@ -70,6 +70,10 @@ public class DeviceCountRecordEntity {
     @Column(name = "increment_value")
     private Long incrementValue;
 
+    /** 生成的现场报工主键 */
+    @Column(name = "work_report_id")
+    private Long workReportId;
+
     /** 调用用户 */
     @Column(name = "create_by")
     private Long createBy;

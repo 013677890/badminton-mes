@@ -21,6 +21,9 @@ public class CompletionOrderRespVO {
     /** 完工单号 */
     private String completionNo;
 
+    /** 现场生产任务主键，历史完工单可空 */
+    private Long productionTaskId;
+
     /** 生产工单号 */
     private String workOrderNo;
 

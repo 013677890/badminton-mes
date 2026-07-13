@@ -130,6 +130,7 @@ public class CompletionOrderReadService {
         CompletionOrderRespVO response = new CompletionOrderRespVO();
         response.setId(entity.getId());
         response.setCompletionNo(entity.getCompletionNo());
+        response.setProductionTaskId(entity.getProductionTaskId());
         response.setWorkOrderNo(entity.getWorkOrderNo());
         response.setProductCode(entity.getProductCode());
         response.setProductName(entity.getProductName());

@@ -41,6 +41,9 @@ public interface MaterialRepository extends JpaRepository<MaterialEntity, Long>,
     /** 判断有效物料编码是否存在。 */
     boolean existsByMaterialCodeAndDeletedFalse(String materialCode);
 
+    /** 按物料编码查询未删除物料。 */
+    Optional<MaterialEntity> findByMaterialCodeAndDeletedFalse(String materialCode);
+
     /** 判断有效物料编码是否存在，排除指定主键。 */
     boolean existsByMaterialCodeAndIdNotAndDeletedFalse(String materialCode, Long id);
 

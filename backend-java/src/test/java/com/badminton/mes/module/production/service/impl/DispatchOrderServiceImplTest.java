@@ -31,6 +31,7 @@ import com.badminton.mes.module.production.dal.repository.WorkOrderRepository;
 import com.badminton.mes.module.production.enums.DispatchAdjustTypeEnum;
 import com.badminton.mes.module.production.enums.DispatchStatusEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
+import com.badminton.mes.module.scene.service.SceneTaskService;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -104,6 +105,9 @@ class DispatchOrderServiceImplTest {
 
     @Mock
     private WorkOrderCache workOrderCache;
+
+    @Mock
+    private SceneTaskService sceneTaskService;
 
     @InjectMocks
     private DispatchOrderServiceImpl dispatchOrderService;

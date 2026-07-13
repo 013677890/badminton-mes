@@ -70,6 +70,10 @@ public class DeviceCountExceptionEntity {
     @Column(name = "request_snapshot", columnDefinition = "json")
     private String requestSnapshot;
 
+    /** 最后一次修正重试请求快照 */
+    @Column(name = "retry_request_snapshot", columnDefinition = "json")
+    private String retryRequestSnapshot;
+
     /** 异常类型 */
     @Column(name = "exception_type")
     private String exceptionType;
@@ -85,6 +89,26 @@ public class DeviceCountExceptionEntity {
     /** 处理状态：0 待处理 1 已处理 2 已忽略 */
     @Column(name = "handle_status")
     private Integer handleStatus;
+
+    /** 处理人 */
+    @Column(name = "handle_by")
+    private Long handleBy;
+
+    /** 处理时间 */
+    @Column(name = "handle_time")
+    private LocalDateTime handleTime;
+
+    /** 处理说明 */
+    @Column(name = "handle_remark")
+    private String handleRemark;
+
+    /** 修正后写入日志主键 */
+    @Column(name = "retry_log_id")
+    private Long retryLogId;
+
+    /** 修正后设备计数记录主键 */
+    @Column(name = "retry_record_id")
+    private Long retryRecordId;
 
     /** 调用用户 */
     @Column(name = "create_by")

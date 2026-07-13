@@ -18,7 +18,10 @@ public enum ErpCraftPendingStatusEnum {
     CONFIRMED(1),
 
     /** 校验异常：产品或工序校验未通过，可重新同步 */
-    FAILED(2);
+    FAILED(2),
+
+    /** 已驳回：工艺工程师明确不采用，可重新同步覆盖 */
+    REJECTED(3);
 
     /** 数据库存储值 */
     private final Integer status;

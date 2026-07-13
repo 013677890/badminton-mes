@@ -6,9 +6,11 @@ import java.util.Locale;
 import java.util.Optional;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.common.core.GlobalErrorCodeConstants;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingRespVO;
+import com.badminton.mes.module.integration.controller.vo.ErpCraftPendingPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncReqVO;
 import com.badminton.mes.module.integration.controller.vo.ErpCraftSyncRespVO;
 import com.badminton.mes.module.integration.controller.vo.ErpSyncLogPageReqVO;
@@ -18,11 +20,13 @@ import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRes
 import com.badminton.mes.module.integration.dal.entity.ErpCraftPendingEntity;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
 import com.badminton.mes.module.integration.dal.repository.ErpSyncLogSpecifications;
+import com.badminton.mes.module.integration.dal.repository.ErpCraftPendingRepository;
+import com.badminton.mes.module.integration.dal.repository.ErpCraftPendingSpecifications;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
 import com.badminton.mes.module.integration.enums.ErpCraftPendingStatusEnum;
 import com.badminton.mes.module.integration.service.ErpCraftSyncCommandService;
-import com.badminton.mes.module.integration.service.ErpMockDataSource;
+import com.badminton.mes.module.integration.service.ErpDataSource;
 import com.badminton.mes.module.integration.service.ErpSyncService;
 import com.badminton.mes.module.integration.service.ErpTaskSyncCommandService;
 import com.badminton.mes.module.integration.service.IntegrationAuditService;
@@ -53,7 +57,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
 
     private static final String INVALID_BUSINESS_KEY = "INVALID_SOURCE_DATA";
 
-    private final ErpMockDataSource mockDataSource;
+    private final ErpDataSource erpDataSource;
 
     private final ErpTaskSyncCommandService taskSyncCommandService;
 
@@ -63,31 +67,49 @@ public class ErpSyncServiceImpl implements ErpSyncService {
 
     private final IntegrationWriteLogRepository writeLogRepository;
 
+    private final ErpCraftPendingRepository pendingRepository;
+
     /**
      * 构造 ERP 同步门面。
      *
-     * @param mockDataSource          Mock ERP 数据源
+     * @param erpDataSource           ERP 数据源
      * @param taskSyncCommandService  任务同步命令服务
      * @param craftSyncCommandService 工艺同步命令服务
      * @param auditService            接口审计服务
      * @param writeLogRepository      写入日志 Repository
      */
-    public ErpSyncServiceImpl(ErpMockDataSource mockDataSource,
+    @org.springframework.beans.factory.annotation.Autowired
+    public ErpSyncServiceImpl(ErpDataSource erpDataSource,
                               ErpTaskSyncCommandService taskSyncCommandService,
                               ErpCraftSyncCommandService craftSyncCommandService,
                               IntegrationAuditService auditService,
-                              IntegrationWriteLogRepository writeLogRepository) {
-        this.mockDataSource = mockDataSource;
+                               IntegrationWriteLogRepository writeLogRepository,
+                               ErpCraftPendingRepository pendingRepository) {
+        this.erpDataSource = erpDataSource;
         this.taskSyncCommandService = taskSyncCommandService;
         this.craftSyncCommandService = craftSyncCommandService;
         this.auditService = auditService;
         this.writeLogRepository = writeLogRepository;
+        this.pendingRepository = pendingRepository;
+    }
+
+    /** 兼容既有聚焦单测的构造入口。 */
+    public ErpSyncServiceImpl(ErpDataSource erpDataSource,
+                              ErpTaskSyncCommandService taskSyncCommandService,
+                              ErpCraftSyncCommandService craftSyncCommandService,
+                              IntegrationAuditService auditService,
+                              IntegrationWriteLogRepository writeLogRepository) {
+        this(erpDataSource, taskSyncCommandService, craftSyncCommandService,
+                auditService, writeLogRepository, null);
     }
 
     @Override
     public ErpTaskSyncRespVO syncErpTasks(ErpTaskSyncReqVO reqVO) {
         String sourceSystem = resolveSourceSystem(reqVO.getSourceSystem());
-        List<ErpTaskDTO> tasks = filterTasks(mockDataSource.fetchTasks(), reqVO.getErpOrderNo());
+        validateTaskTimeRange(reqVO);
+        List<ErpTaskDTO> tasks = filterTasks(
+                erpDataSource.fetchTasks(), reqVO.getErpOrderNo(),
+                reqVO.getStartTime(), reqVO.getEndTime());
 
         ErpTaskSyncRespVO response = new ErpTaskSyncRespVO();
         response.setSourceSystem(sourceSystem);
@@ -126,7 +148,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
     @Override
     public ErpCraftSyncRespVO syncErpCrafts(ErpCraftSyncReqVO reqVO) {
         String sourceSystem = resolveSourceSystem(reqVO.getSourceSystem());
-        List<ErpCraftDTO> crafts = mockDataSource.fetchCrafts();
+        List<ErpCraftDTO> crafts = erpDataSource.fetchCrafts();
 
         ErpCraftSyncRespVO response = new ErpCraftSyncRespVO();
         response.setSourceSystem(sourceSystem);
@@ -144,6 +166,29 @@ public class ErpSyncServiceImpl implements ErpSyncService {
     @Override
     public Long confirmPendingCraft(Long id) {
         return craftSyncCommandService.confirmCraft(id);
+    }
+
+    @Override
+    public PageResult<ErpCraftPendingRespVO> getPendingCraftPage(
+            ErpCraftPendingPageReqVO reqVO) {
+        Specification<ErpCraftPendingEntity> specification =
+                ErpCraftPendingSpecifications.page(reqVO);
+        long total = pendingRepository.count(specification);
+        if (total == 0) {
+            return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
+        }
+        int pageNo = normalizePageNo(reqVO.getPageNo(), reqVO.getPageSize(), total);
+        Page<ErpCraftPendingEntity> page = pendingRepository.findAll(
+                specification, PageRequest.of(pageNo - 1, reqVO.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "id")));
+        return PageResult.of(page.getContent().stream()
+                        .map(ErpSyncResponseConverter::toPendingResponse).toList(),
+                total, pageNo, reqVO.getPageSize());
+    }
+
+    @Override
+    public void rejectPendingCraft(Long id, String reason) {
+        craftSyncCommandService.rejectCraft(id, reason);
     }
 
     /**
@@ -359,14 +404,28 @@ public class ErpSyncServiceImpl implements ErpSyncService {
         return craft.erpRoutingCode().trim() + ":" + craft.erpRoutingVersion().trim();
     }
 
-    private List<ErpTaskDTO> filterTasks(List<ErpTaskDTO> tasks, String erpOrderNo) {
-        if (!StringUtils.hasText(erpOrderNo)) {
-            return tasks;
-        }
-        String target = erpOrderNo.trim();
+    private List<ErpTaskDTO> filterTasks(
+            List<ErpTaskDTO> tasks,
+            String erpOrderNo,
+            java.time.LocalDateTime startTime,
+            java.time.LocalDateTime endTime) {
+        String target = StringUtils.hasText(erpOrderNo) ? erpOrderNo.trim() : null;
         return tasks.stream()
-                .filter(task -> task != null && target.equals(task.erpOrderNo()))
+                .filter(java.util.Objects::nonNull)
+                .filter(task -> target == null || target.equals(task.erpOrderNo()))
+                .filter(task -> startTime == null || (task.planStartTime() != null
+                        && !task.planStartTime().isBefore(startTime)))
+                .filter(task -> endTime == null || (task.planStartTime() != null
+                        && !task.planStartTime().isAfter(endTime)))
                 .toList();
+    }
+
+    private void validateTaskTimeRange(ErpTaskSyncReqVO reqVO) {
+        if (reqVO.getStartTime() != null && reqVO.getEndTime() != null
+                && reqVO.getEndTime().isBefore(reqVO.getStartTime())) {
+            throw new ServiceException(GlobalErrorCodeConstants.PARAM_ERROR,
+                    "同步截止时间不能早于同步起始时间");
+        }
     }
 
     private int normalizePageNo(int requestedPageNo, int pageSize, long total) {
@@ -377,6 +436,6 @@ public class ErpSyncServiceImpl implements ErpSyncService {
     private String resolveSourceSystem(String sourceSystem) {
         return StringUtils.hasText(sourceSystem)
                 ? sourceSystem.trim().toUpperCase(Locale.ROOT)
-                : ErpMockDataSource.DEFAULT_SOURCE_SYSTEM;
+                : ErpDataSource.DEFAULT_SOURCE_SYSTEM;
     }
 }

@@ -50,6 +50,13 @@ public interface WorkOrderMaterialRepository extends JpaRepository<WorkOrderMate
      */
     boolean existsByWorkOrderIdAndDeletedFalse(Long workOrderId);
 
+    @Query("""
+            SELECT DISTINCT material.workOrderId FROM WorkOrderMaterialEntity material
+            WHERE material.materialId IN :materialIds AND material.deleted = false
+            """)
+    List<Long> findDistinctWorkOrderIdsByMaterialIdIn(
+            @Param("materialIds") java.util.Collection<Long> materialIds);
+
     /**
      * 逻辑删除指定工单的全部未删除物料需求，工单作废时随单失效，
      * 避免后续齐套/领料按物料聚合时计入已作废工单。

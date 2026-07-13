@@ -138,6 +138,46 @@ public final class IntegrationErrorCodeConstants {
     public static final ErrorCode ERP_CRAFT_PENDING_STATUS_INVALID =
             new ErrorCode("A0440", "当前状态不允许确认", "只有待确认状态的数据才能确认");
 
+    /** 设备未维护有效报工绑定 */
+    public static final ErrorCode DEVICE_BINDING_NOT_AVAILABLE =
+            new ErrorCode("A0402", "设备不存在或未启用", "请先维护并启用设备报工绑定");
+
+    /** 设备绑定产线与派工产线不一致 */
+    public static final ErrorCode DEVICE_BINDING_LINE_MISMATCH =
+            new ErrorCode("A0440", "设备未绑定当前派工产线", "请检查设备与派工产线绑定");
+
+    /** 设备绑定工序与上报工序不一致 */
+    public static final ErrorCode DEVICE_BINDING_PROCESS_MISMATCH =
+            new ErrorCode("A0440", "设备未绑定当前工序", "请检查设备与工序绑定");
+
+    /** 设备单次计数增量异常 */
+    public static final ErrorCode DEVICE_COUNT_JUMP =
+            new ErrorCode("A0420", "设备计数增量超过阈值", "计数变化异常，已进入异常池");
+
+    /** 设备绑定产线无效 */
+    public static final ErrorCode DEVICE_BINDING_LINE_INVALID =
+            new ErrorCode("A0402", "设备绑定产线不存在", "请选择有效产线");
+
+    /** 设备绑定工序无效 */
+    public static final ErrorCode DEVICE_BINDING_PROCESS_INVALID =
+            new ErrorCode("A0402", "设备绑定工序不存在", "请选择有效工序");
+
+    /** 设备默认员工无效 */
+    public static final ErrorCode DEVICE_BINDING_EMPLOYEE_INVALID =
+            new ErrorCode("A0402", "设备默认员工不存在", "请选择有效员工");
+
+    /** 设备异常记录不存在 */
+    public static final ErrorCode DEVICE_EXCEPTION_NOT_EXISTS =
+            new ErrorCode("A0402", "设备计数异常不存在", "异常记录不存在或已被处理");
+
+    /** 设备异常状态不允许处理 */
+    public static final ErrorCode DEVICE_EXCEPTION_STATUS_INVALID =
+            new ErrorCode("A0440", "设备计数异常已处理", "请刷新异常列表");
+
+    /** ERP 远程接口调用失败 */
+    public static final ErrorCode ERP_REMOTE_CALL_FAILED =
+            new ErrorCode("C0001", "ERP 接口调用失败", "ERP 暂时不可用，请稍后重试");
+
     private IntegrationErrorCodeConstants() {
     }
 }
