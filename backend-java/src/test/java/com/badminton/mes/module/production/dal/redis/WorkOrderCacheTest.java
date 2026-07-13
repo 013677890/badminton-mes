@@ -17,6 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -24,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -65,6 +68,7 @@ class WorkOrderCacheTest {
 
         assertThat(result).isPresent();
         assertThat(result.get().getWorkOrderNo()).isEqualTo("WO202607080001");
+        assertThat(result.get().getSourceSystem()).isEqualTo("ERP-MAIN");
     }
 
     @Test
@@ -109,11 +113,37 @@ class WorkOrderCacheTest {
         workOrderCache.evict(WORK_ORDER_ID);
     }
 
+    @Test
+    @DisplayName("提交后删除：无事务同步时立即删除缓存")
+    void evictAfterCommitEvictsImmediatelyWithoutSynchronization() {
+        workOrderCache.evictAfterCommit(WORK_ORDER_ID);
+
+        verify(stringRedisTemplate).delete(ProductionRedisKeyConstants.workOrderDetailKey(WORK_ORDER_ID));
+    }
+
+    @Test
+    @DisplayName("提交后删除：事务同步激活时推迟到 afterCommit")
+    void evictAfterCommitDefersUntilAfterCommit() {
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            workOrderCache.evictAfterCommit(WORK_ORDER_ID);
+
+            verify(stringRedisTemplate, never()).delete(ProductionRedisKeyConstants.workOrderDetailKey(WORK_ORDER_ID));
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            verify(stringRedisTemplate).delete(ProductionRedisKeyConstants.workOrderDetailKey(WORK_ORDER_ID));
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
     private WorkOrderEntity buildWorkOrder() {
         WorkOrderEntity workOrder = new WorkOrderEntity();
         workOrder.setId(WORK_ORDER_ID);
         workOrder.setWorkOrderNo("WO202607080001");
-        workOrder.setSourceType(WorkOrderSourceTypeEnum.MANUAL.getType());
+        workOrder.setSourceType(WorkOrderSourceTypeEnum.API_WRITE.getType());
+        workOrder.setSourceSystem("ERP-MAIN");
+        workOrder.setSourceOrderNo("ERP-WO-001");
         workOrder.setProductId(10L);
         workOrder.setProductName("比赛级羽毛球");
         workOrder.setUnitId(1L);

@@ -59,6 +59,7 @@ public final class WorkOrderConvert {
         respVO.setId(workOrder.getId());
         respVO.setWorkOrderNo(workOrder.getWorkOrderNo());
         respVO.setSourceType(workOrder.getSourceType());
+        respVO.setSourceSystem(workOrder.getSourceSystem());
         respVO.setSourceOrderNo(workOrder.getSourceOrderNo());
         respVO.setProductId(workOrder.getProductId());
         respVO.setProductName(workOrder.getProductName());

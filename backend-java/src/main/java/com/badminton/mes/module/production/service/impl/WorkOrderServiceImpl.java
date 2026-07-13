@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -15,9 +16,14 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
@@ -46,6 +52,7 @@ import com.badminton.mes.module.production.enums.WorkOrderChangeTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderSourceTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
 import com.badminton.mes.module.production.service.WorkOrderService;
+import com.badminton.mes.module.production.service.support.BomDetailManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,8 +63,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /**
@@ -78,6 +83,10 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private final ProductRepository productRepository;
 
+    private final CraftRouteRepository routeRepository;
+
+    private final CraftRouteProductRepository routeProductRepository;
+
     private final WorkshopRepository workshopRepository;
 
     private final BomRepository bomRepository;
@@ -94,11 +103,15 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     private final WorkOrderNoSequence workOrderNoSequence;
 
+    private final BomDetailManager bomDetailManager;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param workOrderRepository          工单 Repository
      * @param productRepository            产品 Repository
+     * @param routeRepository              工艺路线 Repository
+     * @param routeProductRepository       路线产品关系 Repository
      * @param workshopRepository           车间 Repository
      * @param bomRepository                BOM Repository
      * @param bomDetailRepository          BOM 明细 Repository
@@ -107,15 +120,21 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param workOrderStatusLogRepository 工单状态日志 Repository
      * @param workOrderCache               工单缓存组件
      * @param workOrderNoSequence          工单号流水生成器
+     * @param bomDetailManager             BOM 明细锁定与校验组件
      */
     public WorkOrderServiceImpl(WorkOrderRepository workOrderRepository, ProductRepository productRepository,
+                                CraftRouteRepository routeRepository,
+                                CraftRouteProductRepository routeProductRepository,
                                 WorkshopRepository workshopRepository, BomRepository bomRepository,
                                 BomDetailRepository bomDetailRepository, MaterialRepository materialRepository,
                                 WorkOrderMaterialRepository workOrderMaterialRepository,
                                 WorkOrderStatusLogRepository workOrderStatusLogRepository,
-                                WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence) {
+                                WorkOrderCache workOrderCache, WorkOrderNoSequence workOrderNoSequence,
+                                BomDetailManager bomDetailManager) {
         this.workOrderRepository = workOrderRepository;
         this.productRepository = productRepository;
+        this.routeRepository = routeRepository;
+        this.routeProductRepository = routeProductRepository;
         this.workshopRepository = workshopRepository;
         this.bomRepository = bomRepository;
         this.bomDetailRepository = bomDetailRepository;
@@ -124,6 +143,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         this.workOrderStatusLogRepository = workOrderStatusLogRepository;
         this.workOrderCache = workOrderCache;
         this.workOrderNoSequence = workOrderNoSequence;
+        this.bomDetailManager = bomDetailManager;
     }
 
     @Override
@@ -131,6 +151,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     public Long createWorkOrder(WorkOrderSaveReqVO reqVO) {
         validatePlanTime(reqVO);
         ProductEntity product = validateProduct(reqVO.getProductId());
+        validateRoutingReference(reqVO.getRoutingId(), reqVO.getProductId(), false);
         validateWorkshop(reqVO.getWorkshopId());
         String workOrderNo = resolveWorkOrderNo(reqVO.getWorkOrderNo());
 
@@ -180,6 +201,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      */
     private void updateCreatedWorkOrder(Long id, WorkOrderSaveReqVO reqVO) {
         ProductEntity product = validateProduct(reqVO.getProductId());
+        validateRoutingReference(reqVO.getRoutingId(), reqVO.getProductId(), false);
         validateWorkshop(reqVO.getWorkshopId());
 
         WorkOrderEntity updateEntity = WorkOrderConvert.toEntity(reqVO);
@@ -255,31 +277,28 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void releaseWorkOrder(Long id) {
-        // 先 CAS 更新再对失败查因，避免"先查后改"竞态；条件含 BOM/工艺路线非空校验
-        int rows = workOrderRepository.updateToReleased(id, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus());
-        if (rows == 1) {
-            WorkOrderEntity workOrder = validateWorkOrderExists(id);
-            // BOM 校验或明细为空抛异常时，本事务连同上面的状态更新一起回滚
-            generateWorkOrderMaterials(workOrder);
-            insertStatusLog(id, WorkOrderStatusEnum.CREATED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
-                    WorkOrderChangeTypeEnum.STATUS_TRANSITION, null);
-            evictCacheAfterCommit(id);
-            logger.info("[下达工单] id: {}", id);
-            return;
-        }
-
-        // CAS 未命中，逐项查明原因给出精确提示(EXC-003 分门别类提示)
-        WorkOrderEntity workOrder = validateWorkOrderExists(id);
+        WorkOrderEntity workOrder = workOrderRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         if (!WorkOrderStatusEnum.CREATED.getStatus().equals(workOrder.getOrderStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
         }
         if (workOrder.getBomId() == null || workOrder.getRoutingId() == null) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_RELEASE_MISSING_BOM_ROUTING);
         }
+        validateRoutingReference(workOrder.getRoutingId(), workOrder.getProductId(), true);
 
-        // 查因瞬间状态又被并发修改，按状态不允许下达处理
-        throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
+        int rows = workOrderRepository.updateToReleased(id, WorkOrderStatusEnum.CREATED.getStatus(),
+                WorkOrderStatusEnum.RELEASED.getStatus());
+        if (rows != 1) {
+            throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE);
+        }
+
+        // BOM 或明细校验失败会抛异常，本事务连同状态更新一起回滚。
+        generateWorkOrderMaterials(workOrder);
+        insertStatusLog(id, WorkOrderStatusEnum.CREATED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
+                WorkOrderChangeTypeEnum.STATUS_TRANSITION, null);
+        evictCacheAfterCommit(id);
+        logger.info("[下达工单] id: {}", id);
     }
 
     @Override
@@ -428,6 +447,66 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<WorkOrderProgressRespVO> getWorkOrderProgress(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+        List<Long> distinctIds = ids.stream().filter(id -> id != null && id > 0).distinct().toList();
+        if (distinctIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, WorkOrderEntity> workOrderById = workOrderRepository
+                .findByIdInAndDeletedFalse(distinctIds).stream()
+                .collect(Collectors.toMap(WorkOrderEntity::getId, Function.identity()));
+        return distinctIds.stream()
+                .map(workOrderById::get)
+                .filter(Objects::nonNull)
+                .map(this::toProgressRespVO)
+                .toList();
+    }
+
+    /**
+     * 工单实体转进度响应。
+     *
+     * @param workOrder 工单实体
+     * @return 进度响应
+     */
+    private WorkOrderProgressRespVO toProgressRespVO(WorkOrderEntity workOrder) {
+        WorkOrderProgressRespVO respVO = new WorkOrderProgressRespVO();
+        respVO.setId(workOrder.getId());
+        respVO.setWorkOrderNo(workOrder.getWorkOrderNo());
+        respVO.setProductName(workOrder.getProductName());
+        respVO.setPlanQuantity(workOrder.getPlanQuantity());
+        respVO.setDispatchedQuantity(workOrder.getDispatchedQuantity());
+        respVO.setInputQuantity(workOrder.getInputQuantity());
+        respVO.setFinishQuantity(workOrder.getFinishQuantity());
+        respVO.setDefectQuantity(workOrder.getDefectQuantity());
+        respVO.setReworkQuantity(workOrder.getReworkQuantity());
+        respVO.setOrderStatus(workOrder.getOrderStatus());
+        respVO.setProgressPercent(calculateProgressPercent(
+                workOrder.getFinishQuantity(), workOrder.getPlanQuantity()));
+        return respVO;
+    }
+
+    /**
+     * 计算完工进度百分比，保留两位小数。
+     *
+     * @param finishQuantity 完工数量
+     * @param planQuantity   计划数量
+     * @return 进度百分比
+     */
+    private BigDecimal calculateProgressPercent(Integer finishQuantity, Integer planQuantity) {
+        if (planQuantity == null || planQuantity <= 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+        int finish = finishQuantity == null ? 0 : finishQuantity;
+        return BigDecimal.valueOf(finish)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(planQuantity), 2, RoundingMode.HALF_UP);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<WorkOrderRespVO> getWorkOrderPage(WorkOrderPageReqVO reqVO) {
         Specification<WorkOrderEntity> specification = WorkOrderSpecifications.page(reqVO);
         // 先 count：总数为 0 直接返回空页，省一次列表查询(SQL-005)
@@ -467,6 +546,8 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         if (workOrderMaterialRepository.existsByWorkOrderIdAndDeletedFalse(workOrder.getId())) {
             return;
         }
+        // 与物料停用共用主档行锁；按主键升序加锁，保持全局锁顺序一致。
+        bomDetailManager.validateAndLockExisting(details);
 
         BigDecimal planQuantity = BigDecimal.valueOf(workOrder.getPlanQuantity());
         List<WorkOrderMaterialEntity> materials = details.stream().map(detail -> {
@@ -579,17 +660,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param id 工单主键
      */
     private void evictCacheAfterCommit(Long id) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            workOrderCache.evict(id);
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                workOrderCache.evict(id);
-            }
-        });
+        workOrderCache.evictAfterCommit(id);
     }
 
     /**
@@ -664,7 +735,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @return 产品档案，用于冗余字段回填
      */
     private ProductEntity validateProduct(Long productId) {
-        ProductEntity product = productRepository.findByIdAndDeletedFalse(productId)
+        ProductEntity product = productRepository.findByIdAndDeletedFalseForUpdate(productId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.PRODUCT_NOT_EXISTS));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(product.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.PRODUCT_NOT_EXISTS);
@@ -674,12 +745,40 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     }
 
     /**
+     * 锁定并校验工艺路线存在、状态可用且绑定当前产品。
+     *
+     * <p>工单草稿允许引用草稿或生效路线，但不允许引用停用路线；正式下达只接受生效路线。
+     * 路线写锁与停用、删除共用，保证“校验有效后下达”的事务窗口内状态不漂移。
+     *
+     * @param routingId        工艺路线主键，可空
+     * @param productId        工单产品主键
+     * @param effectiveRequired 是否必须为生效状态
+     */
+    private void validateRoutingReference(
+            Long routingId, Long productId, boolean effectiveRequired) {
+        if (routingId == null) {
+            return;
+        }
+        CraftRouteEntity route = routeRepository.findByIdAndDeletedFalseForUpdate(routingId)
+                .orElseThrow(() -> new ServiceException(
+                        ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE));
+        boolean statusAvailable = effectiveRequired
+                ? CraftRouteStatusEnum.EFFECTIVE.getStatus().equals(route.getRoutingStatus())
+                : !CraftRouteStatusEnum.DISABLED.getStatus().equals(route.getRoutingStatus());
+        boolean productBound = routeProductRepository
+                .existsByRouteIdAndProductIdAndDeletedFalse(routingId, productId);
+        if (!statusAvailable || !productBound) {
+            throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE);
+        }
+    }
+
+    /**
      * 校验车间存在且处于启用状态。
      *
      * @param workshopId 车间 id
      */
     private void validateWorkshop(Long workshopId) {
-        WorkshopEntity workshop = workshopRepository.findByIdAndDeletedFalse(workshopId)
+        WorkshopEntity workshop = workshopRepository.findByIdAndDeletedFalseForUpdate(workshopId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS);

@@ -30,6 +30,14 @@ public final class EquipmentErrorCodeConstants {
     public static final ErrorCode EQUIPMENT_CATEGORY_HAS_EQUIPMENT =
             new ErrorCode("A0440", "该类别下存在设备，不允许删除", "请先删除或移动该类别下的设备");
 
+    /** 设备类别仍被启用工序引用 */
+    public static final ErrorCode EQUIPMENT_CATEGORY_REFERENCED_BY_PROCESS =
+            new ErrorCode("A0440", "设备类别仍被启用工序引用", "请先调整或停用引用该类别的工序");
+
+    /** 设备类别仍被生效工艺路线引用 */
+    public static final ErrorCode EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE =
+            new ErrorCode("A0440", "设备类别仍被生效工艺路线引用", "请先在工艺路线新版本中替换该设备类别");
+
     /** 父级类别不存在 */
     public static final ErrorCode PARENT_CATEGORY_NOT_EXISTS =
             new ErrorCode("A0402", "父级类别不存在", "所选父级类别不可用，请重新选择");

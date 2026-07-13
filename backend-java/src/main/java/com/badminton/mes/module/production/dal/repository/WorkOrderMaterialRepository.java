@@ -17,6 +17,23 @@ import org.springframework.data.repository.query.Param;
  */
 public interface WorkOrderMaterialRepository extends JpaRepository<WorkOrderMaterialEntity, Long> {
 
+    /** 判断物料是否被任意工单物料需求引用。 */
+    boolean existsByMaterialIdAndDeletedFalse(Long materialId);
+
+    /** 判断物料是否被未结束工单物料需求引用。 */
+    @Query("""
+            SELECT CASE WHEN COUNT(material) > 0 THEN true ELSE false END
+            FROM WorkOrderMaterialEntity material, WorkOrderEntity workOrder
+            WHERE workOrder.id = material.workOrderId
+              AND material.materialId = :materialId
+              AND workOrder.orderStatus IN :statuses
+              AND workOrder.deleted = false
+              AND material.deleted = false
+            """)
+    boolean existsActiveOrderByMaterialId(
+            @Param("materialId") Long materialId,
+            @Param("statuses") java.util.Collection<Integer> statuses);
+
     /**
      * 查询指定工单的全部未删除物料需求。
      *
@@ -32,6 +49,13 @@ public interface WorkOrderMaterialRepository extends JpaRepository<WorkOrderMate
      * @return true 已生成，false 未生成
      */
     boolean existsByWorkOrderIdAndDeletedFalse(Long workOrderId);
+
+    @Query("""
+            SELECT DISTINCT material.workOrderId FROM WorkOrderMaterialEntity material
+            WHERE material.materialId IN :materialIds AND material.deleted = false
+            """)
+    List<Long> findDistinctWorkOrderIdsByMaterialIdIn(
+            @Param("materialIds") java.util.Collection<Long> materialIds);
 
     /**
      * 逻辑删除指定工单的全部未删除物料需求，工单作废时随单失效，
