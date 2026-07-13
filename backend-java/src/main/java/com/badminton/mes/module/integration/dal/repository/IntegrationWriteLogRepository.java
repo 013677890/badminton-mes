@@ -30,4 +30,18 @@ public interface IntegrationWriteLogRepository extends JpaRepository<Integration
     Optional<IntegrationWriteLogEntity> findFirstByInterfaceTypeAndSourceSystemAndBusinessKeyAndWriteStatusInOrderByIdDesc(
             String interfaceType, String sourceSystem, String businessKey,
             Collection<Integer> writeStatuses);
+
+    /**
+     * 按接口、来源和业务键查询最近处理结果，不区分成功或失败状态。
+     *
+     * <p>设备计数以任何已落日志为幂等处理完成，重复请求直接返回原结果引用。
+     *
+     * @param interfaceType 接口类型
+     * @param sourceSystem  来源系统
+     * @param businessKey   来源侧业务键
+     * @return 最近一条处理日志
+     */
+    Optional<IntegrationWriteLogEntity>
+            findFirstByInterfaceTypeAndSourceSystemAndBusinessKeyOrderByIdDesc(
+                    String interfaceType, String sourceSystem, String businessKey);
 }

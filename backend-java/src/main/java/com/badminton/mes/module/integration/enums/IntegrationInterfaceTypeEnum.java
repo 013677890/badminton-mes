@@ -3,7 +3,7 @@ package com.badminton.mes.module.integration.enums;
 import lombok.Getter;
 
 /**
- * 外部写入接口类型。
+ * 外部集成接口类型。
  *
  * @author 张竹灏
  * @date 2026/07/11
@@ -24,7 +24,13 @@ public enum IntegrationInterfaceTypeEnum {
     ERP_TASK_SYNC("ERP_TASK_SYNC"),
 
     /** ERP 工艺数据同步 */
-    ERP_CRAFT_SYNC("ERP_CRAFT_SYNC");
+    ERP_CRAFT_SYNC("ERP_CRAFT_SYNC"),
+
+    /** 设备累计计数写入 */
+    DEVICE_COUNT_WRITE("DEVICE_COUNT_WRITE"),
+
+    /** 生产完工单读取 */
+    COMPLETION_ORDER_READ("COMPLETION_ORDER_READ");
 
     /** 数据库存储值 */
     private final String value;

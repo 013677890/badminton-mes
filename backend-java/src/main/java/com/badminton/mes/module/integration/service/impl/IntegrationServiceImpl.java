@@ -7,6 +7,7 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
 import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
@@ -18,6 +19,7 @@ import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogSp
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
 import com.badminton.mes.module.integration.enums.IntegrationWriteStatusEnum;
 import com.badminton.mes.module.integration.service.IntegrationAuditService;
+import com.badminton.mes.module.integration.service.DeviceCountWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationDispatchWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationService;
 import com.badminton.mes.module.integration.service.IntegrationWriteCommandService;
@@ -47,6 +49,8 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     private final IntegrationDispatchWriteCommandService dispatchCommandService;
 
+    private final DeviceCountWriteCommandService deviceCountCommandService;
+
     private final IntegrationAuditService auditService;
 
     private final IntegrationWriteLogRepository writeLogRepository;
@@ -56,15 +60,18 @@ public class IntegrationServiceImpl implements IntegrationService {
      *
      * @param commandService         单位与生产工单写入命令服务
      * @param dispatchCommandService 生产任务单写入命令服务
+     * @param deviceCountCommandService 设备累计计数写入命令服务
      * @param auditService           接口审计服务
      * @param writeLogRepository     写入日志 Repository
      */
     public IntegrationServiceImpl(IntegrationWriteCommandService commandService,
                                   IntegrationDispatchWriteCommandService dispatchCommandService,
+                                  DeviceCountWriteCommandService deviceCountCommandService,
                                   IntegrationAuditService auditService,
                                   IntegrationWriteLogRepository writeLogRepository) {
         this.commandService = commandService;
         this.dispatchCommandService = dispatchCommandService;
+        this.deviceCountCommandService = deviceCountCommandService;
         this.auditService = auditService;
         this.writeLogRepository = writeLogRepository;
     }
@@ -154,6 +161,40 @@ public class IntegrationServiceImpl implements IntegrationService {
                     exception,
                     existing.map(IntegrationWriteLogEntity::getResultId).orElse(null),
                     existing.map(IntegrationWriteLogEntity::getResultNo).orElse(null));
+        }
+    }
+
+    @Override
+    public IntegrationWriteResultRespVO writeDeviceCount(DeviceCountWriteReqVO reqVO) {
+        String snapshot = auditService.serializeRequest(reqVO);
+        String sourceSystem = normalizeCode(reqVO.getSourceSystem());
+        String externalKey = normalizeCode(reqVO.getExternalKey());
+        Optional<IntegrationWriteLogEntity> processedLog =
+                deviceCountCommandService.findProcessedLog(sourceSystem, externalKey);
+        if (processedLog.isPresent()) {
+            return toDeviceCountDuplicate(processedLog.get());
+        }
+        try {
+            return deviceCountCommandService.writeDeviceCount(reqVO, snapshot);
+        } catch (ServiceException exception) {
+            boolean duplicate = IntegrationErrorCodeConstants.DEVICE_COUNT_DUPLICATE
+                    .equals(exception.getErrorCode());
+            Optional<IntegrationWriteLogEntity> existing = duplicate
+                    ? deviceCountCommandService.findProcessedLog(sourceSystem, externalKey)
+                    : Optional.empty();
+            if (existing.isPresent()) {
+                return toDeviceCountDuplicate(existing.get());
+            }
+            return recordFailure(
+                    IntegrationInterfaceTypeEnum.DEVICE_COUNT_WRITE,
+                    sourceSystem,
+                    externalKey,
+                    snapshot,
+                    duplicate
+                            ? new ServiceException(IntegrationErrorCodeConstants.WRITE_CONFLICT)
+                            : exception,
+                    null,
+                    null);
         }
     }
 
@@ -289,6 +330,23 @@ public class IntegrationServiceImpl implements IntegrationService {
         response.setBusinessId(resultId);
         response.setBusinessNo(resultNo);
         response.setMessage("重复请求，未生成新数据");
+        return response;
+    }
+
+    /**
+     * 将设备计数唯一键竞争的获胜日志转换为稳定重复响应。
+     *
+     * @param log 原处理日志
+     * @return 重复写入响应
+     */
+    private IntegrationWriteResultRespVO toDeviceCountDuplicate(IntegrationWriteLogEntity log) {
+        IntegrationWriteResultRespVO response = new IntegrationWriteResultRespVO();
+        response.setLogId(log.getId());
+        response.setStatus(IntegrationWriteStatusEnum.DUPLICATE.getCode());
+        response.setBusinessId(log.getResultId());
+        response.setBusinessNo(log.getResultNo());
+        response.setErrorCode(log.getErrorCode());
+        response.setMessage("重复请求，沿用原设备计数处理结果");
         return response;
     }
 

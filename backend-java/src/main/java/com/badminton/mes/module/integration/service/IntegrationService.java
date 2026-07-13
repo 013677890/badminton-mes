@@ -3,6 +3,7 @@ package com.badminton.mes.module.integration.service;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
@@ -39,6 +40,14 @@ public interface IntegrationService {
      * @return 写入结果
      */
     IntegrationWriteResultRespVO writeDispatchOrder(ExternalDispatchOrderWriteReqVO reqVO);
+
+    /**
+     * 按来源系统和外部幂等键写入设备累计计数。
+     *
+     * @param reqVO 设备计数写入请求
+     * @return 写入或异常池处理结果
+     */
+    IntegrationWriteResultRespVO writeDeviceCount(DeviceCountWriteReqVO reqVO);
 
     /**
      * 分页查询外部接口写入结果。

@@ -56,6 +56,19 @@ public interface DispatchOrderRepository extends JpaRepository<DispatchOrderEnti
     Optional<DispatchOrderEntity> findByIdAndDeletedFalse(Long id);
 
     /**
+     * 按派工单号加悲观写锁查询，供设备累计计数串行校验与计算增量。
+     *
+     * @param dispatchNo 派工单号
+     * @return 已锁定的未删除派工单
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT dispatch FROM DispatchOrderEntity dispatch
+            WHERE dispatch.dispatchNo = :dispatchNo AND dispatch.deleted = false
+            """)
+    Optional<DispatchOrderEntity> findByDispatchNoForUpdate(@Param("dispatchNo") String dispatchNo);
+
+    /**
      * 仅取派工单所属工单 id(标量投影，不载入实体)。
      *
      * <p>写路径锁序为"先工单行后派工单行"，锁工单前需要 workOrderId 但

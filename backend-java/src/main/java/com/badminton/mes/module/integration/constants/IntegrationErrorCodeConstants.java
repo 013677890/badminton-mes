@@ -66,6 +66,38 @@ public final class IntegrationErrorCodeConstants {
     public static final ErrorCode WRITE_CONFLICT =
             new ErrorCode("B0001", "接口写入发生数据库冲突", "写入失败，请稍后重试或联系管理员");
 
+    /** 设备计数幂等键已处理 */
+    public static final ErrorCode DEVICE_COUNT_DUPLICATE =
+            new ErrorCode("A0506", "设备计数请求已处理", "该设备计数已处理，请勿重复提交");
+
+    /** 设备计数关联派工单不存在 */
+    public static final ErrorCode DEVICE_COUNT_DISPATCH_NOT_FOUND =
+            new ErrorCode("A0402", "派工单不存在", "请检查设备计数关联的派工单号");
+
+    /** 设备计数关联派工单状态不可用 */
+    public static final ErrorCode DEVICE_COUNT_DISPATCH_STATUS_INVALID =
+            new ErrorCode("A0440", "派工单未下发或不在执行中", "只有已下发或执行中的派工单可接收设备计数");
+
+    /** 设备计数关联工序不存在 */
+    public static final ErrorCode DEVICE_COUNT_PROCESS_NOT_FOUND =
+            new ErrorCode("A0402", "工序编码不存在", "请检查设备计数关联的工序编码");
+
+    /** 设备累计计数不是正数 */
+    public static final ErrorCode DEVICE_COUNT_NON_POSITIVE =
+            new ErrorCode("A0420", "设备计数值必须大于零", "请检查设备累计计数值");
+
+    /** 设备累计计数发生倒退 */
+    public static final ErrorCode DEVICE_COUNT_ROLLBACK =
+            new ErrorCode("A0420", "设备累计计数发生倒退", "当前计数不能小于最近一次累计计数");
+
+    /** 设备异常池查询时间范围不合法 */
+    public static final ErrorCode DEVICE_EXCEPTION_TIME_RANGE_INVALID =
+            new ErrorCode("A0420", "异常查询结束时间早于开始时间", "请检查异常查询时间范围");
+
+    /** 完工单或读取日志查询时间范围不合法 */
+    public static final ErrorCode COMPLETION_TIME_RANGE_INVALID =
+            new ErrorCode("A0420", "完工查询结束时间早于开始时间", "请检查完工单查询时间范围");
+
     /** ERP 同步：产品编码不存在 */
     public static final ErrorCode ERP_PRODUCT_NOT_AVAILABLE =
             new ErrorCode("A0402", "产品编码不存在", "ERP 产品编码在 MES 中不存在或未启用");

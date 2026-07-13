@@ -59,6 +59,18 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
     Optional<CraftProcessEntity> findByProcessCodeAndDeletedFalse(String processCode);
 
     /**
+     * 以写锁按编码查询未删除工序，和设备计数校验期间的工序变更串行化。
+     *
+     * @param processCode 工序编码
+     * @return 已锁定工序实体
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT process FROM CraftProcessEntity process "
+            + "WHERE process.processCode = :processCode AND process.deleted = false")
+    Optional<CraftProcessEntity> findByProcessCodeAndDeletedFalseForUpdate(
+            @Param("processCode") String processCode);
+
+    /**
      * 判断未删除工序中是否存在指定编码，排除当前工序。
      *
      * @param processCode 工序编码

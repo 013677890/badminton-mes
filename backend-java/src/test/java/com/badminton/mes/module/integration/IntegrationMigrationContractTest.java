@@ -64,6 +64,37 @@ class IntegrationMigrationContractTest {
                 "SELECT 1 FROM `craft_process` WHERE `process_code` = 'PR005'");
     }
 
+    @Test
+    @DisplayName("设备计数：成功记录、异常池和接口专用幂等唯一键同时落地")
+    void deviceCountMigrationContainsRecordsExceptionsAndIdempotencyKey() throws IOException {
+        String migration = readMigration("V15__device_count_record_exception.sql");
+
+        assertThat(migration).contains("CREATE TABLE `integration_device_count_record`");
+        assertThat(migration).contains("CREATE TABLE `integration_device_count_exception`");
+        assertThat(migration).contains("UNIQUE KEY `uk_device_count_idempotency_key`");
+        assertThat(migration).contains(
+                "CASE WHEN `interface_type` = 'DEVICE_COUNT_WRITE'");
+        assertThat(migration).contains("CHARACTER SET ascii COLLATE ascii_bin");
+        assertThat(migration).contains(
+                "UPPER(CONCAT(`source_system`, '#', `business_key`))");
+        assertThat(migration).contains("KEY `idx_device_count_context_id`");
+    }
+
+    @Test
+    @DisplayName("完工读取：完工单审核索引和逐条读取日志表同时落地")
+    void completionReadMigrationContainsApprovedIndexAndReadLog() throws IOException {
+        String migration = readMigration("V16__completion_order_read_log.sql");
+
+        assertThat(migration).contains("CREATE TABLE `prod_completion_order`");
+        assertThat(migration).contains("CREATE TABLE `integration_completion_read_log`");
+        assertThat(migration).contains("UNIQUE KEY `uk_completion_no`");
+        assertThat(migration).contains("KEY `idx_completion_audit_time_id`");
+        assertThat(migration).contains("KEY `idx_completion_read_source_time_id`");
+        assertThat(migration).contains("CONSTRAINT `chk_completion_approved_audit_time`");
+        assertThat(migration).contains(
+                "CHECK (`audit_status` <> 1 OR `audit_time` IS NOT NULL)");
+    }
+
     /**
      * 读取数据库迁移脚本。
      *

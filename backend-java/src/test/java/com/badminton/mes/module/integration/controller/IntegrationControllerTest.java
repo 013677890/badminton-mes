@@ -3,6 +3,8 @@ package com.badminton.mes.module.integration.controller;
 import com.badminton.mes.common.security.AuthInterceptor;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
 import com.badminton.mes.module.integration.service.IntegrationService;
+import com.badminton.mes.module.integration.service.CompletionOrderReadService;
+import com.badminton.mes.module.integration.service.DeviceCountWriteCommandService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +38,12 @@ class IntegrationControllerTest {
 
     @MockitoBean
     private IntegrationService integrationService;
+
+    @MockitoBean
+    private DeviceCountWriteCommandService deviceCountWriteCommandService;
+
+    @MockitoBean
+    private CompletionOrderReadService completionOrderReadService;
 
     @MockitoBean
     private AuthInterceptor authInterceptor;
@@ -137,6 +145,58 @@ class IntegrationControllerTest {
         verify(integrationService, never()).getWriteLogPage(any());
     }
 
+    @Test
+    @DisplayName("设备计数写入：合法请求返回异常池或成功处理结果")
+    void writeDeviceCountReturnsTraceableResult() throws Exception {
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(70L);
+        result.setStatus("SUCCESS");
+        result.setBusinessId(80L);
+        when(integrationService.writeDeviceCount(any())).thenReturn(result);
+
+        mockMvc.perform(post("/api/integration/device_counts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDeviceCountJson()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.logId").value(70))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+    }
+
+    @Test
+    @DisplayName("设备计数写入：非法来源字符在 Web 层被拒绝")
+    void writeDeviceCountRejectsInvalidSourceSystem() throws Exception {
+        mockMvc.perform(post("/api/integration/device_counts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDeviceCountJson().replace(
+                                "DEVICE-GATEWAY", "DEVICE GATEWAY")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeDeviceCount(any());
+    }
+
+    @Test
+    @DisplayName("完工单读取：缺少来源系统时返回参数错误")
+    void getCompletionOrdersRejectsMissingSourceSystem() throws Exception {
+        mockMvc.perform(get("/api/integration/completion_orders")
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(completionOrderReadService, never()).getCompletionOrderPage(any());
+    }
+
+    @Test
+    @DisplayName("设备异常分页：pageSize 超过上限时返回参数错误")
+    void getDeviceCountExceptionsRejectsOversizedPage() throws Exception {
+        mockMvc.perform(get("/api/integration/device_counts/exceptions")
+                        .param("pageNo", "1")
+                        .param("pageSize", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(deviceCountWriteCommandService, never()).getExceptionPage(any());
+    }
+
     private String validWorkOrderJson() {
         return """
                 {
@@ -165,6 +225,20 @@ class IntegrationControllerTest {
                   "planQuantity": 100,
                   "planStartTime": "2026-07-13 08:00:00",
                   "planEndTime": "2026-07-13 12:00:00"
+                }
+                """;
+    }
+
+    private String validDeviceCountJson() {
+        return """
+                {
+                  "sourceSystem": "DEVICE-GATEWAY",
+                  "externalKey": "COUNT-001",
+                  "equipmentCode": "EQP-01",
+                  "dispatchNo": "DO202607130001",
+                  "processCode": "PR001",
+                  "collectTime": "2026-07-13 10:30:00",
+                  "countValue": 130
                 }
                 """;
     }

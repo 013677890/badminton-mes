@@ -8,6 +8,7 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConstants;
 import com.badminton.mes.module.integration.controller.vo.ExternalDispatchOrderWriteReqVO;
+import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.ExternalWorkOrderWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteLogRespVO;
@@ -17,6 +18,7 @@ import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
 import com.badminton.mes.module.integration.service.IntegrationAuditService;
+import com.badminton.mes.module.integration.service.DeviceCountWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationDispatchWriteCommandService;
 import com.badminton.mes.module.integration.service.IntegrationWriteCommandService;
 import com.badminton.mes.module.integration.service.dto.IntegrationCommandResult;
@@ -55,6 +57,9 @@ class IntegrationServiceImplTest {
     private IntegrationDispatchWriteCommandService dispatchCommandService;
 
     @Mock
+    private DeviceCountWriteCommandService deviceCountCommandService;
+
+    @Mock
     private IntegrationAuditService auditService;
 
     @Mock
@@ -65,7 +70,8 @@ class IntegrationServiceImplTest {
     @BeforeEach
     void setUp() {
         integrationService = new IntegrationServiceImpl(
-                commandService, dispatchCommandService, auditService, writeLogRepository);
+                commandService, dispatchCommandService, deviceCountCommandService,
+                auditService, writeLogRepository);
     }
 
     @Test
@@ -204,6 +210,71 @@ class IntegrationServiceImplTest {
     }
 
     @Test
+    @DisplayName("设备计数：命令成功时直接返回可追踪结果")
+    void writeDeviceCountReturnsCommandResult() {
+        DeviceCountWriteReqVO reqVO = buildDeviceCountReqVO();
+        reqVO.setExternalKey("count-001");
+        when(auditService.serializeRequest(reqVO)).thenReturn("{}");
+        when(deviceCountCommandService.findProcessedLog("DEVICE-GATEWAY", "COUNT-001"))
+                .thenReturn(Optional.empty());
+        IntegrationWriteResultRespVO commandResult = new IntegrationWriteResultRespVO();
+        commandResult.setLogId(600L);
+        commandResult.setStatus("SUCCESS");
+        commandResult.setBusinessId(700L);
+        when(deviceCountCommandService.writeDeviceCount(reqVO, "{}"))
+                .thenReturn(commandResult);
+
+        IntegrationWriteResultRespVO result = integrationService.writeDeviceCount(reqVO);
+
+        assertThat(result.getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.getBusinessId()).isEqualTo(700L);
+        assertThat(result.getLogId()).isEqualTo(600L);
+    }
+
+    @Test
+    @DisplayName("设备计数：并发唯一键竞争后返回获胜日志引用")
+    void writeDeviceCountRecoversConcurrentDuplicate() {
+        DeviceCountWriteReqVO reqVO = buildDeviceCountReqVO();
+        when(auditService.serializeRequest(reqVO)).thenReturn("{}");
+        when(deviceCountCommandService.writeDeviceCount(reqVO, "{}"))
+                .thenThrow(new ServiceException(
+                        IntegrationErrorCodeConstants.DEVICE_COUNT_DUPLICATE));
+        IntegrationWriteLogEntity existing = new IntegrationWriteLogEntity();
+        existing.setId(601L);
+        existing.setResultId(701L);
+        existing.setResultNo("COUNT-001");
+        when(deviceCountCommandService.findProcessedLog("DEVICE-GATEWAY", "COUNT-001"))
+                .thenReturn(Optional.empty(), Optional.of(existing));
+
+        IntegrationWriteResultRespVO result = integrationService.writeDeviceCount(reqVO);
+
+        assertThat(result.getStatus()).isEqualTo("DUPLICATE");
+        assertThat(result.getLogId()).isEqualTo(601L);
+        assertThat(result.getBusinessId()).isEqualTo(701L);
+        verify(auditService, never()).recordFailure(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("设备计数：预查到日志时不启动写事务并返回稳定重复结果")
+    void writeDeviceCountReturnsDuplicateBeforeCommandTransaction() {
+        DeviceCountWriteReqVO reqVO = buildDeviceCountReqVO();
+        when(auditService.serializeRequest(reqVO)).thenReturn("{}");
+        IntegrationWriteLogEntity existing = new IntegrationWriteLogEntity();
+        existing.setId(602L);
+        existing.setResultId(702L);
+        existing.setResultNo("COUNT-001");
+        when(deviceCountCommandService.findProcessedLog("DEVICE-GATEWAY", "COUNT-001"))
+                .thenReturn(Optional.of(existing));
+
+        IntegrationWriteResultRespVO result = integrationService.writeDeviceCount(reqVO);
+
+        assertThat(result.getStatus()).isEqualTo("DUPLICATE");
+        assertThat(result.getLogId()).isEqualTo(602L);
+        verify(deviceCountCommandService, never()).writeDeviceCount(any(), any());
+    }
+
+    @Test
     @DisplayName("日志查询：请求页码超界时返回最后一页")
     @SuppressWarnings("unchecked")
     void getWriteLogPageNormalizesOverflowPage() {
@@ -244,6 +315,13 @@ class IntegrationServiceImplTest {
         ExternalDispatchOrderWriteReqVO reqVO = new ExternalDispatchOrderWriteReqVO();
         reqVO.setSourceSystem("ERP-MAIN");
         reqVO.setExternalDispatchOrderNo("ERP-DO-001");
+        return reqVO;
+    }
+
+    private DeviceCountWriteReqVO buildDeviceCountReqVO() {
+        DeviceCountWriteReqVO reqVO = new DeviceCountWriteReqVO();
+        reqVO.setSourceSystem("DEVICE-GATEWAY");
+        reqVO.setExternalKey("COUNT-001");
         return reqVO;
     }
 }
