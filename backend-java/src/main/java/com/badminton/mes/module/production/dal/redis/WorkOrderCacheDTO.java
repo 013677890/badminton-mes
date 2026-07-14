@@ -21,6 +21,7 @@ public class WorkOrderCacheDTO {
     private Long id;
     private String workOrderNo;
     private Integer sourceType;
+    private String sourceSystem;
     private String sourceOrderNo;
     private Long productId;
     private String productName;
@@ -59,6 +60,7 @@ public class WorkOrderCacheDTO {
         dto.setId(entity.getId());
         dto.setWorkOrderNo(entity.getWorkOrderNo());
         dto.setSourceType(entity.getSourceType());
+        dto.setSourceSystem(entity.getSourceSystem());
         dto.setSourceOrderNo(entity.getSourceOrderNo());
         dto.setProductId(entity.getProductId());
         dto.setProductName(entity.getProductName());
@@ -98,6 +100,7 @@ public class WorkOrderCacheDTO {
         entity.setId(id);
         entity.setWorkOrderNo(workOrderNo);
         entity.setSourceType(sourceType);
+        entity.setSourceSystem(sourceSystem);
         entity.setSourceOrderNo(sourceOrderNo);
         entity.setProductId(productId);
         entity.setProductName(productName);

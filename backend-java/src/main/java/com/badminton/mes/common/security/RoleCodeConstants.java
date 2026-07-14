@@ -1,7 +1,7 @@
 package com.badminton.mes.common.security;
 
 /**
- * 内置角色编码常量，取值与 system 模块 V3 迁移种子数据一致。
+ * 内置角色编码常量，取值与 system 模块 V3、craft 模块 V6 迁移种子数据一致。
  *
  * <p>供各模块 {@code @RequiresRoles} 注解与业务代码引用，避免魔法字符串
  * 散落；属于跨模块共享的安全词汇表，故放在 common(协作边界约定：
@@ -29,6 +29,9 @@ public final class RoleCodeConstants {
 
     /** 质检员：检验与质量记录 */
     public static final String INSPECTOR = "INSPECTOR";
+
+    /** 工艺工程师：工序、工艺路线与 SOP 维护 */
+    public static final String CRAFT_ENGINEER = "CRAFT_ENGINEER";
 
     private RoleCodeConstants() {
     }

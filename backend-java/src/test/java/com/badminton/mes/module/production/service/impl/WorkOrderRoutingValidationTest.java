@@ -5,6 +5,10 @@ import java.util.Optional;
 
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.dal.entity.BomDetailEntity;
 import com.badminton.mes.module.production.dal.entity.BomEntity;
@@ -24,6 +28,7 @@ import com.badminton.mes.module.production.dal.repository.WorkOrderStatusLogRepo
 import com.badminton.mes.module.production.dal.repository.WorkshopRepository;
 import com.badminton.mes.module.production.enums.BomStatusEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
+import com.badminton.mes.module.production.service.support.BomDetailManager;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +65,12 @@ class WorkOrderRoutingValidationTest {
     private ProductRepository productRepository;
 
     @Mock
+    private CraftRouteRepository routeRepository;
+
+    @Mock
+    private CraftRouteProductRepository routeProductRepository;
+
+    @Mock
     private WorkshopRepository workshopRepository;
 
     @Mock
@@ -86,18 +97,29 @@ class WorkOrderRoutingValidationTest {
     @Mock
     private WorkOrderNoSequence workOrderNoSequence;
 
+    @Mock
+    private BomDetailManager bomDetailManager;
+
     private WorkOrderServiceImpl workOrderService;
 
     @BeforeEach
     void setUp() {
-        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository, workshopRepository,
+        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository,
+                routeRepository, routeProductRepository, workshopRepository,
                 bomRepository, bomDetailRepository, materialRepository, craftRoutingRelationRepository,
-                workOrderMaterialRepository, workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
+                workOrderMaterialRepository, workOrderStatusLogRepository, workOrderCache,
+                workOrderNoSequence, bomDetailManager);
 
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildReleasedWorkOrder()));
+        CraftRouteEntity route = new CraftRouteEntity();
+        route.setId(ROUTING_ID);
+        route.setRoutingStatus(CraftRouteStatusEnum.EFFECTIVE.getStatus());
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTING_ID)).thenReturn(Optional.of(route));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTING_ID, PRODUCT_ID))
+                .thenReturn(true);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID)).thenReturn(Optional.of(buildEffectiveBom()));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
         when(materialRepository.findByIdInAndDeletedFalse(List.of(MATERIAL_ID)))
@@ -163,7 +185,7 @@ class WorkOrderRoutingValidationTest {
         workOrder.setProductId(PRODUCT_ID);
         workOrder.setBomId(BOM_ID);
         workOrder.setRoutingId(ROUTING_ID);
-        workOrder.setOrderStatus(WorkOrderStatusEnum.RELEASED.getStatus());
+        workOrder.setOrderStatus(WorkOrderStatusEnum.CREATED.getStatus());
         return workOrder;
     }
 

@@ -2,12 +2,22 @@ package com.badminton.mes.module.scene.dal.entity;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import jakarta.persistence.*;
-import lombok.Data;
+
 import org.hibernate.annotations.DynamicInsert;
 
-/** 生产任务实体及上游快照。 @author 刘涵 */
-@Data @Entity @DynamicInsert @Table(name = "prod_task")
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
+
+/** 现场生产任务实体及上游快照，对应 B 组现场任务表。 */
+@Data
+@Entity
+@DynamicInsert
+@Table(name = "prod_task")
 public class SceneProductionTaskEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "task_no") private String taskNo;

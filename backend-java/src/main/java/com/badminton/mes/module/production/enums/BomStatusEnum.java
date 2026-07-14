@@ -30,4 +30,19 @@ public enum BomStatusEnum {
         this.status = status;
         this.description = description;
     }
+
+    /**
+     * 判断状态值是否属于 BOM 状态枚举。
+     *
+     * @param status 状态值
+     * @return true 表示合法
+     */
+    public static boolean contains(Integer status) {
+        for (BomStatusEnum value : values()) {
+            if (value.status.equals(status)) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

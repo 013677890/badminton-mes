@@ -2,6 +2,7 @@ package com.badminton.mes;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 羽毛球 MES 系统启动类。
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @date 2026/07/07
  */
 @SpringBootApplication
+@EnableScheduling
 public class MesApplication {
 
     public static void main(String[] args) {

@@ -31,7 +31,8 @@ public final class EquipmentCategorySpecifications {
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
 
             if (StringUtils.hasText(reqVO.getKeyword())) {
-                String pattern = "%" + reqVO.getKeyword() + "%";
+                String escapedKeyword = escapeWildcards(reqVO.getKeyword());
+                String pattern = "%" + escapedKeyword + "%";
                 Predicate codeLike = criteriaBuilder.like(root.get("categoryCode"), pattern);
                 Predicate nameLike = criteriaBuilder.like(root.get("categoryName"), pattern);
                 predicates.add(criteriaBuilder.or(codeLike, nameLike));
@@ -47,6 +48,21 @@ public final class EquipmentCategorySpecifications {
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    /**
+     * 转义 LIKE 查询中的通配符，防止用户输入的 % 和 _ 被当作通配符处理。
+     *
+     * @param input 用户输入
+     * @return 转义后的字符串
+     */
+    private static String escapeWildcards(String input) {
+        if (input == null) {
+            return null;
+        }
+        return input.replace("\\", "\\\\")
+                    .replace("%", "\\%")
+                    .replace("_", "\\_");
     }
 
     private EquipmentCategorySpecifications() {

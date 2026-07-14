@@ -1,0 +1,2 @@
+-- V10 原用于保养测试数据。正式迁移保留版本号但不写入业务数据。
+-- 开发环境测试数据由 classpath:db/dev-migration 中的 repeatable migration 加载。

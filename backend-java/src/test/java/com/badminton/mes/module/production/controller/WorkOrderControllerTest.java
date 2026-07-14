@@ -6,6 +6,7 @@ import java.util.List;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.AuthInterceptor;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
@@ -159,6 +160,36 @@ class WorkOrderControllerTest {
                         .param("pageSize", "1000"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("A0400"));
+    }
+
+    @Test
+    @DisplayName("工单进度批量查询：返回进度列表并转发主键顺序")
+    void getWorkOrderProgressReturnsProgressList() throws Exception {
+        WorkOrderProgressRespVO progress = new WorkOrderProgressRespVO();
+        progress.setId(100L);
+        progress.setWorkOrderNo("WO202607080001");
+        when(workOrderService.getWorkOrderProgress(List.of(100L, 200L)))
+                .thenReturn(List.of(progress));
+
+        mockMvc.perform(get("/api/production/work_orders/progress")
+                        .param("ids", "100", "200"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data[0].workOrderNo").value("WO202607080001"));
+        verify(workOrderService).getWorkOrderProgress(List.of(100L, 200L));
+    }
+
+    @Test
+    @DisplayName("工单进度批量查询：超过 100 个主键时拒绝请求")
+    void getWorkOrderProgressRejectsOversizedBatch() throws Exception {
+        String[] ids = java.util.stream.LongStream.rangeClosed(1, 101)
+                .mapToObj(String::valueOf)
+                .toArray(String[]::new);
+
+        mockMvc.perform(get("/api/production/work_orders/progress").param("ids", ids))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(workOrderService, never()).getWorkOrderProgress(any());
     }
 
     @Test

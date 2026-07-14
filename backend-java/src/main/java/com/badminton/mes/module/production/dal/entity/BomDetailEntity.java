@@ -1,6 +1,10 @@
 package com.badminton.mes.module.production.dal.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
 
 import lombok.Data;
 
@@ -21,6 +25,8 @@ import jakarta.persistence.Table;
  */
 @Data
 @Entity
+@DynamicInsert
+@DynamicUpdate
 @Table(name = "base_bom_detail")
 public class BomDetailEntity {
 
@@ -44,6 +50,14 @@ public class BomDetailEntity {
     /** 损耗率(%) */
     @Column(name = "loss_rate", precision = 5, scale = 2)
     private BigDecimal lossRate;
+
+    /** 创建时间 */
+    @Column(name = "create_time", insertable = false, updatable = false)
+    private LocalDateTime createTime;
+
+    /** 更新时间 */
+    @Column(name = "update_time", insertable = false, updatable = false)
+    private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
     @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
