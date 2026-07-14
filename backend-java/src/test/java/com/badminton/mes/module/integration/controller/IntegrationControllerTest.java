@@ -1,0 +1,245 @@
+package com.badminton.mes.module.integration.controller;
+
+import com.badminton.mes.common.security.AuthInterceptor;
+import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
+import com.badminton.mes.module.integration.service.IntegrationService;
+import com.badminton.mes.module.integration.service.CompletionOrderReadService;
+import com.badminton.mes.module.integration.service.DeviceCountWriteCommandService;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * {@link IntegrationController} Web 切片测试。
+ *
+ * @author 张竹灏
+ * @date 2026/07/11
+ */
+@WebMvcTest(IntegrationController.class)
+class IntegrationControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private IntegrationService integrationService;
+
+    @MockitoBean
+    private DeviceCountWriteCommandService deviceCountWriteCommandService;
+
+    @MockitoBean
+    private CompletionOrderReadService completionOrderReadService;
+
+    @MockitoBean
+    private AuthInterceptor authInterceptor;
+
+    @BeforeEach
+    void permitAllRequests() throws Exception {
+        when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);
+    }
+
+    @Test
+    @DisplayName("单位写入：合法请求返回可追踪的写入结果")
+    void writeUnitReturnsTraceableResult() throws Exception {
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(10L);
+        result.setStatus("SUCCESS");
+        result.setBusinessId(20L);
+        result.setBusinessNo("PCS");
+        when(integrationService.writeUnit(any())).thenReturn(result);
+
+        mockMvc.perform(post("/api/integration/units")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceSystem": "ERP-MAIN",
+                                  "unitCode": "PCS",
+                                  "unitName": "个",
+                                  "decimalPrecision": 0,
+                                  "status": 1
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.logId").value(10))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+    }
+
+    @Test
+    @DisplayName("外部工单写入：缺少来源工单号时返回参数错误")
+    void writeWorkOrderRejectsMissingExternalNo() throws Exception {
+        mockMvc.perform(post("/api/integration/work_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validWorkOrderJson().replace(
+                                "\"externalWorkOrderNo\": \"ERP-WO-001\",", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeWorkOrder(any());
+    }
+
+    @Test
+    @DisplayName("外部工单写入：非法产品编码字符在 Web 层被拒绝")
+    void writeWorkOrderRejectsInvalidProductCode() throws Exception {
+        mockMvc.perform(post("/api/integration/work_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validWorkOrderJson().replace("P001", "产品 001")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeWorkOrder(any());
+    }
+
+    @Test
+    @DisplayName("外部任务单写入：合法请求转发并返回派工单结果")
+    void writeDispatchOrderReturnsTraceableResult() throws Exception {
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(30L);
+        result.setStatus("SUCCESS");
+        result.setBusinessId(40L);
+        result.setBusinessNo("DO202607130001");
+        when(integrationService.writeDispatchOrder(any())).thenReturn(result);
+
+        mockMvc.perform(post("/api/integration/dispatch_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDispatchOrderJson()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.logId").value(30))
+                .andExpect(jsonPath("$.data.businessNo").value("DO202607130001"));
+    }
+
+    @Test
+    @DisplayName("外部任务单写入：缺少产线编码时返回参数错误")
+    void writeDispatchOrderRejectsMissingLineCode() throws Exception {
+        mockMvc.perform(post("/api/integration/dispatch_orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDispatchOrderJson().replace(
+                                "\"lineCode\": \"LINE-01\",", "")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeDispatchOrder(any());
+    }
+
+    @Test
+    @DisplayName("日志查询：pageSize 超过上限时返回参数错误")
+    void getWriteLogsRejectsOversizedPage() throws Exception {
+        mockMvc.perform(get("/api/integration/write_logs")
+                        .param("pageNo", "1")
+                        .param("pageSize", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).getWriteLogPage(any());
+    }
+
+    @Test
+    @DisplayName("设备计数写入：合法请求返回异常池或成功处理结果")
+    void writeDeviceCountReturnsTraceableResult() throws Exception {
+        IntegrationWriteResultRespVO result = new IntegrationWriteResultRespVO();
+        result.setLogId(70L);
+        result.setStatus("SUCCESS");
+        result.setBusinessId(80L);
+        when(integrationService.writeDeviceCount(any())).thenReturn(result);
+
+        mockMvc.perform(post("/api/integration/device_counts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDeviceCountJson()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.logId").value(70))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+    }
+
+    @Test
+    @DisplayName("设备计数写入：非法来源字符在 Web 层被拒绝")
+    void writeDeviceCountRejectsInvalidSourceSystem() throws Exception {
+        mockMvc.perform(post("/api/integration/device_counts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validDeviceCountJson().replace(
+                                "DEVICE-GATEWAY", "DEVICE GATEWAY")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(integrationService, never()).writeDeviceCount(any());
+    }
+
+    @Test
+    @DisplayName("完工单读取：缺少来源系统时返回参数错误")
+    void getCompletionOrdersRejectsMissingSourceSystem() throws Exception {
+        mockMvc.perform(get("/api/integration/completion_orders")
+                        .param("pageNo", "1")
+                        .param("pageSize", "10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(completionOrderReadService, never()).getCompletionOrderPage(any());
+    }
+
+    @Test
+    @DisplayName("设备异常分页：pageSize 超过上限时返回参数错误")
+    void getDeviceCountExceptionsRejectsOversizedPage() throws Exception {
+        mockMvc.perform(get("/api/integration/device_counts/exceptions")
+                        .param("pageNo", "1")
+                        .param("pageSize", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+        verify(deviceCountWriteCommandService, never()).getExceptionPage(any());
+    }
+
+    private String validWorkOrderJson() {
+        return """
+                {
+                  "sourceSystem": "ERP-MAIN",
+                  "externalWorkOrderNo": "ERP-WO-001",
+                  "productCode": "P001",
+                  "workshopCode": "WS001",
+                  "bomId": 30,
+                  "routingId": 40,
+                  "planQuantity": 1000,
+                  "planStartTime": "2026-07-12 08:00:00",
+                  "planEndTime": "2026-07-15 18:00:00"
+                }
+                """;
+    }
+
+    private String validDispatchOrderJson() {
+        return """
+                {
+                  "sourceSystem": "ERP-MAIN",
+                  "externalDispatchOrderNo": "ERP-DO-001",
+                  "workOrderNo": "WO202607110001",
+                  "lineCode": "LINE-01",
+                  "shiftCode": "DAY",
+                  "planDate": "2026-07-13",
+                  "planQuantity": 100,
+                  "planStartTime": "2026-07-13 08:00:00",
+                  "planEndTime": "2026-07-13 12:00:00"
+                }
+                """;
+    }
+
+    private String validDeviceCountJson() {
+        return """
+                {
+                  "sourceSystem": "DEVICE-GATEWAY",
+                  "externalKey": "COUNT-001",
+                  "equipmentCode": "EQP-01",
+                  "dispatchNo": "DO202607130001",
+                  "processCode": "PR001",
+                  "collectTime": "2026-07-13 10:30:00",
+                  "countValue": 130
+                }
+                """;
+    }
+}

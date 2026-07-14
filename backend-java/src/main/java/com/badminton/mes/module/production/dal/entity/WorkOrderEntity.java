@@ -41,6 +41,10 @@ public class WorkOrderEntity {
     @Column(name = "source_type")
     private Integer sourceType;
 
+    /** 外部来源系统 */
+    @Column(name = "source_system")
+    private String sourceSystem;
+
     /** 外部来源单号 */
     @Column(name = "source_order_no")
     private String sourceOrderNo;
@@ -138,7 +142,7 @@ public class WorkOrderEntity {
     private LocalDateTime createTime;
 
     /** 更新时间 */
-    @Column(name = "update_time", insertable = false)
+    @Column(name = "update_time", insertable = false, updatable = false)
     private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */

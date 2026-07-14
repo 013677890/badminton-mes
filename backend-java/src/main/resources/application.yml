@@ -32,3 +32,11 @@ mes:
   security:
     # 默认启用认证；仅允许受控的本地开发环境通过环境变量显式关闭
     auth-disabled: ${MES_SECURITY_AUTH_DISABLED:false}
+  erp:
+    # mock: 使用内置演示数据；remote: 通过 HTTP 读取真实 ERP 数据
+    mode: ${MES_ERP_MODE:mock}
+    base-url: ${MES_ERP_BASE_URL:http://localhost:8090}
+    task-path: ${MES_ERP_TASK_PATH:/api/mes/tasks}
+    craft-path: ${MES_ERP_CRAFT_PATH:/api/mes/crafts}
+    connect-timeout: ${MES_ERP_CONNECT_TIMEOUT:3s}
+    read-timeout: ${MES_ERP_READ_TIMEOUT:10s}

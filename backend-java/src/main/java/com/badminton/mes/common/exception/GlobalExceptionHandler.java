@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -76,6 +77,20 @@ public class GlobalExceptionHandler {
         logger.warn("[参数校验失败] {}", exception.getMessage());
         return buildResponse(GlobalErrorCodeConstants.PARAM_ERROR,
                 GlobalErrorCodeConstants.PARAM_ERROR.message());
+    }
+
+    /**
+     * 处理必填查询参数缺失。
+     *
+     * @param exception 缺少查询参数异常
+     * @return A0400 参数错误响应
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<CommonResult<Void>> handleMissingRequestParameterException(
+            MissingServletRequestParameterException exception) {
+        String detail = exception.getParameterName() + ": 必填查询参数不能为空";
+        logger.warn("[查询参数缺失] {}", detail);
+        return buildResponse(GlobalErrorCodeConstants.PARAM_ERROR, detail);
     }
 
     /**

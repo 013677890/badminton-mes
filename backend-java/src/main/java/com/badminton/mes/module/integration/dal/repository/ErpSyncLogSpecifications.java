@@ -1,0 +1,49 @@
+package com.badminton.mes.module.integration.dal.repository;
+
+import com.badminton.mes.module.integration.controller.vo.ErpSyncLogPageReqVO;
+import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
+import com.badminton.mes.module.integration.enums.IntegrationInterfaceTypeEnum;
+
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.StringUtils;
+
+import java.util.Locale;
+
+/**
+ * ERP 同步日志动态查询条件，固定过滤 interfaceType=ERP_TASK_SYNC。
+ *
+ * @author 张竹灏
+ * @date 2026/07/13
+ */
+public final class ErpSyncLogSpecifications {
+
+    /**
+     * 构造 ERP 任务同步日志分页筛选条件。
+     *
+     * @param reqVO 查询参数
+     * @return JPA Specification
+     */
+    public static Specification<IntegrationWriteLogEntity> erpTaskSyncLogPage(
+            ErpSyncLogPageReqVO reqVO) {
+        return (root, query, criteriaBuilder) -> {
+            var predicates = new java.util.ArrayList<jakarta.persistence.criteria.Predicate>();
+            predicates.add(criteriaBuilder.equal(root.get("interfaceType"),
+                    IntegrationInterfaceTypeEnum.ERP_TASK_SYNC.getValue()));
+            if (StringUtils.hasText(reqVO.getSourceSystem())) {
+                predicates.add(criteriaBuilder.equal(root.get("sourceSystem"),
+                        reqVO.getSourceSystem().trim().toUpperCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(reqVO.getBusinessKey())) {
+                predicates.add(criteriaBuilder.equal(root.get("businessKey"),
+                        reqVO.getBusinessKey().trim()));
+            }
+            if (reqVO.getWriteStatus() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("writeStatus"), reqVO.getWriteStatus()));
+            }
+            return criteriaBuilder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+        };
+    }
+
+    private ErpSyncLogSpecifications() {
+    }
+}

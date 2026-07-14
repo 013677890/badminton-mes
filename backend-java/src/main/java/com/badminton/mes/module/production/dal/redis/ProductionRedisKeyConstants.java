@@ -22,6 +22,12 @@ public final class ProductionRedisKeyConstants {
     /** 工单号流水 Key TTL，跨天后计数 Key 自动清理 */
     public static final Duration WORK_ORDER_SERIAL_TTL = Duration.ofDays(2);
 
+    /** 派工单号当日流水自增 Key 模板，参数为 yyyyMMdd 日期串 */
+    public static final String DISPATCH_SERIAL = "mes:production:dispatch_serial:%s";
+
+    /** 派工单号流水 Key TTL，跨天后计数 Key 自动清理 */
+    public static final Duration DISPATCH_SERIAL_TTL = Duration.ofDays(2);
+
     /**
      * 构造工单详情缓存 Key。
      *
@@ -40,6 +46,16 @@ public final class ProductionRedisKeyConstants {
      */
     public static String workOrderSerialKey(String date) {
         return String.format(WORK_ORDER_SERIAL, date);
+    }
+
+    /**
+     * 构造派工单号当日流水 Key。
+     *
+     * @param date yyyyMMdd 格式日期串
+     * @return 流水计数 Key
+     */
+    public static String dispatchSerialKey(String date) {
+        return String.format(DISPATCH_SERIAL, date);
     }
 
     private ProductionRedisKeyConstants() {

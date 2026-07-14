@@ -5,6 +5,7 @@ import java.util.List;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderStatusLogRespVO;
@@ -154,6 +155,14 @@ public interface WorkOrderService {
      * @throws com.badminton.mes.common.exception.ServiceException 工单不存在时抛出
      */
     WorkOrderRespVO getWorkOrder(Long id);
+
+    /**
+     * 按主键集合批量查询工单进度。
+     *
+     * @param ids 工单主键集合
+     * @return 进度列表，不存在的 id 不返回
+     */
+    List<WorkOrderProgressRespVO> getWorkOrderProgress(List<Long> ids);
 
     /**
      * 分页查询工单列表。
