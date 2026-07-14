@@ -141,3 +141,25 @@
 - 已新增 Flyway 迁移 `V2026071303__add_b_group_report_m4_indexes.sql`，只为 `prod_report` 和 `prod_task` 增加报表查询索引，并新增独立数据库变更说明。
 - 验证结果：M4 聚焦单元测试在 ASCII 路径通过；Docker MySQL 8.4/Redis `integrationTest --rerun-tasks` 共 10 项、0 失败，覆盖真实 SQL、Flyway、净额、追溯、去重和越权拒绝。
 - M4 代码与测试完成；后续进入 M5。M3 仍保留真实 ERP/WMS 端到端演示和 A 组工单汇总写入两个外部依赖事项。
+
+## 12. B 组 M5 返修、小程序和电子看板（2026-07-14）
+
+- 已在 `scene` 模块新增返修工单、返修作业记录和返修复检记录，来源必须是真实未冲销且存在不良数量的 B 组报工。
+- 返修流程覆盖待指派、待返修、返修中、待复检、继续返修、已放行、已报废和已关闭；非法状态跳转和复检数量超限返回明确业务错误。
+- 同一来源报工通过数据库唯一索引和 Service 幂等查询只生成一张返修工单；返修结果已进入产品追溯和统一不良来源聚合。
+- 新增迁移 `V2026071401__add_b_group_scene_m5_repair.sql` 和独立数据库变更说明，未修改共享数据库基线或历史迁移。
+- 微信小程序代码使用独立分层目录：`controller/miniapp`、`service/miniapp`、`service/impl/miniapp`，聚合实时生产、生产分析和产品追溯，不直接访问 Repository。
+- 电子看板使用 `controller/kanban`、`service/kanban`、`service/impl/kanban` 和 `dal/redis`，提供产线、车间、中控 HTTP 快照。
+- Redis 快照 Key 为 `report:kanban:snapshot:{scopeType}:{scopeId}`，TTL 90 秒；已访问范围每 60 秒强制刷新并通过 STOMP 推送。
+- WebSocket 端点为 `/ws/report/kanban`，主题为 `/topic/report/kanban/{scopeType}/{scopeId}`；CONNECT 校验 Bearer Redis 会话，SUBSCRIBE 再次校验车间或产线范围。
+- 第一阶段采用单实例 Spring SimpleBroker；不使用 Redis Pub/Sub 承担可靠业务任务。客户端断线后先通过 HTTP 获取含版本号的完整快照，再恢复订阅。
+- 验证结果：ASCII 虚拟盘路径下 `clean test` 全量单元测试通过；加载当前 Docker Compose 连接参数后，真实 MySQL 8.4/Redis `integrationTest --rerun-tasks` 共 10 项、0 失败，Flyway、JPA、Spring 上下文和既有并发事务测试通过。
+- M5 已完成；下一步进入 M6 集成验收与交付，同时保留 M3 的真实 ERP/WMS 端到端演示和 A 组工单汇总写入两个外部依赖事项。
+
+## 13. B 组 M6 集成验收与交付（2026-07-14）
+
+- 新增 `M6IntegrationAcceptanceTest`，验证返修、小程序聚合、看板、生产报表和产品追溯服务可在同一 Spring Boot 上下文装配。
+- 新增 `backend-java/docs/M6集成验收与交付清单.md`，固化自动化门槛、最小闭环演示顺序、交付物位置和外部依赖边界。
+- `backend-java/docs/B组后端项目总体实施规划.md` 的 M6 全链路验证和交付物清单已全部勾选。
+- ASCII 虚拟盘路径下执行 `clean test` 成功；真实 Docker MySQL 8.4/Redis 执行全部 `integrationTest` 成功，共 11 项、0 失败。
+- M6 本地代码、自动化验收和交付资料已完成。真实 ERP/WMS 地址演示及 A 组工单汇总写入仍是跨组/部署环境外部事项，不影响 B 组交付包完成状态。

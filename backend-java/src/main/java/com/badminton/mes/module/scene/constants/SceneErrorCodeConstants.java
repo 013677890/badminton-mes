@@ -33,6 +33,10 @@ public final class SceneErrorCodeConstants {
     public static final ErrorCode COMPLETION_QUANTITY_INVALID = error("A0420", "完工数量超过可完工数量");
     public static final ErrorCode COMPLETION_SYNC_RETRY_EXCEEDED = error("A0440", "完工同步重试次数已达到上限");
     public static final ErrorCode COMPLETION_SYNC_FAILED = error("C0001", "完工单同步外部系统失败");
+    public static final ErrorCode REPAIR_NOT_EXISTS = error("A0402", "返修工单不存在或不在授权范围内");
+    public static final ErrorCode REPAIR_STATUS_INVALID = error("A0440", "返修工单当前状态不允许执行该操作");
+    public static final ErrorCode REPAIR_QUANTITY_INVALID = error("A0420", "返修数量超过来源不良可返修数量");
+    public static final ErrorCode REPAIR_RECHECK_INVALID = error("A0440", "返修复检结果或数量不合法");
 
     private static ErrorCode error(String code, String message) {
         return new ErrorCode(code, message, message + "，请检查数据后重试");

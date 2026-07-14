@@ -8,6 +8,7 @@ import com.badminton.mes.module.report.controller.vo.ProductTraceRespVO;
 import com.badminton.mes.module.report.dal.ReportQueryRepository;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceTask;
 import com.badminton.mes.module.report.service.ReportDataScopeService;
+import com.badminton.mes.module.scene.dal.repository.SceneRepairWorkOrderRepository;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +26,8 @@ class ProductTraceServiceImplTest {
 
     private final ReportQueryRepository repository = mock(ReportQueryRepository.class);
     private final ReportDataScopeService dataScopeService = mock(ReportDataScopeService.class);
-    private final ProductTraceServiceImpl service = new ProductTraceServiceImpl(repository, dataScopeService);
+    private final SceneRepairWorkOrderRepository repairRepository = mock(SceneRepairWorkOrderRepository.class);
+    private final ProductTraceServiceImpl service = new ProductTraceServiceImpl(repository, dataScopeService, repairRepository);
 
     @Test
     void traceReturnsCoreDataAndExplicitOptionalSourceWarnings() {

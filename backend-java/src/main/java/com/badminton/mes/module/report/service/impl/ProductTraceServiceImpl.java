@@ -12,6 +12,7 @@ import com.badminton.mes.module.report.dal.ReportQueryRows.ReportDetail;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceTask;
 import com.badminton.mes.module.report.service.ProductTraceService;
 import com.badminton.mes.module.report.service.ReportDataScopeService;
+import com.badminton.mes.module.scene.dal.repository.SceneRepairWorkOrderRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -27,11 +28,14 @@ public class ProductTraceServiceImpl implements ProductTraceService {
 
     private final ReportQueryRepository repository;
     private final ReportDataScopeService dataScopeService;
+    private final SceneRepairWorkOrderRepository repairRepository;
 
     public ProductTraceServiceImpl(ReportQueryRepository repository,
-                                   ReportDataScopeService dataScopeService) {
+                                   ReportDataScopeService dataScopeService,
+                                   SceneRepairWorkOrderRepository repairRepository) {
         this.repository = repository;
         this.dataScopeService = dataScopeService;
+        this.repairRepository = repairRepository;
     }
 
     @Override
@@ -121,11 +125,20 @@ public class ProductTraceServiceImpl implements ProductTraceService {
             item.setIssuedQuantity(row.issuedQuantity());
             return item;
         }).toList());
+        result.setRepairRecords(repairRepository.findByBatchNoAndDeletedFalseOrderByCreatedTimeAsc(task.batchNo())
+                .stream().map(row -> {
+                    ProductTraceRespVO.OptionalSourceItem item = new ProductTraceRespVO.OptionalSourceItem();
+                    item.setSourceType("REPAIR"); item.setSourceId(row.getRepairNo());
+                    item.setSummary(row.getStatus() + "，返修数量 " + row.getRepairQuantity());
+                    item.setEventTime(row.getUpdatedTime()); return item;
+                }).toList());
         List<String> warnings = new ArrayList<>();
         warnings.add("MATERIAL_BATCH：A组当前仅提供工单物料需求和领料数量，未提供实际消耗物料批次");
         warnings.add("PACKING：装箱明细表尚未落库，当前追溯不含装箱信息");
         warnings.add("QUALITY_INSPECTION：C组质量结果表契约尚未落库，当前追溯不含质量不良");
-        warnings.add("REPAIR：M5返修表尚未落库，当前追溯不含返修记录");
+        if (result.getRepairRecords().isEmpty()) {
+            warnings.add("REPAIR：当前批次没有返修记录");
+        }
         warnings.add("EQUIPMENT：C组设备状态表契约尚未落库，当前追溯不含设备状态");
         warnings.add("ANDON：C组安灯事件表契约尚未落库，当前追溯不含安灯异常");
         result.setWarnings(List.copyOf(warnings));
