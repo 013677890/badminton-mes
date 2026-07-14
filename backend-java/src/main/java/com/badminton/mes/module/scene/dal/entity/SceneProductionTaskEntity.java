@@ -12,6 +12,7 @@ public class SceneProductionTaskEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "task_no") private String taskNo;
     @Column(name = "source_type", columnDefinition = "tinyint unsigned") private Integer sourceType;
+    @Column(name = "dispatch_order_id") private Long dispatchOrderId;
     @Column(name = "work_order_id") private Long workOrderId;
     @Column(name = "work_order_no") private String workOrderNo;
     @Column(name = "product_id") private Long productId;
@@ -45,4 +46,18 @@ public class SceneProductionTaskEntity {
     @Column(name = "create_time", insertable = false, updatable = false) private LocalDateTime createTime;
     @Column(name = "update_time", insertable = false) private LocalDateTime updateTime;
     @Column(name = "is_deleted", columnDefinition = "tinyint unsigned") private Boolean deleted;
+
+    /** 兼容 A 组派工模型的良品数量命名。 */
+    public void setQualifiedQuantity(java.math.BigDecimal quantity) {
+        this.goodQuantity = quantity == null ? null : quantity.intValueExact();
+    }
+
+    /** 兼容 A 组派工模型的 BigDecimal 不良数量。 */
+    public void setDefectQuantity(java.math.BigDecimal quantity) {
+        this.defectQuantity = quantity == null ? null : quantity.intValueExact();
+    }
+
+    public void setDefectQuantity(Integer quantity) {
+        this.defectQuantity = quantity;
+    }
 }

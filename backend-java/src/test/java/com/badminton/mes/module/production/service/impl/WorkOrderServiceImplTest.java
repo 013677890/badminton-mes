@@ -9,9 +9,14 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.craft.dal.entity.CraftRouteEntity;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteProductRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.production.constants.ProductionErrorCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
 import com.badminton.mes.module.production.dal.entity.BomDetailEntity;
@@ -38,6 +43,7 @@ import com.badminton.mes.module.production.enums.BomStatusEnum;
 import com.badminton.mes.module.production.enums.WorkOrderChangeTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderSourceTypeEnum;
 import com.badminton.mes.module.production.enums.WorkOrderStatusEnum;
+import com.badminton.mes.module.production.service.support.BomDetailManager;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,8 +57,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -85,6 +89,9 @@ class WorkOrderServiceImplTest {
     /** 测试用 BOM id */
     private static final Long BOM_ID = 30L;
 
+    /** 测试用工艺路线 id */
+    private static final Long ROUTE_ID = 40L;
+
     /** 测试用物料 id */
     private static final Long MATERIAL_ID = 50L;
 
@@ -96,6 +103,12 @@ class WorkOrderServiceImplTest {
 
     @Mock
     private ProductRepository productRepository;
+
+    @Mock
+    private CraftRouteRepository routeRepository;
+
+    @Mock
+    private CraftRouteProductRepository routeProductRepository;
 
     @Mock
     private WorkshopRepository workshopRepository;
@@ -124,14 +137,19 @@ class WorkOrderServiceImplTest {
     @Mock
     private WorkOrderNoSequence workOrderNoSequence;
 
+    @Mock
+    private BomDetailManager bomDetailManager;
+
     private WorkOrderServiceImpl workOrderService;
 
     @BeforeEach
     void setUp() {
-        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository, workshopRepository,
-                bomRepository, bomDetailRepository, materialRepository, craftRoutingRelationRepository,
+        workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository,
+                routeRepository, routeProductRepository, workshopRepository, bomRepository,
+                bomDetailRepository, materialRepository, craftRoutingRelationRepository,
                 workOrderMaterialRepository,
-                workOrderStatusLogRepository, workOrderCache, workOrderNoSequence);
+                workOrderStatusLogRepository, workOrderCache, workOrderNoSequence,
+                bomDetailManager);
         // Service 从登录上下文取操作人，单测手工构造上下文并在用后清理
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
@@ -148,8 +166,10 @@ class WorkOrderServiceImplTest {
     @DisplayName("创建工单：自动生成单号，冗余字段按产品档案回填")
     void createWorkOrderGeneratesNoAndFillsRedundancy() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderNoSequence.nextNo()).thenReturn("WO202607080001");
         doAnswer(invocation -> {
             WorkOrderEntity entity = invocation.getArgument(0);
@@ -190,7 +210,8 @@ class WorkOrderServiceImplTest {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         ProductEntity disabled = buildEnabledProduct();
         disabled.setStatus(0);
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(disabled));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(disabled));
 
         assertThatThrownBy(() -> workOrderService.createWorkOrder(reqVO))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
@@ -202,8 +223,10 @@ class WorkOrderServiceImplTest {
     void createWorkOrderRejectsDuplicateNo() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         reqVO.setWorkOrderNo("WO202607080001");
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080001")).thenReturn(true);
 
         assertThatThrownBy(() -> workOrderService.createWorkOrder(reqVO))
@@ -218,8 +241,10 @@ class WorkOrderServiceImplTest {
     void createWorkOrderTranslatesDataIntegrityViolationException() {
         WorkOrderSaveReqVO reqVO = buildSaveReqVO();
         reqVO.setWorkOrderNo("WO202607080002");
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.existsByWorkOrderNoAndDeletedFalse("WO202607080002")).thenReturn(false);
         when(workOrderRepository.saveAndFlush(any(WorkOrderEntity.class)))
                 .thenThrow(new DataIntegrityViolationException("uk_work_order_no"));
@@ -257,7 +282,7 @@ class WorkOrderServiceImplTest {
         WorkOrderStatusLogEntity statusLog = captor.getValue();
         assertThat(statusLog.getChangeType()).isEqualTo(WorkOrderChangeTypeEnum.PLAN_CHANGE.getType());
         assertThat(statusLog.getChangeReason()).isEqualTo("客户加急，交期提前");
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -359,8 +384,10 @@ class WorkOrderServiceImplTest {
     void updateWorkOrderFailsWhenCasMiss() {
         when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(0);
 
@@ -374,14 +401,16 @@ class WorkOrderServiceImplTest {
     void updateWorkOrderEvictsCacheOnSuccess() {
         when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
-        when(productRepository.findByIdAndDeletedFalse(PRODUCT_ID)).thenReturn(Optional.of(buildEnabledProduct()));
-        when(workshopRepository.findByIdAndDeletedFalse(WORKSHOP_ID)).thenReturn(Optional.of(buildEnabledWorkshop()));
+        when(productRepository.findByIdAndDeletedFalseForUpdate(PRODUCT_ID))
+                .thenReturn(Optional.of(buildEnabledProduct()));
+        when(workshopRepository.findByIdAndDeletedFalseForUpdate(WORKSHOP_ID))
+                .thenReturn(Optional.of(buildEnabledWorkshop()));
         when(workOrderRepository.updatePlan(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), any(), any(), any())).thenReturn(1);
 
         workOrderService.updateWorkOrder(WORK_ORDER_ID, buildSaveReqVO());
 
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -394,7 +423,7 @@ class WorkOrderServiceImplTest {
 
         workOrderService.deleteWorkOrder(WORK_ORDER_ID);
 
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -410,10 +439,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：CAS 命中后按 BOM 生成物料需求(含损耗率)并记录状态日志")
     void releaseWorkOrderGeneratesMaterialsAndLog() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
@@ -426,6 +454,7 @@ class WorkOrderServiceImplTest {
         workOrderService.releaseWorkOrder(WORK_ORDER_ID);
 
         // 计划 1000 × 用量 16 ×(1 + 5%) = 16800
+        verify(bomDetailManager).validateAndLockExisting(any());
         ArgumentCaptor<List<WorkOrderMaterialEntity>> materialCaptor = ArgumentCaptor.captor();
         verify(workOrderMaterialRepository).saveAll(materialCaptor.capture());
         List<WorkOrderMaterialEntity> materials = materialCaptor.getValue();
@@ -435,16 +464,15 @@ class WorkOrderServiceImplTest {
         ArgumentCaptor<WorkOrderStatusLogEntity> logCaptor = ArgumentCaptor.forClass(WorkOrderStatusLogEntity.class);
         verify(workOrderStatusLogRepository).save(logCaptor.capture());
         assertThat(logCaptor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.RELEASED.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
     @DisplayName("下达工单：BOM 未生效，抛 BOM 不可用异常")
     void releaseWorkOrderRejectsIneffectiveBom() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.DRAFT.getStatus())));
 
@@ -459,8 +487,12 @@ class WorkOrderServiceImplTest {
     void releaseWorkOrderRejectsBomOfAnotherProduct() {
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
         BomEntity anotherProductBom = buildBom(BomStatusEnum.EFFECTIVE.getStatus());
         anotherProductBom.setProductId(PRODUCT_ID + 1);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID)).thenReturn(Optional.of(anotherProductBom));
@@ -477,8 +509,12 @@ class WorkOrderServiceImplTest {
     void releaseWorkOrderRejectsDisabledMaterial() {
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));
@@ -496,10 +532,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：BOM 无明细，抛明细为空异常")
     void releaseWorkOrderRejectsEmptyBomDetail() {
+        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of());
@@ -512,11 +547,9 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：未维护 BOM，查因后抛缺 BOM/工艺路线异常")
     void releaseWorkOrderRejectsMissingBom() {
-        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(0);
         WorkOrderEntity created = buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus());
         created.setBomId(null);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID)).thenReturn(Optional.of(created));
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID)).thenReturn(Optional.of(created));
 
         assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
@@ -526,14 +559,27 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：状态已是已下达，查因后抛状态不允许下达异常")
     void releaseWorkOrderRejectsWrongStatus() {
-        when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
-                WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(0);
-        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
                 .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus())));
 
         assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
                         .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RELEASE));
+    }
+
+    @Test
+    @DisplayName("下达工单：路线未绑定当前产品时拒绝下达")
+    void releaseWorkOrderRejectsUnboundRoute() {
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+
+        assertThatThrownBy(() -> workOrderService.releaseWorkOrder(WORK_ORDER_ID))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE));
+        verify(workOrderRepository, never()).updateToReleased(any(), any(), any());
     }
 
     @Test
@@ -572,6 +618,29 @@ class WorkOrderServiceImplTest {
                 .isInstanceOfSatisfying(ServiceException.class, e -> assertThat(e.getErrorCode())
                         .isSameAs(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         verify(workOrderCache, never()).put(any());
+    }
+
+    @Test
+    @DisplayName("工单进度批量查询：按请求顺序去重并计算完成百分比")
+    void getWorkOrderProgressReturnsDistinctResultsInRequestOrder() {
+        WorkOrderEntity firstWorkOrder = buildWorkOrder(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
+        firstWorkOrder.setPlanQuantity(1000);
+        firstWorkOrder.setFinishQuantity(250);
+        WorkOrderEntity secondWorkOrder = buildWorkOrder(WorkOrderStatusEnum.RELEASED.getStatus());
+        secondWorkOrder.setId(200L);
+        secondWorkOrder.setWorkOrderNo("WO202607080002");
+        secondWorkOrder.setPlanQuantity(400);
+        secondWorkOrder.setFinishQuantity(100);
+        when(workOrderRepository.findByIdInAndDeletedFalse(List.of(WORK_ORDER_ID, 200L)))
+                .thenReturn(List.of(secondWorkOrder, firstWorkOrder));
+
+        List<WorkOrderProgressRespVO> result = workOrderService.getWorkOrderProgress(
+                List.of(WORK_ORDER_ID, 200L, WORK_ORDER_ID));
+
+        assertThat(result).extracting(WorkOrderProgressRespVO::getId)
+                .containsExactly(WORK_ORDER_ID, 200L);
+        assertThat(result).extracting(WorkOrderProgressRespVO::getProgressPercent)
+                .containsExactly(new BigDecimal("25.00"), new BigDecimal("25.00"));
     }
 
     @Test
@@ -619,7 +688,7 @@ class WorkOrderServiceImplTest {
         assertThat(statusLog.getFromStatus()).isEqualTo(WorkOrderStatusEnum.RELEASED.getStatus());
         assertThat(statusLog.getToStatus()).isEqualTo(WorkOrderStatusEnum.PAUSED.getStatus());
         assertThat(statusLog.getChangeReason()).isEqualTo("羽片缺料");
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -672,7 +741,7 @@ class WorkOrderServiceImplTest {
         ArgumentCaptor<WorkOrderStatusLogEntity> captor = ArgumentCaptor.forClass(WorkOrderStatusLogEntity.class);
         verify(workOrderStatusLogRepository).save(captor.capture());
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -704,7 +773,7 @@ class WorkOrderServiceImplTest {
         verify(workOrderStatusLogRepository).save(captor.capture());
         assertThat(captor.getValue().getFromStatus()).isEqualTo(WorkOrderStatusEnum.IN_PRODUCTION.getStatus());
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.FINISHED.getStatus());
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -734,7 +803,7 @@ class WorkOrderServiceImplTest {
         workOrderService.closeWorkOrder(WORK_ORDER_ID);
 
         verify(workOrderStatusLogRepository).save(any(WorkOrderStatusLogEntity.class));
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -750,26 +819,18 @@ class WorkOrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("缓存删除：事务同步激活时推迟到提交后执行，提交前不删")
-    void evictionDeferredUntilAfterCommit() {
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
-                    .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.FINISHED.getStatus())));
-            when(workOrderRepository.updateStatus(WORK_ORDER_ID,
-                    List.of(WorkOrderStatusEnum.FINISHED.getStatus()),
-                    WorkOrderStatusEnum.CLOSED.getStatus())).thenReturn(1);
+    @DisplayName("缓存删除：写路径委托缓存组件在提交后删除")
+    void evictionDelegatesAfterCommit() {
+        when(workOrderRepository.findByIdAndDeletedFalse(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.FINISHED.getStatus())));
+        when(workOrderRepository.updateStatus(WORK_ORDER_ID,
+                List.of(WorkOrderStatusEnum.FINISHED.getStatus()),
+                WorkOrderStatusEnum.CLOSED.getStatus())).thenReturn(1);
 
-            workOrderService.closeWorkOrder(WORK_ORDER_ID);
+        workOrderService.closeWorkOrder(WORK_ORDER_ID);
 
-            // 提交前不删缓存，避免并发读旧值回填
-            verify(workOrderCache, never()).evict(any());
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
-            verify(workOrderCache).evict(WORK_ORDER_ID);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
+        verify(workOrderCache, never()).evict(any());
     }
 
     @Test
@@ -787,7 +848,7 @@ class WorkOrderServiceImplTest {
         assertThat(captor.getValue().getToStatus()).isEqualTo(WorkOrderStatusEnum.CANCELLED.getStatus());
         assertThat(captor.getValue().getChangeReason()).isEqualTo("重复创建");
         verify(workOrderMaterialRepository).logicDeleteByWorkOrderId(WORK_ORDER_ID);
-        verify(workOrderCache).evict(WORK_ORDER_ID);
+        verify(workOrderCache).evictAfterCommit(WORK_ORDER_ID);
     }
 
     @Test
@@ -862,6 +923,32 @@ class WorkOrderServiceImplTest {
     }
 
     /**
+     * 准备可下达工单及其生效路线引用。
+     */
+    private void stubReleasableWorkOrder() {
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
+    }
+
+    /**
+     * 构造指定状态的工艺路线。
+     *
+     * @param status 路线状态
+     * @return 路线实体
+     */
+    private CraftRouteEntity buildRoute(CraftRouteStatusEnum status) {
+        CraftRouteEntity route = new CraftRouteEntity();
+        route.setId(ROUTE_ID);
+        route.setRoutingStatus(status.getStatus());
+        route.setDeleted(false);
+        return route;
+    }
+
+    /**
      * 构造合法的保存请求。
      */
     private WorkOrderSaveReqVO buildSaveReqVO() {
@@ -918,7 +1005,7 @@ class WorkOrderServiceImplTest {
         workOrder.setProductName("比赛级羽毛球");
         workOrder.setUnitId(1L);
         workOrder.setBomId(30L);
-        workOrder.setRoutingId(40L);
+        workOrder.setRoutingId(ROUTE_ID);
         workOrder.setWorkshopId(WORKSHOP_ID);
         workOrder.setPlanQuantity(1000);
         workOrder.setPlanStartTime(LocalDateTime.of(2026, 7, 10, 8, 0, 0));

@@ -12,6 +12,7 @@ import jakarta.persistence.LockModeType;
 public interface SceneProductionTaskRepository extends JpaRepository<SceneProductionTaskEntity, Long>,
         JpaSpecificationExecutor<SceneProductionTaskEntity> {
     Optional<SceneProductionTaskEntity> findByIdAndDeletedFalse(Long id);
+    Optional<SceneProductionTaskEntity> findByDispatchOrderIdAndDeletedFalse(Long dispatchOrderId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM SceneProductionTaskEntity t WHERE t.id=:id AND t.deleted=false")
     Optional<SceneProductionTaskEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);

@@ -40,8 +40,9 @@ class CraftRoutingRelationRepositoryIntegrationTest {
     void setUpContractData() {
         jdbcTemplate.update("""
                 INSERT INTO craft_process
-                    (id, process_code, process_name, status, is_deleted)
-                VALUES (?, ?, ?, 1, 0)
+                    (id, process_code, process_name, process_type, standard_time_seconds,
+                     status, create_by, update_by, is_deleted)
+                VALUES (?, ?, ?, 'MANUAL', 1, 1, 1, 1, 0)
                 """, PROCESS_ID, "M0-PROCESS", "M0验证工序");
         jdbcTemplate.update("""
                 INSERT INTO craft_sop

@@ -27,17 +27,22 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
     private final List<String> allowedOrigins;
 
+    private final boolean authDisabled;
+
     /**
      * 构造器注入，依赖不可变。
      *
      * @param authInterceptor 登录鉴权拦截器
      * @param allowedOrigins  前端允许来源列表
+     * @param authDisabled    是否关闭认证，仅允许本地联调环境启用
      */
     public SecurityWebConfig(AuthInterceptor authInterceptor,
                              @Value("${mes.web.cors.allowed-origins:http://localhost:5173}")
-                             List<String> allowedOrigins) {
+                             List<String> allowedOrigins,
+                             @Value("${mes.security.auth-disabled:false}") boolean authDisabled) {
         this.authInterceptor = authInterceptor;
         this.allowedOrigins = List.copyOf(allowedOrigins);
+        this.authDisabled = authDisabled;
     }
 
     @Override
@@ -52,6 +57,10 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        if (authDisabled) {
+            return;
+        }
+
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(LOGIN_PATH);

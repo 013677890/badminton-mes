@@ -9,6 +9,7 @@ import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.production.service.ProductionOrganizationReferenceQuery;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
@@ -76,12 +77,15 @@ class UserServiceImplTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private ProductionOrganizationReferenceQuery organizationReferenceQuery;
+
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
         userService = new UserServiceImpl(userRepository, userRoleRepository, roleRepository,
-                loginSessionRedisDAO, passwordEncoder);
+                loginSessionRedisDAO, passwordEncoder, organizationReferenceQuery);
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
         loginUser.setUserNo("admin");
@@ -165,6 +169,25 @@ class UserServiceImplTest {
     }
 
     @Test
+    @DisplayName("创建用户：车间与产线层级不一致时拒绝")
+    void createUserRejectsInvalidOrganizationAssignment() {
+        UserSaveReqVO reqVO = buildSaveReqVO("initPass123", List.of(2L));
+        reqVO.setWorkshopId(10L);
+        reqVO.setLineId(20L);
+        when(userRepository.existsByUserNoAndDeletedFalse(USER_NO)).thenReturn(false);
+        when(roleRepository.findByIdInAndDeletedFalse(Set.of(2L)))
+                .thenReturn(List.of(buildRole(2L, "PMC", 1)));
+        when(organizationReferenceQuery.lockAndCheckAssignment(10L, 20L))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> userService.createUser(reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                SystemErrorCodeConstants.USER_ORGANIZATION_INVALID));
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("修改用户：角色变化时提交后下线(无事务上下文直接调用)")
     void updateUserEvictsSessionWhenRolesChanged() {
         UserSaveReqVO reqVO = buildSaveReqVO(null, List.of(3L));
@@ -245,6 +268,24 @@ class UserServiceImplTest {
         userService.updateUserStatus(USER_ID, CommonStatusEnum.ENABLED.getStatus());
 
         verify(loginSessionRedisDAO, never()).removeSessionByUserId(any());
+    }
+
+    @Test
+    @DisplayName("启用用户：所属车间或产线不可用时拒绝")
+    void enableUserRejectsInvalidOrganizationAssignment() {
+        UserEntity user = buildUser(0);
+        user.setWorkshopId(10L);
+        user.setLineId(20L);
+        when(userRepository.findByIdAndDeletedFalse(USER_ID)).thenReturn(Optional.of(user));
+        when(organizationReferenceQuery.lockAndCheckAssignment(10L, 20L))
+                .thenReturn(false);
+
+        assertThatThrownBy(() -> userService.updateUserStatus(
+                USER_ID, CommonStatusEnum.ENABLED.getStatus()))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(
+                                SystemErrorCodeConstants.USER_ORGANIZATION_INVALID));
+        verify(userRepository, never()).save(any());
     }
 
     @Test

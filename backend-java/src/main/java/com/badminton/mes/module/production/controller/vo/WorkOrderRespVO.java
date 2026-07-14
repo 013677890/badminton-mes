@@ -30,6 +30,9 @@ public class WorkOrderRespVO {
     /** 来源：1 手工 2 导入 3 ERP同步 4 API写入，见 WorkOrderSourceTypeEnum */
     private Integer sourceType;
 
+    /** 外部来源系统，手工单为 null */
+    private String sourceSystem;
+
     /** 外部来源单号，手工单为 null */
     private String sourceOrderNo;
 

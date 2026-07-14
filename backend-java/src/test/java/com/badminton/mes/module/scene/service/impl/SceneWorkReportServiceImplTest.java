@@ -4,6 +4,8 @@ import java.util.Optional;
 
 import com.badminton.mes.module.scene.controller.vo.SceneWorkReportSubmitReqVO;
 import com.badminton.mes.module.scene.dal.entity.SceneWorkReportEntity;
+import com.badminton.mes.module.scene.dal.repository.SceneDispatchDetailRepository;
+import com.badminton.mes.module.scene.dal.repository.SceneProductionTaskRepository;
 import com.badminton.mes.module.scene.dal.repository.SceneWorkReportRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,8 +28,13 @@ class SceneWorkReportServiceImplTest {
     private final SceneWorkReportRepository reportRepository = mock(SceneWorkReportRepository.class);
     private final SceneWorkReportTransactionalService transactionalService =
             mock(SceneWorkReportTransactionalService.class);
+    private final SceneProductionTaskRepository taskRepository =
+            mock(SceneProductionTaskRepository.class);
+    private final SceneDispatchDetailRepository detailRepository =
+            mock(SceneDispatchDetailRepository.class);
     private final SceneWorkReportServiceImpl service =
-            new SceneWorkReportServiceImpl(reportRepository, transactionalService);
+            new SceneWorkReportServiceImpl(reportRepository, transactionalService,
+                    taskRepository, detailRepository);
 
     @Test
     void duplicateRequestReturnsExistingIdWithoutNewTransaction() {

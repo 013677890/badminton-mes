@@ -2,7 +2,7 @@
 -- 结构来源：badminton-mes.wiki/database/mes_schema.sql 的已冻结工艺契约。
 -- 本迁移仅落地共享表，不写入演示数据，不修改历史迁移。
 
-CREATE TABLE `craft_process` (
+CREATE TABLE IF NOT EXISTS `craft_process` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `process_code` varchar(32) NOT NULL COMMENT '工序编码(唯一)',
     `process_name` varchar(64) NOT NULL COMMENT '工序名称',
@@ -21,7 +21,7 @@ CREATE TABLE `craft_process` (
     UNIQUE KEY `uk_process_code` (`process_code`) COMMENT '工序编码唯一'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工序主表';
 
-CREATE TABLE `craft_process_defect` (
+CREATE TABLE IF NOT EXISTS `craft_process_defect` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `process_id` bigint unsigned NOT NULL COMMENT '工序',
     `defect_code` varchar(32) NOT NULL COMMENT '不良原因编码(工序内唯一)',
@@ -34,7 +34,7 @@ CREATE TABLE `craft_process_defect` (
     UNIQUE KEY `uk_process_defect_code` (`process_id`, `defect_code`) COMMENT '工序内不良编码唯一'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工序不良原因表';
 
-CREATE TABLE `craft_sop` (
+CREATE TABLE IF NOT EXISTS `craft_sop` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `sop_code` varchar(32) NOT NULL COMMENT 'SOP编码',
     `sop_name` varchar(128) NOT NULL COMMENT 'SOP名称',
@@ -49,7 +49,7 @@ CREATE TABLE `craft_sop` (
     UNIQUE KEY `uk_code_version` (`sop_code`, `version`) COMMENT 'SOP编码+版本唯一'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'SOP主表';
 
-CREATE TABLE `craft_sop_file` (
+CREATE TABLE IF NOT EXISTS `craft_sop_file` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `sop_id` bigint unsigned NOT NULL COMMENT 'SOP主表',
     `file_type` tinyint unsigned NOT NULL DEFAULT 1 COMMENT '文件类型:1图片 2视频 3文档',
@@ -63,7 +63,7 @@ CREATE TABLE `craft_sop_file` (
     KEY `idx_sop_id` (`sop_id`) COMMENT '按SOP查文件'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'SOP文件表';
 
-CREATE TABLE `craft_routing` (
+CREATE TABLE IF NOT EXISTS `craft_routing` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `routing_code` varchar(32) NOT NULL COMMENT '路线编码',
     `routing_name` varchar(128) NOT NULL COMMENT '路线名称',
@@ -80,7 +80,7 @@ CREATE TABLE `craft_routing` (
     UNIQUE KEY `uk_code_version` (`routing_code`, `version`) COMMENT '路线编码+版本唯一'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工艺路线主表';
 
-CREATE TABLE `craft_routing_detail` (
+CREATE TABLE IF NOT EXISTS `craft_routing_detail` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `routing_id` bigint unsigned NOT NULL COMMENT '工艺路线',
     `seq` int unsigned NOT NULL COMMENT '工序顺序(路线内不可重复不可断裂)',
@@ -96,7 +96,7 @@ CREATE TABLE `craft_routing_detail` (
     KEY `idx_process_id` (`process_id`) COMMENT '工序被引用校验'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '工艺路线明细表';
 
-CREATE TABLE `craft_routing_product` (
+CREATE TABLE IF NOT EXISTS `craft_routing_product` (
     `id` bigint unsigned NOT NULL AUTO_INCREMENT COMMENT '主键',
     `routing_id` bigint unsigned NOT NULL COMMENT '工艺路线',
     `product_id` bigint unsigned NOT NULL COMMENT '产品',

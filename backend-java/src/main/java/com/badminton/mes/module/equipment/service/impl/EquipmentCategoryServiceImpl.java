@@ -4,7 +4,11 @@ import java.util.List;
 import java.util.Set;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
+import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
+import com.badminton.mes.module.craft.enums.CraftRouteStatusEnum;
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryPageReqVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
@@ -13,6 +17,8 @@ import com.badminton.mes.module.equipment.convert.EquipmentCategoryConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategorySpecifications;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.service.EquipmentCategoryService;
 
 import org.slf4j.Logger;
@@ -43,13 +49,34 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
     private final EquipmentCategoryRepository categoryRepository;
 
+    private final EquipmentLedgerRepository ledgerRepository;
+
+    private final EquipmentFaultPrincipleRepository faultPrincipleRepository;
+
+    private final CraftProcessRepository processRepository;
+
+    private final CraftRouteDetailRepository routeDetailRepository;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param categoryRepository 设备类别 Repository
+     * @param ledgerRepository 设备台账 Repository
+     * @param faultPrincipleRepository 设备故障原理 Repository
+     * @param processRepository 工序 Repository
+     * @param routeDetailRepository 路线明细 Repository
      */
-    public EquipmentCategoryServiceImpl(EquipmentCategoryRepository categoryRepository) {
+    public EquipmentCategoryServiceImpl(
+            EquipmentCategoryRepository categoryRepository,
+            EquipmentLedgerRepository ledgerRepository,
+            EquipmentFaultPrincipleRepository faultPrincipleRepository,
+            CraftProcessRepository processRepository,
+            CraftRouteDetailRepository routeDetailRepository) {
         this.categoryRepository = categoryRepository;
+        this.ledgerRepository = ledgerRepository;
+        this.faultPrincipleRepository = faultPrincipleRepository;
+        this.processRepository = processRepository;
+        this.routeDetailRepository = routeDetailRepository;
     }
 
     @Override
@@ -60,12 +87,21 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
         EquipmentCategoryEntity category = EquipmentCategoryConvert.toEntity(reqVO);
         category.setCreateBy(DEFAULT_OPERATOR_ID);
+        // 设置状态默认值为启用
+        if (category.getStatus() == null) {
+            category.setStatus(1);
+        }
 
         try {
             categoryRepository.saveAndFlush(category);
         } catch (DataIntegrityViolationException e) {
-            // 并发创建穿透应用层查重时，由唯一索引 uk_category_code 兜底，转成业务错误提示
-            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_CODE_DUPLICATE);
+            // 并发创建穿透应用层查重时，由唯一索引 uk_category_code 兜底
+            // 精确匹配唯一索引冲突，避免误判其他约束（如外键）
+            if (e.getMessage() != null && e.getMessage().contains("uk_category_code")) {
+                throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_CODE_DUPLICATE);
+            }
+            // 其他数据库约束冲突不应吞噬，向上抛出
+            throw e;
         }
 
         logger.info("[创建设备类别] id: {}, categoryCode: {}", category.getId(), category.getCategoryCode());
@@ -75,19 +111,28 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentCategory(Long id, EquipmentCategorySaveReqVO reqVO) {
-        EquipmentCategoryEntity existing = validateCategoryExists(id);
+        EquipmentCategoryEntity existing = validateCategoryExistsForUpdate(id);
         validateCategoryCode(reqVO.getCategoryCode(), id);
         validateParentCategory(reqVO.getParentId());
 
         // 检查循环引用
         validateNoCyclicReference(id, reqVO.getParentId());
 
+        boolean disabling = CommonStatusEnum.ENABLED.getStatus().equals(existing.getStatus())
+                && CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus());
+        if (disabling) {
+            validateNoActiveCraftReferences(id);
+        }
+
         existing.setCategoryCode(reqVO.getCategoryCode());
         existing.setCategoryName(reqVO.getCategoryName());
         existing.setParentId(reqVO.getParentId());
         existing.setSortOrder(reqVO.getSortOrder());
         existing.setRemark(reqVO.getRemark());
-        existing.setStatus(reqVO.getStatus());
+        // 修改时若状态为 null，保持原值不变
+        if (reqVO.getStatus() != null) {
+            existing.setStatus(reqVO.getStatus());
+        }
 
         categoryRepository.save(existing);
         logger.info("[修改设备类别] id: {}, categoryCode: {}", id, reqVO.getCategoryCode());
@@ -96,7 +141,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentCategory(Long id) {
-        EquipmentCategoryEntity category = validateCategoryExists(id);
+        EquipmentCategoryEntity category = validateCategoryExistsForUpdate(id);
 
         // 检查是否存在下级分类
         long childCount = categoryRepository.countByParentIdAndDeletedFalse(id);
@@ -104,11 +149,17 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_CHILDREN);
         }
 
-        // TODO(角色C, 2026/07/09): 后续需要检查该类别下是否存在设备
-        // 暂时注释，等设备台账模块完成后再打开
-        // if (equipmentRepository.countByCategoryIdAndDeletedFalse(id) > 0) {
-        //     throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_EQUIPMENT);
-        // }
+        long equipmentCount = ledgerRepository.countByCategoryIdAndDeletedFalse(id);
+        if (equipmentCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_EQUIPMENT);
+        }
+
+        long faultPrincipleCount = faultPrincipleRepository.countByCategoryIdAndDeletedFalse(id);
+        if (faultPrincipleCount > 0) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_HAS_FAULT_PRINCIPLE);
+        }
+
+        validateNoActiveCraftReferences(id);
 
         // 删除时重命名编码，避免唯一索引冲突（允许撤销删除或数据追溯）
         String originalCode = category.getCategoryCode();
@@ -117,7 +168,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         category.setDeleted(true);
         categoryRepository.save(category);
 
-        logger.info("[删除设备类别] id: {}, 原编码: {}, 重命名为: {}", id, originalCode, deletedCode);
+        logger.info("[删除设备类别] id: {}", id);
     }
 
     @Override
@@ -159,6 +210,17 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
      */
     private EquipmentCategoryEntity validateCategoryExists(Long id) {
         return categoryRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_NOT_EXISTS));
+    }
+
+    /**
+     * 以写锁查询设备类别，供修改和删除操作保护跨表引用校验。
+     *
+     * @param id 类别主键
+     * @return 类别实体
+     */
+    private EquipmentCategoryEntity validateCategoryExistsForUpdate(Long id) {
+        return categoryRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_NOT_EXISTS));
     }
 
@@ -220,6 +282,25 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         Set<Long> ancestorIds = categoryRepository.findAncestorIds(newParentId);
         if (ancestorIds.contains(currentId)) {
             throw new ServiceException(EquipmentErrorCodeConstants.CATEGORY_CYCLIC_REFERENCE);
+        }
+    }
+
+    /**
+     * 校验设备类别未被启用工序或生效路线引用。
+     *
+     * @param categoryId 设备类别主键
+     */
+    private void validateNoActiveCraftReferences(Long categoryId) {
+        boolean processReferenced = processRepository.existsByEquipmentCategoryIdAndStatusAndDeletedFalse(
+                categoryId, CommonStatusEnum.ENABLED.getStatus());
+        if (processReferenced) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_PROCESS);
+        }
+
+        boolean routeReferenced = routeDetailRepository.existsEffectiveRouteByEquipmentCategoryId(
+                categoryId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
+        if (routeReferenced) {
+            throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE);
         }
     }
 }

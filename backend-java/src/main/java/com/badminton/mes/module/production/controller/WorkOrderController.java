@@ -8,6 +8,7 @@ import com.badminton.mes.common.security.RequiresRoles;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.production.controller.vo.WorkOrderMaterialRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderPageReqVO;
+import com.badminton.mes.module.production.controller.vo.WorkOrderProgressRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderReasonReqVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderRespVO;
 import com.badminton.mes.module.production.controller.vo.WorkOrderSaveReqVO;
@@ -21,10 +22,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 /**
  * 生产工单 Controller。
@@ -216,6 +219,19 @@ public class WorkOrderController {
     @GetMapping("/{id}")
     public CommonResult<WorkOrderRespVO> getWorkOrder(@PathVariable("id") @Positive Long id) {
         return CommonResult.success(workOrderService.getWorkOrder(id));
+    }
+
+    /**
+     * 按工单主键集合批量查询进度。
+     *
+     * @param ids 工单主键集合，最多 100 个
+     * @return 工单进度列表，不存在的工单不返回
+     */
+    @GetMapping("/progress")
+    public CommonResult<List<WorkOrderProgressRespVO>> getWorkOrderProgress(
+            @RequestParam("ids") @Size(min = 1, max = 100, message = "工单数量必须在 1 到 100 之间")
+            List<@Positive Long> ids) {
+        return CommonResult.success(workOrderService.getWorkOrderProgress(ids));
     }
 
     /**

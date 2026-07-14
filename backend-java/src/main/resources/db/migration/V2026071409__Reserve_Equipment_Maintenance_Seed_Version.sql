@@ -1,0 +1,2 @@
+-- 原用于保养测试数据。正式迁移保留迁移节点但不写入业务数据。
+-- 开发环境测试数据由 classpath:db/dev-migration 中的 repeatable migration 加载。

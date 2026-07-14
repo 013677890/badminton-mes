@@ -205,8 +205,9 @@ class ReportM4IntegrationTest {
                 """, TASK_ID, DETAIL_ID, BATCH_NO);
         jdbcTemplate.update("""
                 INSERT INTO base_material
-                    (id, material_code, material_name, material_type, unit_id, is_key_material, status, is_deleted)
-                VALUES (?, 'M4-MATERIAL', 'M4关键物料', 1, 1, 1, 1, 0)
+                    (id, material_code, material_name, material_type, unit_id, is_key_material,
+                     status, create_by, update_by, is_deleted)
+                VALUES (?, 'M4-MATERIAL', 'M4关键物料', 1, 1, 1, 1, 1, 1, 0)
                 """, MATERIAL_ID);
         jdbcTemplate.update("""
                 INSERT INTO prod_work_order_material
