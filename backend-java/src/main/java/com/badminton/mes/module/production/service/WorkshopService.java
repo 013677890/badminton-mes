@@ -56,6 +56,14 @@ public interface WorkshopService {
     WorkshopRespVO getWorkshop(Long id);
 
     /**
+     * 查询启用且未删除的车间，供跨模块校验车间引用。
+     *
+     * @param id 车间主键
+     * @return 车间详情
+     */
+    WorkshopRespVO getEnabledWorkshop(Long id);
+
+    /**
      * 分页查询车间。
      *
      * @param reqVO 分页筛选条件

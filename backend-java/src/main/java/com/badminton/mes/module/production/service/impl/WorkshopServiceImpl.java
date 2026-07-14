@@ -158,6 +158,17 @@ public class WorkshopServiceImpl implements WorkshopService {
 
     @Override
     @Transactional(readOnly = true)
+    public WorkshopRespVO getEnabledWorkshop(Long id) {
+        WorkshopEntity workshop = require(id);
+        if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
+            throw new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS);
+        }
+        String managerName = loadManagerName(workshop.getManagerId());
+        return ProductionOrganizationConvert.toWorkshopRespVO(workshop, managerName);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResult<WorkshopRespVO> getWorkshopPage(WorkshopPageReqVO reqVO) {
         var specification = ProductionOrganizationSpecifications.workshopPage(reqVO);
         long total = workshopRepository.count(specification);

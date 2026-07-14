@@ -9,6 +9,8 @@ import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
+import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +41,12 @@ class EquipmentCategoryServiceImplTest {
     private EquipmentCategoryRepository categoryRepository;
 
     @Mock
+    private EquipmentLedgerRepository ledgerRepository;
+
+    @Mock
+    private EquipmentFaultPrincipleRepository faultPrincipleRepository;
+
+    @Mock
     private CraftProcessRepository processRepository;
 
     @Mock
@@ -49,7 +57,11 @@ class EquipmentCategoryServiceImplTest {
     @BeforeEach
     void setUp() {
         categoryService = new EquipmentCategoryServiceImpl(
-                categoryRepository, processRepository, routeDetailRepository);
+                categoryRepository,
+                ledgerRepository,
+                faultPrincipleRepository,
+                processRepository,
+                routeDetailRepository);
     }
 
     @Test

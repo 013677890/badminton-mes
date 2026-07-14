@@ -18,7 +18,7 @@ spring:
       port: ${MES_REDIS_PORT:6379}
   flyway:
     # 数据库结构统一由 Flyway 迁移脚本管理，禁止手工改库
-    locations: classpath:db/migration
+    locations: ${MES_FLYWAY_LOCATIONS:classpath:db/migration}
   jpa:
     # Flyway 是唯一建表入口；Hibernate 只负责 ORM，不自动创建或变更表结构
     hibernate:
@@ -29,6 +29,9 @@ server:
   port: 8080
 
 mes:
+  security:
+    # 默认启用认证；仅允许受控的本地开发环境通过环境变量显式关闭
+    auth-disabled: ${MES_SECURITY_AUTH_DISABLED:false}
   erp:
     # mock: 使用内置演示数据；remote: 通过 HTTP 读取真实 ERP 数据
     mode: ${MES_ERP_MODE:mock}
