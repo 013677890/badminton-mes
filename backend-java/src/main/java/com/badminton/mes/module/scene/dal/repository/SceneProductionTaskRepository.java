@@ -6,10 +6,15 @@ import com.badminton.mes.module.scene.dal.entity.SceneProductionTaskEntity;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
 /** 生产任务 Repository，状态流转采用 CAS。 @author 刘涵 */
 public interface SceneProductionTaskRepository extends JpaRepository<SceneProductionTaskEntity, Long>,
         JpaSpecificationExecutor<SceneProductionTaskEntity> {
     Optional<SceneProductionTaskEntity> findByIdAndDeletedFalse(Long id);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM SceneProductionTaskEntity t WHERE t.id=:id AND t.deleted=false")
+    Optional<SceneProductionTaskEntity> findByIdAndDeletedFalseForUpdate(@Param("id") Long id);
     boolean existsByTaskNoAndDeletedFalse(String taskNo);
     @Query("SELECT COALESCE(SUM(t.planQuantity),0) FROM SceneProductionTaskEntity t WHERE t.workOrderId=:workOrderId AND t.taskStatus NOT IN :excluded AND t.deleted=false")
     Long sumAllocated(@Param("workOrderId") Long workOrderId, @Param("excluded") Collection<Integer> excluded);

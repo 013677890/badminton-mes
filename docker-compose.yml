@@ -18,8 +18,8 @@ services:
       MYSQL_DATABASE: badminton_mes
       # :? 强制从 .env 提供，杜绝默认密码入库(安全规约：敏感信息禁止明文存储)
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
-      # 应用专用账号，容器初始化时自动创建并授予 badminton_mes 库全部权限
-      MYSQL_USER: ${MES_DB_USERNAME:-mes}
+      # 容器首次初始化时创建应用专用账号，并只授予 MYSQL_DATABASE 对应库的权限。
+      MYSQL_USER: ${MES_DB_USERNAME:?请在 .env 中设置 MES_DB_USERNAME}
       MYSQL_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
@@ -30,9 +30,9 @@ services:
       retries: 10
       # 首次初始化建库耗时较长，给足启动宽限期
       start_period: 60s
-    # 默认不向宿主机暴露端口，避免与本机 MySQL 冲突；需要客户端直连调试时再放开
-    # ports:
-    #   - "13306:3306"
+    # 仅绑定本机回环地址：供宿主机 Gradle 集成测试访问，不暴露到局域网。
+    ports:
+      - "127.0.0.1:13306:3306"
 
   redis:
     image: redis:8.0-alpine
@@ -46,9 +46,9 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
-    # 需要客户端直连调试时再放开
-    # ports:
-    #   - "16379:6379"
+    # 无需在 Windows 安装 Redis；宿主机测试通过本地 16379 访问容器。
+    ports:
+      - "127.0.0.1:16379:6379"
 
   backend:
     build:

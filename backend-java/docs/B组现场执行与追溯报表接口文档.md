@@ -303,6 +303,11 @@ Controller：`SceneWorkReportController`
 | `GET` | `/api/scene/work_reports/{id}/materials` | 查询关键物料报工明细 | - | `List<SceneMaterialTraceRecordRespVO>` |
 | `GET` | `/api/scene/work_reports/{id}/packing` | 查询装箱报工明细 | - | `List<ScenePackingReportDetailRespVO>` |
 
+`SceneWorkReportSubmitReqVO` 使用 `barcodeValue` 接收报工扫码值，不接受客户端直接指定可信
+`barcodeId`。当当前任务作用域内生效参数 `must_scan_report=1` 时，条码值必填；Service 复用
+M1 `BarcodeSceneService` 校验任务、产品和批次，写入 `use_type=3` 的条码使用记录，并将服务端
+解析得到的 `barcodeId` 保存到报工记录。参数未要求扫码但客户端主动传入条码时仍执行相同校验和留痕。
+
 当前决策：报工撤销采用“生成反向记录”，不物理删除原报工、不直接覆盖原数量。
 
 反向记录要求：
@@ -330,6 +335,10 @@ Controller：`SceneCompletionOrderController`
 | `GET` | `/api/scene/completion_orders/{id}/sync_records` | 查询同步记录 | - | `List<SceneCompletionSyncRecordRespVO>` |
 
 当前决策：完工单必须审核，审核通过后同步给外部系统或 A 组集成接口。
+
+完工单修改接口只允许修改 `finishQuantity`。草稿和审核驳回状态可修改，待审核和审核通过状态
+拒绝修改；修改时同步令 `goodQuantity=finishQuantity`，不更新任务完工汇总、不触发审核或外部同步。
+任务完工数量仍只在审核通过事务中更新。
 
 ### 3.8 返修工单接口
 
@@ -497,6 +506,33 @@ Controller：`KanbanController`
 - 导出查询必须复用报表查询的数据权限条件，避免越权导出其他车间、产线或班组数据。
 - 导出接口保持只读，不在导出过程中修改业务状态。
 - 若后续真实数据量明显超过课程项目规模，再单独评估是否补充异步导出任务表。
+
+M4 冻结值（2026-07-13）：
+
+- 导出格式统一为 UTF-8 CSV，并写入 BOM 以兼容常用表格软件打开中文内容；
+- 单次同步导出时间范围最多 31 天；
+- 单次同步导出最多 10000 行，第 10001 行用于服务端超限判断，不截断后静默返回；
+- 产量和车间时段导出复用 `ReportQueryReqVO` 的时间、车间、产线、产品、工单、任务、批次、工序、班次和状态条件；
+- 导出权限限 `ADMIN`、`PMC`、`WORKSHOP_MANAGER`，并继续应用登录用户车间/产线范围；
+- 综合不良率分母使用同一查询范围内的报工投入数量净额，分母为 0 时返回 0。
+
+M4 已实现的实际接口：
+
+| 方法 | 路径 | 当前实现 |
+| --- | --- | --- |
+| `GET` | `/api/report/traces/products` | 支持 `batchCode`、`barcodeValue`、`workOrderNo`、`taskNo` 任一入口 |
+| `GET` | `/api/report/traces/barcodes/{barcodeValue}` | 按条码反查同一产品追溯主链路 |
+| `GET` | `/api/report/production_outputs/summary` | 返回净额、发生额、冲销额、达成率和不良率 |
+| `GET` | `/api/report/production_outputs/details` | 分页返回正常/冲销记录及每项数量净额 |
+| `GET` | `/api/report/production_outputs/export` | 同步 CSV 导出，31 天/10000 行保护 |
+| `GET` | `/api/report/realtime_production/overview` | 在制任务实时汇总和可选来源警告 |
+| `GET` | `/api/report/realtime_production/tasks` | 当前授权范围内的在制任务列表 |
+| `GET` | `/api/report/defects/page` | `view=SOURCE` 来源明细；`view=COMPREHENSIVE` 按 `defectGroupNo` 归并 |
+| `GET` | `/api/report/defects/summary` | B/C/返修来源数量、综合数量和各自比率 |
+| `GET` | `/api/report/defects/export` | 同步导出不良来源明细 |
+| `GET` | `/api/report/workshop_periods/summary` | 复用产量净额和数据权限口径 |
+| `GET` | `/api/report/workshop_periods/details` | 复用报工审计明细 |
+| `GET` | `/api/report/workshop_periods/export` | 同步导出车间时段明细 |
 
 ## 5. 第一阶段建议优先实现接口
 
