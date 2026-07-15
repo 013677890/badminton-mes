@@ -36,6 +36,9 @@ public class QualityInspectionRecordRespVO {
     /** 生产类检验关联的生产工单主键。 */
     private Long workOrderId;
 
+    /** 生产类检验关联的生产任务主键；未关联具体任务时可为空。 */
+    private Long productionTaskId;
+
     /** 非工单来源或扩展来源单据的主键。 */
     private Long sourceDocumentId;
 
@@ -51,6 +54,9 @@ public class QualityInspectionRecordRespVO {
     /** 生产线主键；由创建请求提供，用于展示本次生产类检验的现场范围。 */
     private Long productionLineId;
 
+    /** 工序主键；用于标识本次生产类检验对应的具体工序。 */
+    private Long processId;
+
     /** 被检产品或生产对象的批次号。 */
     private String batchNo;
 
@@ -65,6 +71,12 @@ public class QualityInspectionRecordRespVO {
 
     /** 后续业务放行状态：PENDING 待放行、RELEASED 已放行、BLOCKED 已阻断。 */
     private String releaseStatus;
+
+    /** 不良分组号；有失败结果时用于关联同一批不良处置。 */
+    private String defectGroupNo;
+
+    /** 本次检验确认的不良数量；无失败项目时为零或空。 */
+    private Integer defectQuantity;
 
     /** 存在失败项目时填写的不符合事实及偏差说明。 */
     private String nonconformanceDescription;

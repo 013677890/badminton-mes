@@ -56,6 +56,10 @@ public class QualityInspectionRecordEntity {
     @Column(name = "work_order_id")
     private Long workOrderId;
 
+    /** 生产任务主键；生产类检验可用于关联具体现场任务。 */
+    @Column(name = "production_task_id")
+    private Long productionTaskId;
+
     /** 非工单或扩展来源单据的主键。 */
     @Column(name = "source_document_id")
     private Long sourceDocumentId;
@@ -76,6 +80,10 @@ public class QualityInspectionRecordEntity {
     @Column(name = "production_line_id")
     private Long productionLineId;
 
+    /** 工序主键；记录生产类检验对应的实际工序。 */
+    @Column(name = "process_id")
+    private Long processId;
+
     /** 被检批次号，用于将结论约束到具体生产或来料批次。 */
     @Column(name = "batch_no")
     private String batchNo;
@@ -95,6 +103,14 @@ public class QualityInspectionRecordEntity {
     /** 对后续业务的放行状态；创建时待处理，提交后按结论映射为已发布或阻断。 */
     @Column(name = "release_status")
     private String releaseStatus;
+
+    /** 有失败结果时生成或沿用的不良分组号，用于关联后续不良处置。 */
+    @Column(name = "defect_group_no")
+    private String defectGroupNo;
+
+    /** 本次检验确认的不良数量。 */
+    @Column(name = "defect_quantity")
+    private Integer defectQuantity;
 
     /** 存在失败项目时必填的不符合事实说明。 */
     @Column(name = "nonconformance_description")

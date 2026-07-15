@@ -14,7 +14,7 @@ import jakarta.persistence.LockModeType;
 /**
  * 现场工序任务 Repository。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 public interface SceneProcessTaskRepository extends JpaRepository<SceneProcessTaskEntity, Long> {

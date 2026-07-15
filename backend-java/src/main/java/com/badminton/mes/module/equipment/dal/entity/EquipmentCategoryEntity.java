@@ -54,7 +54,7 @@ public class EquipmentCategoryEntity {
     private String remark;
 
     /** 映射 {@code status}；业务启停标记，{@code 1} 表示启用，{@code 0} 表示停用。 */
-    @Column(name = "status")
+    @Column(name = "status", columnDefinition = "tinyint")
     private Integer status;
 
     /** 映射 {@code create_by}；记录创建该类别的系统用户主键，供审计追溯。 */

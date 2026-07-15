@@ -38,15 +38,15 @@ public class WorkOrderStatusLogEntity {
     private Long workOrderId;
 
     /** 变更前状态(计划变更时与 toStatus 相同) */
-    @Column(name = "from_status")
+    @Column(name = "from_status", columnDefinition = "tinyint unsigned")
     private Integer fromStatus;
 
     /** 变更后状态 */
-    @Column(name = "to_status")
+    @Column(name = "to_status", columnDefinition = "tinyint unsigned")
     private Integer toStatus;
 
     /** 变更类型：1 状态流转 2 计划变更 */
-    @Column(name = "change_type")
+    @Column(name = "change_type", columnDefinition = "tinyint unsigned")
     private Integer changeType;
 
     /** 变更原因 */
@@ -62,6 +62,6 @@ public class WorkOrderStatusLogEntity {
     private LocalDateTime operateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

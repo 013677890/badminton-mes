@@ -190,6 +190,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         record.setConclusion(request.getConclusion());
         // 合格和让步接收均可放行，其余结论必须阻断后续流转。
         record.setReleaseStatus(resolveReleaseStatus(request.getConclusion()));
+        applyDefectResult(record, request, hasFailedResult);
         record.setNonconformanceDescription(request.getNonconformanceDescription());
         record.setDisposition(request.getDisposition());
         record.setInspectorId(getCurrentOperatorId());
@@ -248,15 +249,18 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         record.setPlanCodeSnapshot(plan.getPlanCode());
         record.setPlanVersionSnapshot(plan.getVersionNo());
         record.setWorkOrderId(request.getWorkOrderId());
+        record.setProductionTaskId(request.getProductionTaskId());
         record.setSourceDocumentId(request.getSourceDocumentId());
         record.setSourceDocumentNo(request.getSourceDocumentNo());
         record.setProductId(request.getProductId());
         record.setCustomerId(request.getCustomerId());
         record.setProductionLineId(request.getProductionLineId());
+        record.setProcessId(request.getProcessId());
         record.setBatchNo(request.getBatchNo());
         record.setSampleQuantity(request.getSampleQuantity());
         record.setRecordStatus(RECORD_STATUS_DRAFT);
         record.setReleaseStatus(RELEASE_PENDING);
+        record.setDefectQuantity(0);
         record.setCreateBy(getCurrentOperatorId());
         record.setDeleted(false);
         return record;
@@ -408,6 +412,27 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
     private String resolveReleaseStatus(String conclusion) {
         return CONCLUSION_PASS.equals(conclusion) || CONCLUSION_CONCESSION.equals(conclusion)
                 ? RELEASED : BLOCKED;
+    }
+
+    /**
+     * 根据项目判定结果校验并固化不良数量和归并号。
+     *
+     * <p>无失败项目时不允许携带不良数量；存在失败项目时，不良数量必须介于 1 和抽样数量之间。
+     * 归并号在落库前去除首尾空白，空白字符串按未提供处理。</p>
+     */
+    private void applyDefectResult(QualityInspectionRecordEntity record,
+                                   QualityInspectionRecordSubmitReqVO request,
+                                   boolean hasFailedResult) {
+        int defectQuantity = request.getDefectQuantity() == null ? 0 : request.getDefectQuantity();
+        if (!hasFailedResult && defectQuantity != 0) {
+            throw new ServiceException(QualityErrorCodeConstants.RECORD_CONCLUSION_INVALID);
+        }
+        if (hasFailedResult && (defectQuantity <= 0 || defectQuantity > record.getSampleQuantity())) {
+            throw new ServiceException(QualityErrorCodeConstants.RECORD_RESULTS_INCOMPLETE);
+        }
+        record.setDefectQuantity(defectQuantity);
+        record.setDefectGroupNo(StringUtils.hasText(request.getDefectGroupNo())
+                ? request.getDefectGroupNo().trim() : null);
     }
 
     /** 以毫秒时间和随机后缀生成检验单号，数据库唯一约束负责最终并发兜底。 */

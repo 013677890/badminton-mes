@@ -50,7 +50,7 @@ public class EquipmentManufacturerSaveReqVO {
 
     /** 官方网站地址，可省略 HTTP 协议；非空时必须包含合法域名后缀。 */
     @Size(max = 128, message = "官网长度不能超过 128")
-    @Pattern(regexp = "^(https?://)?[\\w\\-.]+\\.[a-z]{2,}.*$", message = "官网格式不正确", 
+    @Pattern(regexp = "^(https?://)?[\\w\\-.]+\\.[a-z]{2,}.*$", message = "官网格式不正确",
              flags = Pattern.Flag.CASE_INSENSITIVE)
     private String website;
 

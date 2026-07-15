@@ -202,6 +202,7 @@ class QualityInspectionRecordServiceImplTest {
         request.setConclusion("REWORK");
         request.setNonconformanceDescription("成品表面开裂");
         request.setDisposition("返工后重新检验");
+        request.setDefectQuantity(1);
         when(recordRepository.findByIdAndDeletedFalseForUpdate(RECORD_ID))
                 .thenReturn(Optional.of(record));
         when(resultRepository.findByInspectionRecordIdOrderBySortOrderAscIdAsc(RECORD_ID))
@@ -214,6 +215,52 @@ class QualityInspectionRecordServiceImplTest {
         assertThat(record.getReleaseStatus()).isEqualTo("BLOCKED");
         assertThat(record.getDisposition()).isEqualTo("返工后重新检验");
         verify(recordRepository).saveAndFlush(record);
+    }
+
+    @Test
+    @DisplayName("提交检验单：失败结果固化不良数量并规范化归并号")
+    void submitRecordPersistsDefectQuantityAndNormalizedGroupNumber() {
+        QualityInspectionRecordEntity record = buildRecord("DRAFT");
+        QualityInspectionResultEntity failedResult = buildResult(true, "FAIL");
+        failedResult.setMeasuredValue("NG");
+        failedResult.setDefectDescription("外观破损");
+        QualityInspectionRecordSubmitReqVO request = buildFailedSubmitRequest(3);
+        when(recordRepository.findByIdAndDeletedFalseForUpdate(RECORD_ID))
+                .thenReturn(Optional.of(record));
+        when(resultRepository.findByInspectionRecordIdOrderBySortOrderAscIdAsc(RECORD_ID))
+                .thenReturn(List.of(failedResult));
+
+        recordService.submitRecord(RECORD_ID, request);
+
+        assertThat(record.getRecordStatus()).isEqualTo("SUBMITTED");
+        assertThat(record.getDefectQuantity()).isEqualTo(3);
+        assertThat(record.getDefectGroupNo()).isEqualTo("DEFECT-001");
+        verify(recordRepository).saveAndFlush(record);
+        verify(qualityCache).evictDetailAfterCommit(
+                QualityRedisKeyConstants.INSPECTION_RECORD_RESOURCE,
+                RECORD_ID);
+    }
+
+    @Test
+    @DisplayName("提交检验单：不良数量超过抽样数量时拒绝提交")
+    void submitRecordRejectsDefectQuantityAboveSampleQuantity() {
+        QualityInspectionRecordEntity record = buildRecord("DRAFT");
+        QualityInspectionResultEntity failedResult = buildResult(true, "FAIL");
+        failedResult.setMeasuredValue("NG");
+        failedResult.setDefectDescription("外观破损");
+        when(recordRepository.findByIdAndDeletedFalseForUpdate(RECORD_ID))
+                .thenReturn(Optional.of(record));
+        when(resultRepository.findByInspectionRecordIdOrderBySortOrderAscIdAsc(RECORD_ID))
+                .thenReturn(List.of(failedResult));
+
+        assertThatThrownBy(() -> recordService.submitRecord(
+                RECORD_ID,
+                buildFailedSubmitRequest(11)))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode()).isSameAs(
+                                QualityErrorCodeConstants.RECORD_RESULTS_INCOMPLETE));
+        verify(recordRepository, never()).saveAndFlush(any());
+        verify(qualityCache, never()).evictDetailAfterCommit(any(), any());
     }
 
     @Test
@@ -240,6 +287,7 @@ class QualityInspectionRecordServiceImplTest {
         record.setId(RECORD_ID);
         record.setInspectionNo("QI-001");
         record.setRecordStatus(recordStatus);
+        record.setSampleQuantity(10);
         record.setDeleted(false);
         return record;
     }
@@ -264,6 +312,17 @@ class QualityInspectionRecordServiceImplTest {
         request.setResultId(resultId);
         request.setMeasuredValue("合格");
         request.setJudgmentResult(judgmentResult);
+        return request;
+    }
+
+    /** 构造具备完整不合格处置信息的提交请求，并保留归并号规范化的测试输入。 */
+    private QualityInspectionRecordSubmitReqVO buildFailedSubmitRequest(int defectQuantity) {
+        QualityInspectionRecordSubmitReqVO request = new QualityInspectionRecordSubmitReqVO();
+        request.setConclusion("REWORK");
+        request.setNonconformanceDescription("外观破损");
+        request.setDisposition("返修");
+        request.setDefectQuantity(defectQuantity);
+        request.setDefectGroupNo(" DEFECT-001 ");
         return request;
     }
 }

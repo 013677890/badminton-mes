@@ -11,7 +11,7 @@ import lombok.Data;
 /**
  * WMS/ERP 物料库存批量同步请求。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Data

@@ -24,6 +24,10 @@ public class QualityInspectionRecordCreateReqVO {
     @Positive(message = "生产工单必须为正整数")
     private Long workOrderId;
 
+    /** 生产任务主键；生产类检验可用于进一步定位具体现场任务，填写时必须为正整数。 */
+    @Positive(message = "生产任务必须为正整数")
+    private Long productionTaskId;
+
     /** 入库检或发货检的来源单据主键；此两类检验必填，且必须为正整数。 */
     @Positive(message = "来源单据必须为正整数")
     private Long sourceDocumentId;
@@ -43,6 +47,10 @@ public class QualityInspectionRecordCreateReqVO {
     /** 生产线主键；填写时必须为正整数，用于记录被检对象的生产归属。 */
     @Positive(message = "产线必须为正整数")
     private Long productionLineId;
+
+    /** 工序主键；生产类检验可用于记录本次检验对应的具体生产工序。 */
+    @Positive(message = "工序必须为正整数")
+    private Long processId;
 
     /** 被检产品批次号；不能为空、最长 64 个字符，生产类检验须与工单已有批次一致。 */
     @NotBlank(message = "产品批次号不能为空")

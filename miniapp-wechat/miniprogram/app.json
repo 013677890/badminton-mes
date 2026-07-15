@@ -1,0 +1,26 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/bind-account/bind-account",
+    "pages/dashboard/dashboard",
+    "pages/production-analysis/production-analysis",
+    "pages/product-trace/product-trace",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarTitleText": "羽毛球 MES",
+    "navigationBarBackgroundColor": "#0f766e",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f7fa"
+  },
+  "tabBar": {
+    "color": "#64748b",
+    "selectedColor": "#0f766e",
+    "list": [
+      { "pagePath": "pages/dashboard/dashboard", "text": "看板" },
+      { "pagePath": "pages/production-analysis/production-analysis", "text": "分析" },
+      { "pagePath": "pages/product-trace/product-trace", "text": "追溯" },
+      { "pagePath": "pages/profile/profile", "text": "我的" }
+    ]
+  }
+}

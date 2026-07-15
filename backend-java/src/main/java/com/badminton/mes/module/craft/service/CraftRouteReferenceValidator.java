@@ -329,9 +329,9 @@ public class CraftRouteReferenceValidator {
         }
         List<CraftQualityPlanReferenceEntity> plans = lockReferences
                 ? qualityPlanRepository.findAvailableByIdInForUpdateOrderByIdAsc(
-                        planIds, CommonStatusEnum.ENABLED.getStatus())
-                : qualityPlanRepository.findByIdInAndStatusAndDeletedFalse(
-                        planIds, CommonStatusEnum.ENABLED.getStatus());
+                        planIds, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)
+                : qualityPlanRepository.findByIdInAndPlanStatusAndDeletedFalse(
+                        planIds, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE);
         if (plans.size() != planIds.size()) {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_QUALITY_PLAN_NOT_AVAILABLE);
         }

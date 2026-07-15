@@ -20,7 +20,7 @@ import jakarta.persistence.Table;
  * @date 2026/07/13
  */
 @Data
-@Entity
+@Entity(name = "IntegrationDeviceCountRecordEntity")
 @DynamicInsert
 @Table(name = "integration_device_count_record")
 public class DeviceCountRecordEntity {

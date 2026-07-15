@@ -14,7 +14,7 @@ import lombok.Data;
 /**
  * 单条物料库存与在途快照。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Data

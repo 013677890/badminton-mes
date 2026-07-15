@@ -24,6 +24,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
 import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessChangeLogEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
+import com.badminton.mes.module.craft.dal.entity.CraftQualityPlanReferenceEntity;
 import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
@@ -411,8 +412,8 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         if (Boolean.TRUE.equals(qualityRequired) && qualityPlanId == null) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_QUALITY_PLAN_REQUIRED);
         }
-        if (qualityPlanId != null && !qualityPlanRepository.existsByIdAndStatusAndDeletedFalse(
-                qualityPlanId, CommonStatusEnum.ENABLED.getStatus())) {
+        if (qualityPlanId != null && !qualityPlanRepository.existsByIdAndPlanStatusAndDeletedFalse(
+                qualityPlanId, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_QUALITY_PLAN_NOT_AVAILABLE);
         }
         if (equipmentCategoryId == null) {

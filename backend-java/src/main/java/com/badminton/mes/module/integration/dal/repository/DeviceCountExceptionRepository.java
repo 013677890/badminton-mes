@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 
@@ -16,13 +17,14 @@ import jakarta.persistence.LockModeType;
  * @author 张竹灏
  * @date 2026/07/13
  */
+@Repository("integrationDeviceCountExceptionRepository")
 public interface DeviceCountExceptionRepository
         extends JpaRepository<DeviceCountExceptionEntity, Long>,
         JpaSpecificationExecutor<DeviceCountExceptionEntity> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            SELECT exception FROM DeviceCountExceptionEntity exception
+            SELECT exception FROM IntegrationDeviceCountExceptionEntity exception
             WHERE exception.id = :id AND exception.deleted = false
             """)
     java.util.Optional<DeviceCountExceptionEntity> findByIdForUpdate(@Param("id") Long id);

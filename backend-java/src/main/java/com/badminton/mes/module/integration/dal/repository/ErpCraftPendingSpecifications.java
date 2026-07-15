@@ -14,7 +14,7 @@ import jakarta.persistence.criteria.Predicate;
 /**
  * ERP 工艺待确认分页条件。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 public final class ErpCraftPendingSpecifications {
