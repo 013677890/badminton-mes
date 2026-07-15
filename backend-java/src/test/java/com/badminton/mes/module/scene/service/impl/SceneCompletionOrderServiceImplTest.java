@@ -7,6 +7,8 @@ import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.integration.service.CompletionOrderPublishService;
+import com.badminton.mes.module.production.service.WorkOrderExecutionSummaryService;
 import com.badminton.mes.module.scene.constants.SceneErrorCodeConstants;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionAuditReqVO;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionCreateReqVO;
@@ -47,9 +49,14 @@ class SceneCompletionOrderServiceImplTest {
     private final SceneDataScopeService dataScopeService = mock(SceneDataScopeService.class);
     private final CompletionSyncClient syncClient = mock(CompletionSyncClient.class);
     private final CompletionSyncResultService syncResultService = mock(CompletionSyncResultService.class);
+    private final WorkOrderExecutionSummaryService workOrderExecutionSummaryService =
+            mock(WorkOrderExecutionSummaryService.class);
+    private final CompletionOrderPublishService completionOrderPublishService =
+            mock(CompletionOrderPublishService.class);
     private final SceneCompletionOrderServiceImpl service = new SceneCompletionOrderServiceImpl(
             orderRepository, syncRecordRepository, taskRepository, dataScopeService,
-            syncClient, syncResultService);
+            syncClient, syncResultService, workOrderExecutionSummaryService,
+            completionOrderPublishService);
 
     @BeforeEach
     void setUp() {
@@ -139,6 +146,8 @@ class SceneCompletionOrderServiceImplTest {
 
         assertThat(order.getFinishStatus()).isEqualTo(2);
         assertThat(task.getFinishQuantity()).isEqualTo(10);
+        verify(workOrderExecutionSummaryService).addApprovedCompletion(30L, 10);
+        verify(completionOrderPublishService).publishApproved(any());
     }
 
     @Test
@@ -155,6 +164,8 @@ class SceneCompletionOrderServiceImplTest {
         assertThat(order.getFinishStatus()).isEqualTo(3);
         assertThat(task.getFinishQuantity()).isZero();
         verify(taskRepository, never()).save(task);
+        verify(workOrderExecutionSummaryService, never()).addApprovedCompletion(any(), any(Integer.class));
+        verify(completionOrderPublishService, never()).publishApproved(any());
     }
 
     @Test
@@ -251,6 +262,7 @@ class SceneCompletionOrderServiceImplTest {
         SceneCompletionOrderEntity order = new SceneCompletionOrderEntity();
         order.setId(5L);
         order.setTaskId(1L);
+        order.setWorkOrderId(30L);
         order.setFinishNo("WG001");
         order.setFinishQuantity(10);
         order.setGoodQuantity(10);

@@ -1,0 +1,14 @@
+{
+  "name": "badminton-mes-miniapp",
+  "private": true,
+  "version": "1.0.0",
+  "description": "羽毛球 MES 微信小程序",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "miniprogram-api-typings": "^4.0.4"
+  }
+}

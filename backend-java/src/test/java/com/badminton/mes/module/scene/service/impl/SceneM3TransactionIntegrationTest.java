@@ -14,6 +14,7 @@ import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionAuditReqVO;
+import com.badminton.mes.module.scene.controller.vo.SceneWorkReportReverseReqVO;
 import com.badminton.mes.module.scene.controller.vo.SceneWorkReportSubmitReqVO;
 import com.badminton.mes.module.scene.dal.entity.SceneCompletionOrderEntity;
 import com.badminton.mes.module.scene.dal.entity.SceneCompletionSyncRecordEntity;
@@ -44,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @ActiveProfiles("test")
 class SceneM3TransactionIntegrationTest {
 
+    private static final Long WORK_ORDER_ID = 9_300_100L;
     private static final Long TASK_ID = 9_300_001L;
     private static final Long DETAIL_ID = 9_300_002L;
     private static final Long BARCODE_ID = 9_300_003L;
@@ -80,6 +82,7 @@ class SceneM3TransactionIntegrationTest {
 
     @Test
     void reportFailureRollsBackBarcodeUseReportAndAggregates() {
+        insertWorkOrder(0, 0, 0, 0);
         insertTask(0, 0, 0);
         insertDetail(Integer.MAX_VALUE, 0);
         insertBarcode();
@@ -95,12 +98,15 @@ class SceneM3TransactionIntegrationTest {
                 .isZero();
         assertThat(value("SELECT input_quantity FROM prod_task WHERE id=?", TASK_ID))
                 .isZero();
+        assertThat(value("SELECT input_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID))
+                .isZero();
         assertThat(value("SELECT good_quantity FROM prod_process_dispatch_detail WHERE id=?", DETAIL_ID))
                 .isEqualTo(Integer.MAX_VALUE);
     }
 
     @Test
     void concurrentDuplicateRequestReturnsSameIdAndAppliesOnlyOnce() throws Exception {
+        insertWorkOrder(0, 0, 0, 0);
         insertTask(0, 0, 0);
         insertDetail(0, 0);
         insertBarcode();
@@ -133,12 +139,46 @@ class SceneM3TransactionIntegrationTest {
                 .isEqualTo(1);
         assertThat(value("SELECT input_quantity FROM prod_task WHERE id=?", TASK_ID))
                 .isEqualTo(1);
+        assertThat(value("SELECT input_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID))
+                .isEqualTo(1);
         assertThat(value("SELECT good_quantity FROM prod_process_dispatch_detail WHERE id=?", DETAIL_ID))
                 .isEqualTo(1);
     }
 
     @Test
+    void reportAndReverseAdjustTaskAndWorkOrderNetAmountsTogether() {
+        insertWorkOrder(0, 0, 0, 0);
+        insertTask(0, 0, 0);
+        insertDetail(0, 0);
+        insertBarcode();
+
+        Long reportId = workReportService.submit(
+                reportRequest("M3-TX-NET", 4, 2, 2, 1), 1);
+
+        assertThat(value("SELECT input_quantity FROM prod_task WHERE id=?", TASK_ID)).isEqualTo(4);
+        assertThat(value("SELECT defect_quantity FROM prod_task WHERE id=?", TASK_ID)).isEqualTo(2);
+        assertThat(value("SELECT rework_quantity FROM prod_task WHERE id=?", TASK_ID)).isEqualTo(1);
+        assertThat(value("SELECT input_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isEqualTo(4);
+        assertThat(value("SELECT defect_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isEqualTo(2);
+        assertThat(value("SELECT rework_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isEqualTo(1);
+
+        SceneWorkReportReverseReqVO reverseReqVO = new SceneWorkReportReverseReqVO();
+        reverseReqVO.setRequestNo("M3-TX-NET-REVERSE");
+        reverseReqVO.setReason("A/B/C 联调冲销验证");
+        workReportService.reverse(reportId, reverseReqVO);
+
+        assertThat(value("SELECT input_quantity FROM prod_task WHERE id=?", TASK_ID)).isZero();
+        assertThat(value("SELECT defect_quantity FROM prod_task WHERE id=?", TASK_ID)).isZero();
+        assertThat(value("SELECT rework_quantity FROM prod_task WHERE id=?", TASK_ID)).isZero();
+        assertThat(value("SELECT input_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isZero();
+        assertThat(value("SELECT defect_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isZero();
+        assertThat(value("SELECT rework_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM prod_report WHERE task_id=?", TASK_ID)).isEqualTo(2);
+    }
+
+    @Test
     void completionAuditFailureRollsBackTaskAndOrder() {
+        insertWorkOrder(20, 0, 0, 0);
         insertTask(20, 0, 0);
         insertCompletionOrder(1, 0);
         SceneCompletionAuditReqVO reqVO = new SceneCompletionAuditReqVO();
@@ -149,15 +189,49 @@ class SceneM3TransactionIntegrationTest {
                 .isInstanceOf(RuntimeException.class);
 
         assertThat(value("SELECT finish_quantity FROM prod_task WHERE id=?", TASK_ID)).isZero();
+        assertThat(value("SELECT finish_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isZero();
         assertThat(value("SELECT finish_status FROM prod_finish_order WHERE id=?", FINISH_ORDER_ID))
                 .isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM prod_completion_order WHERE completion_no='M3-TX-FINISH'"))
+                .isZero();
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT audit_by FROM prod_finish_order WHERE id=?", Long.class, FINISH_ORDER_ID))
                 .isNull();
     }
 
     @Test
+    void approvedCompletionUpdatesWorkOrderAndPublishesForErpRead() {
+        insertWorkOrder(20, 0, 0, 0);
+        insertTask(20, 0, 20);
+        insertCompletionOrder(1, 0);
+        SceneCompletionAuditReqVO reqVO = new SceneCompletionAuditReqVO();
+        reqVO.setApproved(true);
+        reqVO.setRemark("A/B/C 联调审核通过");
+
+        completionOrderService.audit(FINISH_ORDER_ID, reqVO);
+
+        assertThat(value("SELECT finish_quantity FROM prod_task WHERE id=?", TASK_ID)).isEqualTo(10);
+        assertThat(value("SELECT finish_quantity FROM prod_work_order WHERE id=?", WORK_ORDER_ID)).isEqualTo(10);
+        assertThat(value("SELECT finish_status FROM prod_finish_order WHERE id=?", FINISH_ORDER_ID)).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM prod_completion_order WHERE completion_no='M3-TX-FINISH'"))
+                .isEqualTo(1);
+        assertThat(value("SELECT production_task_id FROM prod_completion_order "
+                + "WHERE completion_no='M3-TX-FINISH'"))
+                .isEqualTo(TASK_ID.intValue());
+        assertThat(value("SELECT work_order_id FROM prod_completion_order "
+                + "WHERE completion_no='M3-TX-FINISH'"))
+                .isEqualTo(WORK_ORDER_ID.intValue());
+        assertThat(value("SELECT completion_quantity FROM prod_completion_order "
+                + "WHERE completion_no='M3-TX-FINISH'"))
+                .isEqualTo(10);
+        assertThat(value("SELECT audit_status FROM prod_completion_order "
+                + "WHERE completion_no='M3-TX-FINISH'"))
+                .isEqualTo(1);
+    }
+
+    @Test
     void syncResultFailureRollsBackRecordAndOrderTogether() {
+        insertWorkOrder(20, 0, 0, 0);
         insertTask(20, 0, 0);
         insertCompletionOrder(2, 0);
         SceneCompletionOrderEntity order = completionOrderRepository.findByIdAndDeletedFalse(FINISH_ORDER_ID)
@@ -194,16 +268,37 @@ class SceneM3TransactionIntegrationTest {
     }
 
     private SceneWorkReportSubmitReqVO reportRequest(String requestNo) {
+        return reportRequest(requestNo, 1, 1, 0, 0);
+    }
+
+    private SceneWorkReportSubmitReqVO reportRequest(String requestNo, int inputQuantity,
+                                                      int goodQuantity, int defectQuantity,
+                                                      int reworkQuantity) {
         SceneWorkReportSubmitReqVO reqVO = new SceneWorkReportSubmitReqVO();
         reqVO.setRequestNo(requestNo);
         reqVO.setDispatchDetailId(DETAIL_ID);
-        reqVO.setInputQuantity(1);
-        reqVO.setGoodQuantity(1);
-        reqVO.setDefectQuantity(0);
-        reqVO.setReworkQuantity(0);
+        reqVO.setInputQuantity(inputQuantity);
+        reqVO.setGoodQuantity(goodQuantity);
+        reqVO.setDefectQuantity(defectQuantity);
+        reqVO.setReworkQuantity(reworkQuantity);
         reqVO.setBarcodeValue(BARCODE_VALUE);
         reqVO.setReportTime(LocalDateTime.now());
         return reqVO;
+    }
+
+    private void insertWorkOrder(int inputQuantity, int finishQuantity,
+                                 int defectQuantity, int reworkQuantity) {
+        jdbcTemplate.update("""
+                INSERT INTO prod_work_order
+                    (id, work_order_no, source_type, product_id, product_name, unit_id, batch_no,
+                     workshop_id, plan_quantity, dispatched_quantity, input_quantity, finish_quantity,
+                     defect_quantity, rework_quantity, over_ratio, priority, plan_start_time,
+                     plan_end_time, order_status, kit_status, create_by, is_deleted)
+                VALUES (?, 'M3-TX-WO', 1, 9300200, 'M3事务产品', 1, ?,
+                        9300400, 100, 0, ?, ?, ?, ?, 0, 5, NOW(),
+                        DATE_ADD(NOW(), INTERVAL 1 DAY), 2, 1, 1, 0)
+                """, WORK_ORDER_ID, BATCH_NO, inputQuantity, finishQuantity,
+                defectQuantity, reworkQuantity);
     }
 
     private void insertTask(int goodQuantity, int finishQuantity, int inputQuantity) {
@@ -270,6 +365,8 @@ class SceneM3TransactionIntegrationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.update("DELETE FROM integration_completion_read_log WHERE completion_no='M3-TX-FINISH'");
+        jdbcTemplate.update("DELETE FROM prod_completion_order WHERE completion_no='M3-TX-FINISH'");
         jdbcTemplate.update("DELETE FROM prod_finish_sync_record WHERE finish_order_id=?", FINISH_ORDER_ID);
         jdbcTemplate.update("DELETE FROM prod_finish_order WHERE id=?", FINISH_ORDER_ID);
         jdbcTemplate.update("DELETE FROM prod_report WHERE task_id=?", TASK_ID);
@@ -277,5 +374,6 @@ class SceneM3TransactionIntegrationTest {
         jdbcTemplate.update("DELETE FROM barcode WHERE id=?", BARCODE_ID);
         jdbcTemplate.update("DELETE FROM prod_process_dispatch_detail WHERE id=?", DETAIL_ID);
         jdbcTemplate.update("DELETE FROM prod_task WHERE id=?", TASK_ID);
+        jdbcTemplate.update("DELETE FROM prod_work_order WHERE id=?", WORK_ORDER_ID);
     }
 }

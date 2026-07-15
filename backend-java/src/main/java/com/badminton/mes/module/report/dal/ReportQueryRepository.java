@@ -10,10 +10,12 @@ import java.util.Optional;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.module.report.dal.ReportQueryRows.Aggregate;
 import com.badminton.mes.module.report.dal.ReportQueryRows.RealtimeTask;
+import com.badminton.mes.module.report.dal.ReportQueryRows.RealtimeSupport;
 import com.badminton.mes.module.report.dal.ReportQueryRows.ReportDetail;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceBarcode;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceBarcodeUse;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceMaterial;
+import com.badminton.mes.module.report.dal.ReportQueryRows.TraceOptionalSource;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceProcessHistory;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceTask;
 import com.badminton.mes.module.report.dal.ReportQueryRows.TraceWorkOrder;
@@ -135,6 +137,40 @@ public class ReportQueryRepository {
         return jdbcTemplate.query(sql.toString(), parameters, this::mapRealtimeTask);
     }
 
+    /** 查询授权范围内 C 组设备状态和未关闭安灯数量。 */
+    public RealtimeSupport loadRealtimeSupport(Long workshopId, Long lineId) {
+        StringBuilder equipmentSql = new StringBuilder("""
+                SELECT COUNT(*) AS total_count,
+                       COALESCE(SUM(CASE WHEN e.equipment_status = 'RUNNING' THEN 1 ELSE 0 END), 0)
+                           AS running_count,
+                       COALESCE(SUM(CASE WHEN e.equipment_status IN
+                           ('STOPPED', 'REPAIRING', 'MAINTAINING') THEN 1 ELSE 0 END), 0)
+                           AS unavailable_count
+                FROM equip_ledger AS e
+                WHERE e.is_deleted = 0 AND e.status = 1
+                """);
+        MapSqlParameterSource equipmentParameters = new MapSqlParameterSource();
+        appendEquals(equipmentSql, equipmentParameters, "e.workshop_id", "workshopId", workshopId);
+        appendEquals(equipmentSql, equipmentParameters, "e.production_line_id", "lineId", lineId);
+        long[] equipment = jdbcTemplate.queryForObject(equipmentSql.toString(), equipmentParameters,
+                (rs, rowNum) -> new long[]{rs.getLong("total_count"), rs.getLong("running_count"),
+                        rs.getLong("unavailable_count")});
+
+        StringBuilder andonSql = new StringBuilder("""
+                SELECT COUNT(*) AS open_count,
+                       COALESCE(SUM(CASE WHEN a.severity = 'CRITICAL' THEN 1 ELSE 0 END), 0)
+                           AS critical_count
+                FROM andon_event AS a
+                WHERE a.is_deleted = 0 AND a.event_status <> 'CLOSED'
+                """);
+        MapSqlParameterSource andonParameters = new MapSqlParameterSource();
+        appendEquals(andonSql, andonParameters, "a.workshop_id", "workshopId", workshopId);
+        appendEquals(andonSql, andonParameters, "a.production_line_id", "lineId", lineId);
+        long[] andon = jdbcTemplate.queryForObject(andonSql.toString(), andonParameters,
+                (rs, rowNum) -> new long[]{rs.getLong("open_count"), rs.getLong("critical_count")});
+        return new RealtimeSupport(equipment[0], equipment[1], equipment[2], andon[0], andon[1]);
+    }
+
     /** 按批次、条码、工单号或任务号定位追溯主任务。 */
     public Optional<TraceTask> findTraceTask(String batchCode, String barcodeValue,
                                              String workOrderNo, String taskNo) {
@@ -237,6 +273,76 @@ public class ReportQueryRepository {
                 this::mapTraceMaterial);
     }
 
+    /** 查询批次关联的 C 组质量检验结果。 */
+    public List<TraceOptionalSource> listTraceQualityDefects(TraceTask task) {
+        String sql = """
+                SELECT q.inspection_no, q.conclusion, q.defect_quantity,
+                       q.nonconformance_description, q.inspected_at
+                FROM quality_inspection_record AS q
+                WHERE q.is_deleted = 0 AND q.record_status = 'SUBMITTED'
+                  AND (q.production_task_id = :taskId
+                    OR (q.production_task_id IS NULL AND q.work_order_id = :workOrderId)
+                    OR (q.production_task_id IS NULL AND q.work_order_id IS NULL
+                        AND q.batch_no = :batchNo AND q.product_id = :productId))
+                ORDER BY q.inspected_at ASC, q.id ASC
+                """;
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("taskId", task.id()).addValue("workOrderId", task.workOrderId())
+                .addValue("batchNo", task.batchNo()).addValue("productId", task.productId());
+        return jdbcTemplate.query(sql, parameters, (rs, rowNum) -> {
+            String description = rs.getString("nonconformance_description");
+            String summary = rs.getString("conclusion") + "，不良数量 " + rs.getInt("defect_quantity");
+            if (StringUtils.hasText(description)) {
+                summary += "，" + description;
+            }
+            return new TraceOptionalSource("QUALITY_INSPECTION", rs.getString("inspection_no"),
+                    summary, rs.getObject("inspected_at", LocalDateTime.class));
+        });
+    }
+
+    /** 查询任务实际关联设备的当前状态。 */
+    public List<TraceOptionalSource> listTraceEquipmentStatuses(TraceTask task) {
+        String sql = """
+                SELECT DISTINCT e.equipment_code, e.equipment_name, e.equipment_status, e.update_time
+                FROM equip_ledger AS e
+                WHERE e.is_deleted = 0
+                  AND e.id IN (
+                    SELECT u.equipment_id FROM barcode_use_record AS u
+                    WHERE u.task_id = :taskId AND u.is_deleted = 0 AND u.equipment_id IS NOT NULL
+                    UNION
+                    SELECT d.equipment_id FROM prod_process_dispatch_detail AS d
+                    WHERE d.task_id = :taskId AND d.is_deleted = 0 AND d.equipment_id IS NOT NULL
+                  )
+                ORDER BY e.equipment_code ASC
+                """;
+        return jdbcTemplate.query(sql, new MapSqlParameterSource("taskId", task.id()),
+                (rs, rowNum) -> new TraceOptionalSource("EQUIPMENT", rs.getString("equipment_code"),
+                        rs.getString("equipment_name") + "，状态 " + rs.getString("equipment_status"),
+                        rs.getObject("update_time", LocalDateTime.class)));
+    }
+
+    /** 查询任务、工单或批次关联的 C 组安灯异常。 */
+    public List<TraceOptionalSource> listTraceAndonEvents(TraceTask task) {
+        String sql = """
+                SELECT a.event_no, a.severity, a.event_status, a.description, a.create_time
+                FROM andon_event AS a
+                WHERE a.is_deleted = 0
+                  AND (a.production_task_id = :taskId
+                    OR (a.production_task_id IS NULL AND a.work_order_id = :workOrderId)
+                    OR (a.production_task_id IS NULL AND a.work_order_id IS NULL
+                        AND a.batch_no = :batchNo))
+                ORDER BY a.create_time ASC, a.id ASC
+                """;
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("taskId", task.id()).addValue("workOrderId", task.workOrderId())
+                .addValue("batchNo", task.batchNo());
+        return jdbcTemplate.query(sql, parameters,
+                (rs, rowNum) -> new TraceOptionalSource("ANDON", rs.getString("event_no"),
+                        rs.getString("severity") + " / " + rs.getString("event_status")
+                                + "，" + rs.getString("description"),
+                        rs.getObject("create_time", LocalDateTime.class)));
+    }
+
     /** 查询 B 组报工不良事实，数量按正常/冲销拆分。 */
     public List<DefectSourceRecord> listSceneDefects(ReportQueryCriteria criteria, int limit) {
         QueryParts parts = reportFilters(criteria);
@@ -269,6 +375,33 @@ public class ReportQueryRepository {
                 rs.getObject("detected_time", LocalDateTime.class)));
     }
 
+    /** 查询 C 组已提交质检不良事实。 */
+    public List<DefectSourceRecord> listQualityDefects(ReportQueryCriteria criteria, int limit) {
+        QueryParts parts = qualityFilters(criteria);
+        MapSqlParameterSource parameters = copy(parts.parameters()).addValue("limit", limit);
+        String sql = """
+                SELECT q.id AS source_id, q.defect_group_no, q.production_task_id AS task_id,
+                       t.task_no, w.work_order_no, q.product_id, w.product_name, q.batch_no,
+                       COALESCE(t.workshop_id, w.workshop_id) AS workshop_id,
+                       COALESCE(t.line_id, q.production_line_id) AS line_id,
+                       q.process_id, p.process_name, q.conclusion,
+                       q.nonconformance_description, q.defect_quantity, q.inspected_at
+                FROM quality_inspection_record AS q
+                LEFT JOIN prod_task AS t ON t.id = q.production_task_id AND t.is_deleted = 0
+                LEFT JOIN prod_work_order AS w ON w.id = q.work_order_id AND w.is_deleted = 0
+                LEFT JOIN craft_process AS p ON p.id = q.process_id AND p.is_deleted = 0
+                """ + parts.where()
+                + " ORDER BY q.inspected_at DESC, q.id DESC LIMIT :limit";
+        return jdbcTemplate.query(sql, parameters, (rs, rowNum) -> new DefectSourceRecord(
+                "QUALITY_INSPECTION", rs.getLong("source_id"), null,
+                rs.getString("defect_group_no"), nullableLong(rs, "task_id"), rs.getString("task_no"),
+                rs.getString("work_order_no"), nullableLong(rs, "product_id"), rs.getString("product_name"),
+                rs.getString("batch_no"), nullableLong(rs, "workshop_id"), nullableLong(rs, "line_id"),
+                nullableLong(rs, "process_id"), rs.getString("process_name"), rs.getString("conclusion"),
+                rs.getString("nonconformance_description"), rs.getLong("defect_quantity"), 0L,
+                rs.getObject("inspected_at", LocalDateTime.class)));
+    }
+
     private QueryParts reportFilters(ReportQueryCriteria criteria) {
         StringBuilder where = new StringBuilder(" WHERE r.is_deleted = 0")
                 .append(" AND r.report_time >= :startTime AND r.report_time <= :endTime");
@@ -283,6 +416,25 @@ public class ReportQueryRepository {
         appendEquals(where, parameters, "t.shift_id", "shiftId", criteria.shiftId());
         appendEquals(where, parameters, "t.batch_no", "batchNo", textOrNull(criteria.batchNo()));
         appendEquals(where, parameters, "t.task_status", "status", criteria.status());
+        return new QueryParts(where.toString(), parameters);
+    }
+
+    private QueryParts qualityFilters(ReportQueryCriteria criteria) {
+        StringBuilder where = new StringBuilder(" WHERE q.is_deleted = 0")
+                .append(" AND q.record_status = 'SUBMITTED' AND q.conclusion <> 'PASS'")
+                .append(" AND q.defect_quantity > 0")
+                .append(" AND q.inspected_at >= :startTime AND q.inspected_at <= :endTime");
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("startTime", criteria.startTime()).addValue("endTime", criteria.endTime());
+        appendEquals(where, parameters, "COALESCE(t.workshop_id, w.workshop_id)",
+                "workshopId", criteria.workshopId());
+        appendEquals(where, parameters, "COALESCE(t.line_id, q.production_line_id)",
+                "lineId", criteria.lineId());
+        appendEquals(where, parameters, "q.product_id", "productId", criteria.productId());
+        appendEquals(where, parameters, "q.work_order_id", "workOrderId", criteria.workOrderId());
+        appendEquals(where, parameters, "q.production_task_id", "taskId", criteria.taskId());
+        appendEquals(where, parameters, "q.process_id", "processId", criteria.processId());
+        appendEquals(where, parameters, "q.batch_no", "batchNo", textOrNull(criteria.batchNo()));
         return new QueryParts(where.toString(), parameters);
     }
 

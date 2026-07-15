@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * M4 追溯主链路与可选来源降级警告测试。
+ * M4 追溯主链路与跨组来源查询测试。
  *
  * @author 刘涵
  * @date 2026/07/13
@@ -30,7 +30,7 @@ class ProductTraceServiceImplTest {
     private final ProductTraceServiceImpl service = new ProductTraceServiceImpl(repository, dataScopeService, repairRepository);
 
     @Test
-    void traceReturnsCoreDataAndExplicitOptionalSourceWarnings() {
+    void traceReturnsCoreDataAndQueriesAvailableCGroupSources() {
         ProductTraceQueryReqVO reqVO = new ProductTraceQueryReqVO();
         reqVO.setBatchCode("B001");
         TraceTask task = new TraceTask(1L, "T1", 2L, "W1", 3L, "P1", "产品", "B001",
@@ -47,8 +47,12 @@ class ProductTraceServiceImplTest {
 
         assertThat(result.getTask().getBatchNo()).isEqualTo("B001");
         assertThat(result.getDataCompleteness()).isEqualTo("PARTIAL");
-        assertThat(result.getWarnings()).hasSize(6)
-                .anyMatch(warning -> warning.startsWith("QUALITY_INSPECTION"));
+        assertThat(result.getWarnings()).hasSize(3)
+                .noneMatch(warning -> warning.startsWith("QUALITY_INSPECTION")
+                        || warning.startsWith("EQUIPMENT") || warning.startsWith("ANDON"));
         verify(dataScopeService).checkObject(4L, 5L);
+        verify(repository).listTraceQualityDefects(task);
+        verify(repository).listTraceEquipmentStatuses(task);
+        verify(repository).listTraceAndonEvents(task);
     }
 }

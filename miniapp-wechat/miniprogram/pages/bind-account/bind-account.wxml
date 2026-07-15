@@ -1,0 +1,1 @@
+<view class="page"><view class="card"><view class="title">绑定 MES 工号</view><input placeholder="工号" data-key="userNo" bindinput="input"/><input password placeholder="密码" data-key="password" bindinput="input"/><button class="primary" bindtap="bind">确认绑定</button></view></view>

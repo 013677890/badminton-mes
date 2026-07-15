@@ -65,8 +65,10 @@ services:
       MES_REDIS_HOST: redis
       MES_REDIS_PORT: "6379"
       MES_CORS_ALLOWED_ORIGINS: ${MES_CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-      # 本地接口联调显式关闭认证；生产部署不得设置为 true
-      MES_SECURITY_AUTH_DISABLED: "true"
+      MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:?请在 .env 中设置 MES_WECHAT_MINI_APP_ID}
+      MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:?请在 .env 中设置 MES_WECHAT_MINI_APP_SECRET}
+      # 微信小程序联调必须启用认证，才能从 Bearer token 建立用户和数据范围上下文。
+      MES_SECURITY_AUTH_DISABLED: "false"
       # 测试数据仅从开发专用位置加载，生产环境使用默认 db/migration
       MES_FLYWAY_LOCATIONS: classpath:db/migration,classpath:db/dev-migration
     ports:

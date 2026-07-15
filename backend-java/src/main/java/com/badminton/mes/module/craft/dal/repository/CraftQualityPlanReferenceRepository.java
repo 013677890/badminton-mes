@@ -22,39 +22,39 @@ public interface CraftQualityPlanReferenceRepository
         extends Repository<CraftQualityPlanReferenceEntity, Long> {
 
     /**
-     * 判断检验方案是否存在、启用且未删除。
+     * 判断检验方案是否存在、生效且未删除。
      *
-     * @param id     检验方案主键
-     * @param status 启用状态
+     * @param id         检验方案主键
+     * @param planStatus 方案状态
      * @return true 表示方案可被工序引用
      */
-    boolean existsByIdAndStatusAndDeletedFalse(Long id, Integer status);
+    boolean existsByIdAndPlanStatusAndDeletedFalse(Long id, String planStatus);
 
     /**
-     * 批量查询启用且未删除检验方案。
+     * 批量查询生效且未删除检验方案。
      *
-     * @param ids    检验方案主键集合
-     * @param status 启用状态
+     * @param ids        检验方案主键集合
+     * @param planStatus 方案状态
      * @return 可用检验方案列表
      */
-    List<CraftQualityPlanReferenceEntity> findByIdInAndStatusAndDeletedFalse(
-            Collection<Long> ids, Integer status);
+    List<CraftQualityPlanReferenceEntity> findByIdInAndPlanStatusAndDeletedFalse(
+            Collection<Long> ids, String planStatus);
 
     /**
      * 按主键升序写锁可用检验方案，供路线审核在锁内复核引用。
      *
-     * @param ids    检验方案主键集合
-     * @param status 启用状态
+     * @param ids        检验方案主键集合
+     * @param planStatus 方案状态
      * @return 已锁定检验方案列表
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT plan FROM CraftQualityPlanReferenceEntity plan
             WHERE plan.id IN :ids
-              AND plan.status = :status
+              AND plan.planStatus = :planStatus
               AND plan.deleted = false
             ORDER BY plan.id ASC
             """)
     List<CraftQualityPlanReferenceEntity> findAvailableByIdInForUpdateOrderByIdAsc(
-            @Param("ids") Collection<Long> ids, @Param("status") Integer status);
+            @Param("ids") Collection<Long> ids, @Param("planStatus") String planStatus);
 }

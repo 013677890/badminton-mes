@@ -28,6 +28,9 @@ public final class SystemRedisKeyConstants {
     /** 登录失败锁定阈值：连续失败达到该次数后锁定 */
     public static final int LOGIN_FAIL_MAX = 5;
 
+    /** 微信小程序绑定票据 Key 模板，参数为随机票据 */
+    public static final String MINI_APP_BIND_TICKET = "mes:system:mini-app:bind-ticket:%s";
+
     /**
      * 构造会话正查 Key。
      *
@@ -56,6 +59,16 @@ public final class SystemRedisKeyConstants {
      */
     public static String loginFailKey(String userNo) {
         return String.format(LOGIN_FAIL, userNo);
+    }
+
+    /**
+     * 构造微信小程序绑定票据 Key。
+     *
+     * @param ticket 随机票据
+     * @return Redis Key
+     */
+    public static String miniAppBindTicketKey(String ticket) {
+        return String.format(MINI_APP_BIND_TICKET, ticket);
     }
 
     private SystemRedisKeyConstants() {

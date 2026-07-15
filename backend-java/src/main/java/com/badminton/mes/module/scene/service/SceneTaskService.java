@@ -13,6 +13,8 @@ import com.badminton.mes.module.production.dal.entity.WorkOrderEntity;
 import com.badminton.mes.module.production.dal.repository.WorkOrderRepository;
 import com.badminton.mes.module.scene.dal.entity.SceneProcessTaskEntity;
 import com.badminton.mes.module.scene.dal.entity.SceneProductionTaskEntity;
+import com.badminton.mes.module.scene.dal.repository.SceneDependencyQueryRepository;
+import com.badminton.mes.module.scene.dal.repository.SceneDependencyQueryRepository.WorkOrderSnapshot;
 import com.badminton.mes.module.scene.dal.repository.SceneProcessTaskRepository;
 import com.badminton.mes.module.scene.dal.repository.SceneProductionTaskRepository;
 import com.badminton.mes.module.scene.enums.SceneTaskStatusEnum;
@@ -29,23 +31,32 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SceneTaskService {
 
+    /** prod_task.source_type 取值：1 派工下发。 */
+    private static final int SOURCE_TYPE_DISPATCH_ISSUE = 1;
+
     private final SceneProductionTaskRepository productionTaskRepository;
     private final SceneProcessTaskRepository processTaskRepository;
     private final WorkOrderRepository workOrderRepository;
     private final CraftRouteDetailRepository routeDetailRepository;
+    private final SceneDependencyQueryRepository dependencyQueryRepository;
 
     public SceneTaskService(SceneProductionTaskRepository productionTaskRepository,
                             SceneProcessTaskRepository processTaskRepository,
                             WorkOrderRepository workOrderRepository,
-                            CraftRouteDetailRepository routeDetailRepository) {
+                            CraftRouteDetailRepository routeDetailRepository,
+                            SceneDependencyQueryRepository dependencyQueryRepository) {
         this.productionTaskRepository = productionTaskRepository;
         this.processTaskRepository = processTaskRepository;
         this.workOrderRepository = workOrderRepository;
         this.routeDetailRepository = routeDetailRepository;
+        this.dependencyQueryRepository = dependencyQueryRepository;
     }
 
     /**
      * 幂等生成现场生产任务及工序任务快照。
+     *
+     * <p>prod_task 的工单、产品、路线、车间产线快照列均为非空列，
+     * 统一从 {@link SceneDependencyQueryRepository} 的联查快照取值，缺一不可。
      *
      * @param dispatch 已审核派工单
      * @return 现场生产任务主键
@@ -67,6 +78,11 @@ public class SceneTaskService {
                     ProductionErrorCodeConstants.WORK_ORDER_RELEASE_MISSING_BOM_ROUTING);
         }
 
+        WorkOrderSnapshot snapshot = dependencyQueryRepository
+                .findWorkOrderSnapshot(dispatch.getWorkOrderId(), dispatch.getLineId())
+                .orElseThrow(() -> new ServiceException(
+                        ProductionErrorCodeConstants.WORK_ORDER_ROUTING_NOT_AVAILABLE));
+
         List<CraftRouteDetailEntity> routeSteps = routeDetailRepository
                 .findByRouteIdAndDeletedFalseOrderBySequenceNoAsc(workOrder.getRoutingId());
         if (routeSteps.isEmpty()) {
@@ -76,12 +92,26 @@ public class SceneTaskService {
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
         SceneProductionTaskEntity task = new SceneProductionTaskEntity();
         task.setTaskNo(dispatch.getDispatchNo());
+        task.setSourceType(SOURCE_TYPE_DISPATCH_ISSUE);
         task.setDispatchOrderId(dispatch.getId());
         task.setWorkOrderId(dispatch.getWorkOrderId());
+        task.setWorkOrderNo(snapshot.workOrderNo());
+        task.setProductId(snapshot.productId());
+        task.setProductCode(snapshot.productCode());
+        task.setProductName(snapshot.productName());
+        task.setBatchNo(snapshot.batchNo());
         task.setRoutingId(workOrder.getRoutingId());
+        task.setRoutingCode(snapshot.routingCode());
+        task.setRoutingVersion(snapshot.routingVersion());
+        task.setWorkshopId(snapshot.workshopId());
+        task.setWorkshopName(snapshot.workshopName());
         task.setLineId(dispatch.getLineId());
+        task.setLineName(snapshot.lineName());
         task.setShiftId(dispatch.getShiftId());
+        task.setPlanDate(dispatch.getPlanDate());
         task.setPlanQuantity(dispatch.getPlanQuantity());
+        task.setPlanStartTime(dispatch.getPlanStartTime());
+        task.setPlanEndTime(dispatch.getPlanEndTime());
         task.setTaskStatus(SceneTaskStatusEnum.PENDING.getStatus());
         task.setQualifiedQuantity(BigDecimal.ZERO);
         task.setDefectQuantity(BigDecimal.ZERO);

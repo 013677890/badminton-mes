@@ -9,6 +9,7 @@ import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.barcode.service.BarcodeSceneService;
+import com.badminton.mes.module.production.service.WorkOrderExecutionSummaryService;
 import com.badminton.mes.module.scene.constants.SceneErrorCodeConstants;
 import com.badminton.mes.module.scene.controller.vo.SceneProductionParameterRespVO;
 import com.badminton.mes.module.scene.controller.vo.SceneWorkReportReverseReqVO;
@@ -48,9 +49,11 @@ class SceneWorkReportTransactionalServiceTest {
     private final SceneDataScopeService dataScopeService = mock(SceneDataScopeService.class);
     private final SceneProductionParameterService parameterService = mock(SceneProductionParameterService.class);
     private final BarcodeSceneService barcodeSceneService = mock(BarcodeSceneService.class);
+    private final WorkOrderExecutionSummaryService workOrderExecutionSummaryService =
+            mock(WorkOrderExecutionSummaryService.class);
     private final SceneWorkReportTransactionalService service = new SceneWorkReportTransactionalService(
             reportRepository, taskRepository, detailRepository, dataScopeService,
-            parameterService, barcodeSceneService);
+            parameterService, barcodeSceneService, workOrderExecutionSummaryService);
 
     @BeforeEach
     void setUp() {
@@ -87,6 +90,7 @@ class SceneWorkReportTransactionalServiceTest {
         assertThat(task().getId()).isEqualTo(1L);
         verify(taskRepository).save(any(SceneProductionTaskEntity.class));
         verify(detailRepository).save(any(SceneDispatchDetailEntity.class));
+        verify(workOrderExecutionSummaryService).adjustReportedQuantities(21L, 10, 2, 1);
     }
 
     @Test
@@ -186,6 +190,7 @@ class SceneWorkReportTransactionalServiceTest {
         assertThat(task.getInputQuantity()).isZero();
         assertThat(task.getGoodQuantity()).isZero();
         assertThat(detail.getDefectQuantity()).isZero();
+        verify(workOrderExecutionSummaryService).adjustReportedQuantities(21L, -10, -2, -1);
     }
 
     @Test
@@ -232,6 +237,7 @@ class SceneWorkReportTransactionalServiceTest {
     private SceneProductionTaskEntity task() {
         SceneProductionTaskEntity task = new SceneProductionTaskEntity();
         task.setId(1L);
+        task.setWorkOrderId(21L);
         task.setProductId(11L);
         task.setBatchNo("BATCH-1");
         task.setWorkshopId(4L);

@@ -9,6 +9,8 @@ import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.barcode.service.BarcodeSceneService;
+import com.badminton.mes.module.integration.service.CompletionOrderPublishService;
+import com.badminton.mes.module.production.service.WorkOrderExecutionSummaryService;
 import com.badminton.mes.module.scene.constants.SceneErrorCodeConstants;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionCreateReqVO;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionAuditReqVO;
@@ -76,7 +78,7 @@ class SceneM3DataScopeTest {
         BarcodeSceneService barcodeService = mock(BarcodeSceneService.class);
         SceneWorkReportTransactionalService service = new SceneWorkReportTransactionalService(
                 reportRepository, taskRepository, detailRepository, dataScopeService,
-                parameterService, barcodeService);
+                parameterService, barcodeService, mock(WorkOrderExecutionSummaryService.class));
         SceneWorkReportEntity source = new SceneWorkReportEntity();
         source.setId(3L);
         source.setTaskId(1L);
@@ -192,7 +194,7 @@ class SceneM3DataScopeTest {
         BarcodeSceneService barcodeService = mock(BarcodeSceneService.class);
         SceneWorkReportTransactionalService service = new SceneWorkReportTransactionalService(
                 reportRepository, taskRepository, detailRepository, dataScopeService,
-                parameterService, barcodeService);
+                parameterService, barcodeService, mock(WorkOrderExecutionSummaryService.class));
         SceneDispatchDetailEntity detail = new SceneDispatchDetailEntity();
         detail.setId(2L);
         detail.setTaskId(1L);
@@ -218,7 +220,8 @@ class SceneM3DataScopeTest {
         when(taskRepository.findByIdAndDeletedFalseForUpdate(1L)).thenReturn(Optional.of(task));
         SceneCompletionOrderServiceImpl service = new SceneCompletionOrderServiceImpl(
                 orderRepository, syncRecordRepository, taskRepository, dataScopeService,
-                syncClient, syncResultService);
+                syncClient, syncResultService, mock(WorkOrderExecutionSummaryService.class),
+                mock(CompletionOrderPublishService.class));
         return new CompletionFixture(service, orderRepository, taskRepository, syncClient);
     }
 

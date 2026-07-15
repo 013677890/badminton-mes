@@ -6,6 +6,9 @@ import java.util.UUID;
 
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
+import com.badminton.mes.module.integration.service.CompletionOrderPublishService;
+import com.badminton.mes.module.integration.service.dto.ApprovedCompletionDTO;
+import com.badminton.mes.module.production.service.WorkOrderExecutionSummaryService;
 import com.badminton.mes.module.scene.constants.SceneErrorCodeConstants;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionAuditReqVO;
 import com.badminton.mes.module.scene.controller.vo.SceneCompletionCreateReqVO;
@@ -47,19 +50,25 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
     private final SceneDataScopeService dataScopeService;
     private final CompletionSyncClient syncClient;
     private final CompletionSyncResultService syncResultService;
+    private final WorkOrderExecutionSummaryService workOrderExecutionSummaryService;
+    private final CompletionOrderPublishService completionOrderPublishService;
 
     public SceneCompletionOrderServiceImpl(SceneCompletionOrderRepository orderRepository,
                                            SceneCompletionSyncRecordRepository syncRecordRepository,
                                            SceneProductionTaskRepository taskRepository,
                                            SceneDataScopeService dataScopeService,
                                            CompletionSyncClient syncClient,
-                                           CompletionSyncResultService syncResultService) {
+                                           CompletionSyncResultService syncResultService,
+                                           WorkOrderExecutionSummaryService workOrderExecutionSummaryService,
+                                           CompletionOrderPublishService completionOrderPublishService) {
         this.orderRepository = orderRepository;
         this.syncRecordRepository = syncRecordRepository;
         this.taskRepository = taskRepository;
         this.dataScopeService = dataScopeService;
         this.syncClient = syncClient;
         this.syncResultService = syncResultService;
+        this.workOrderExecutionSummaryService = workOrderExecutionSummaryService;
+        this.completionOrderPublishService = completionOrderPublishService;
     }
 
     @Override
@@ -136,6 +145,9 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
                 task.setActualEndTime(LocalDateTime.now());
             }
             taskRepository.save(task);
+            workOrderExecutionSummaryService.addApprovedCompletion(
+                    order.getWorkOrderId(), order.getFinishQuantity());
+            completionOrderPublishService.publishApproved(toApprovedCompletion(order, task));
         }
         orderRepository.save(order);
     }
@@ -226,6 +238,14 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
             return "外部同步失败";
         }
         return message.substring(0, Math.min(500, message.length()));
+    }
+
+    private ApprovedCompletionDTO toApprovedCompletion(SceneCompletionOrderEntity order,
+                                                        SceneProductionTaskEntity task) {
+        return new ApprovedCompletionDTO(order.getFinishNo(), task.getId(), order.getWorkOrderId(),
+                task.getWorkOrderNo(), order.getProductId(), task.getProductCode(), task.getProductName(),
+                order.getBatchNo(), order.getFinishQuantity(), order.getGoodQuantity(),
+                order.getDefectQuantity(), order.getAuditBy(), order.getAuditTime(), order.getAuditRemark());
     }
 
     private String number() {

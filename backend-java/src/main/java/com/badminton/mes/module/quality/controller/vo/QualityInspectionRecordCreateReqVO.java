@@ -17,6 +17,9 @@ public class QualityInspectionRecordCreateReqVO {
     @Positive(message = "生产工单必须为正整数")
     private Long workOrderId;
 
+    @Positive(message = "生产任务必须为正整数")
+    private Long productionTaskId;
+
     @Positive(message = "来源单据必须为正整数")
     private Long sourceDocumentId;
 
@@ -31,6 +34,9 @@ public class QualityInspectionRecordCreateReqVO {
 
     @Positive(message = "产线必须为正整数")
     private Long productionLineId;
+
+    @Positive(message = "工序必须为正整数")
+    private Long processId;
 
     @NotBlank(message = "产品批次号不能为空")
     @Size(max = 64, message = "产品批次号长度不能超过 64")

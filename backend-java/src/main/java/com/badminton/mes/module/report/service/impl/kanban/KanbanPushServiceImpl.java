@@ -20,6 +20,10 @@ public class KanbanPushServiceImpl implements KanbanPushService {
             Object payload = snapshotService.refresh(scope.type(), scope.id());
             String scopeId = scope.id() == null ? "0" : scope.id().toString();
             messagingTemplate.convertAndSend("/topic/report/kanban/" + scope.type() + "/" + scopeId, payload);
+            if (scope.id() != null) {
+                messagingTemplate.convertAndSend("/topic/report/mini_app/realtime/"
+                        + scope.type() + "/" + scopeId, payload);
+            }
         }
     }
 }

@@ -132,15 +132,18 @@ public class ProductTraceServiceImpl implements ProductTraceService {
                     item.setSummary(row.getStatus() + "，返修数量 " + row.getRepairQuantity());
                     item.setEventTime(row.getUpdatedTime()); return item;
                 }).toList());
+        result.setQualityDefects(repository.listTraceQualityDefects(task).stream()
+                .map(this::toOptionalSourceItem).toList());
+        result.setEquipmentStatuses(repository.listTraceEquipmentStatuses(task).stream()
+                .map(this::toOptionalSourceItem).toList());
+        result.setAndonExceptions(repository.listTraceAndonEvents(task).stream()
+                .map(this::toOptionalSourceItem).toList());
         List<String> warnings = new ArrayList<>();
         warnings.add("MATERIAL_BATCH：A组当前仅提供工单物料需求和领料数量，未提供实际消耗物料批次");
         warnings.add("PACKING：装箱明细表尚未落库，当前追溯不含装箱信息");
-        warnings.add("QUALITY_INSPECTION：C组质量结果表契约尚未落库，当前追溯不含质量不良");
         if (result.getRepairRecords().isEmpty()) {
             warnings.add("REPAIR：当前批次没有返修记录");
         }
-        warnings.add("EQUIPMENT：C组设备状态表契约尚未落库，当前追溯不含设备状态");
-        warnings.add("ANDON：C组安灯事件表契约尚未落库，当前追溯不含安灯异常");
         result.setWarnings(List.copyOf(warnings));
         result.setDataCompleteness("PARTIAL");
         return result;
@@ -190,5 +193,15 @@ public class ProductTraceServiceImpl implements ProductTraceService {
         result.setReverseReason(row.reverseReason());
         result.setReportTime(row.reportTime());
         return result;
+    }
+
+    private ProductTraceRespVO.OptionalSourceItem toOptionalSourceItem(
+            com.badminton.mes.module.report.dal.ReportQueryRows.TraceOptionalSource row) {
+        ProductTraceRespVO.OptionalSourceItem item = new ProductTraceRespVO.OptionalSourceItem();
+        item.setSourceType(row.sourceType());
+        item.setSourceId(row.sourceId());
+        item.setSummary(row.summary());
+        item.setEventTime(row.eventTime());
+        return item;
     }
 }

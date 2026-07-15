@@ -118,6 +118,10 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode WORK_ORDER_FINISH_EXCEED_LIMIT =
             new ErrorCode("A0420", "完工数量超过允许超产上限", "完工数量超出计划数量与超产比例限制，请核对报工数据");
 
+    /** 现场执行汇总与工单数量约束不一致 */
+    public static final ErrorCode WORK_ORDER_EXECUTION_QUANTITY_INVALID =
+            new ErrorCode("A0420", "工单执行汇总数量不合法", "报工、冲销或完工数量与工单汇总不一致，请刷新后重试");
+
     /** 计划变更后物料需求数量低于已领数量 */
     public static final ErrorCode WORK_ORDER_MATERIAL_ISSUED_EXCEED =
             new ErrorCode("A0420", "物料需求数量不能低于已领数量", "计划数量下调后物料需求低于已领数量，请先处理领料再变更计划");

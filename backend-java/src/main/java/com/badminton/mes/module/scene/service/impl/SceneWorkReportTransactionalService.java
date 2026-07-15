@@ -7,6 +7,7 @@ import java.util.UUID;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.barcode.service.BarcodeSceneService;
+import com.badminton.mes.module.production.service.WorkOrderExecutionSummaryService;
 import com.badminton.mes.module.scene.constants.SceneErrorCodeConstants;
 import com.badminton.mes.module.scene.constants.SceneParameterCodes;
 import com.badminton.mes.module.scene.controller.vo.SceneEffectiveParameterReqVO;
@@ -46,19 +47,22 @@ public class SceneWorkReportTransactionalService {
     private final SceneDataScopeService dataScopeService;
     private final SceneProductionParameterService parameterService;
     private final BarcodeSceneService barcodeSceneService;
+    private final WorkOrderExecutionSummaryService workOrderExecutionSummaryService;
 
     public SceneWorkReportTransactionalService(SceneWorkReportRepository reportRepository,
                                                SceneProductionTaskRepository taskRepository,
                                                SceneDispatchDetailRepository detailRepository,
                                                SceneDataScopeService dataScopeService,
                                                SceneProductionParameterService parameterService,
-                                               BarcodeSceneService barcodeSceneService) {
+                                               BarcodeSceneService barcodeSceneService,
+                                               WorkOrderExecutionSummaryService workOrderExecutionSummaryService) {
         this.reportRepository = reportRepository;
         this.taskRepository = taskRepository;
         this.detailRepository = detailRepository;
         this.dataScopeService = dataScopeService;
         this.parameterService = parameterService;
         this.barcodeSceneService = barcodeSceneService;
+        this.workOrderExecutionSummaryService = workOrderExecutionSummaryService;
     }
 
     /**
@@ -237,6 +241,9 @@ public class SceneWorkReportTransactionalService {
         detail.setDefectQuantity(detail.getDefectQuantity() + direction * report.getDefectQuantity());
         taskRepository.save(task);
         detailRepository.save(detail);
+        workOrderExecutionSummaryService.adjustReportedQuantities(task.getWorkOrderId(),
+                direction * report.getInputQuantity(), direction * report.getDefectQuantity(),
+                direction * report.getReworkQuantity());
     }
 
     private String number(String prefix) {

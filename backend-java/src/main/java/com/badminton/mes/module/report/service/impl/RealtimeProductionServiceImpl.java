@@ -7,6 +7,7 @@ import com.badminton.mes.module.report.controller.vo.RealtimeProductionRespVO;
 import com.badminton.mes.module.report.controller.vo.RealtimeReportQueryReqVO;
 import com.badminton.mes.module.report.dal.ReportQueryRepository;
 import com.badminton.mes.module.report.dal.ReportQueryRows.RealtimeTask;
+import com.badminton.mes.module.report.dal.ReportQueryRows.RealtimeSupport;
 import com.badminton.mes.module.report.service.RealtimeProductionService;
 import com.badminton.mes.module.report.service.ReportDataScopeService;
 import com.badminton.mes.module.report.service.ReportDataScopeService.ReportDataScope;
@@ -43,11 +44,16 @@ public class RealtimeProductionServiceImpl implements RealtimeProductionService 
         result.setInputQuantity(rows.stream().mapToLong(row -> zero(row.inputQuantity())).sum());
         result.setGoodQuantity(rows.stream().mapToLong(row -> zero(row.goodQuantity())).sum());
         result.setDefectQuantity(rows.stream().mapToLong(row -> zero(row.defectQuantity())).sum());
+        ReportDataScope scope = dataScopeService.resolve(reqVO.getWorkshopId(), reqVO.getLineId());
+        RealtimeSupport support = repository.loadRealtimeSupport(scope.workshopId(), scope.lineId());
+        result.setEquipmentTotalCount(support.equipmentTotalCount());
+        result.setRunningEquipmentCount(support.runningEquipmentCount());
+        result.setUnavailableEquipmentCount(support.unavailableEquipmentCount());
+        result.setOpenAndonCount(support.openAndonCount());
+        result.setCriticalAndonCount(support.criticalAndonCount());
         result.setLastRefreshTime(LocalDateTime.now());
         result.setDataStatus("PARTIAL");
-        result.setWarnings(List.of(
-                "EQUIPMENT：C组设备状态与OEE表契约尚未落库，实时总览不含设备状态",
-                "ANDON：C组安灯事件表契约尚未落库，实时总览不含未处理异常"));
+        result.setWarnings(List.of("EQUIPMENT_OEE：已接入设备状态，C组当前未提供OEE事实表，OEE指标暂不展示"));
         return result;
     }
 

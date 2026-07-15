@@ -3,8 +3,7 @@ package com.badminton.mes.module.report.service.impl.miniapp;
 import com.badminton.mes.module.report.controller.vo.*;
 import com.badminton.mes.module.report.service.*;
 import com.badminton.mes.module.report.service.miniapp.MiniAppDashboardService;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /** 微信小程序展示聚合服务实现。 @author 刘涵 */
@@ -23,10 +22,10 @@ public class MiniAppDashboardServiceImpl implements MiniAppDashboardService {
     }
 
     @Override
-    public Map<String, Object> realtimeDashboard(RealtimeReportQueryReqVO request) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("overview", realtimeService.overview(request));
-        result.put("tasks", realtimeService.tasks(request));
+    public MiniAppRealtimeDashboardRespVO realtimeDashboard(RealtimeReportQueryReqVO request) {
+        MiniAppRealtimeDashboardRespVO result = new MiniAppRealtimeDashboardRespVO();
+        result.setOverview(realtimeService.overview(request));
+        result.setTasks(List.copyOf(realtimeService.tasks(request)));
         return result;
     }
 

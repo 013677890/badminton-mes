@@ -12,9 +12,11 @@ import com.badminton.mes.module.report.controller.vo.ProductTraceQueryReqVO;
 import com.badminton.mes.module.report.controller.vo.ProductTraceRespVO;
 import com.badminton.mes.module.report.controller.vo.ProductionReportRespVO;
 import com.badminton.mes.module.report.controller.vo.ReportQueryReqVO;
+import com.badminton.mes.module.report.controller.vo.RealtimeReportQueryReqVO;
 import com.badminton.mes.module.report.service.DefectReportService;
 import com.badminton.mes.module.report.service.ProductTraceService;
 import com.badminton.mes.module.report.service.ProductionReportService;
+import com.badminton.mes.module.report.service.RealtimeProductionService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -47,6 +49,9 @@ class ReportM4IntegrationTest {
     private static final Long MATERIAL_ID = 9_400_007L;
     private static final Long WORKSHOP_ID = 9_400_008L;
     private static final Long LINE_ID = 9_400_009L;
+    private static final Long QUALITY_RECORD_ID = 9_400_010L;
+    private static final Long EQUIPMENT_ID = 9_400_011L;
+    private static final Long ANDON_EVENT_ID = 9_400_012L;
     private static final String BATCH_NO = "M4-TRACE-BATCH";
 
     @Autowired
@@ -60,6 +65,9 @@ class ReportM4IntegrationTest {
 
     @Autowired
     private DefectReportService defectReportService;
+
+    @Autowired
+    private RealtimeProductionService realtimeProductionService;
 
     @BeforeEach
     void setUp() {
@@ -102,7 +110,10 @@ class ReportM4IntegrationTest {
         assertThat(result.getWorkReports()).hasSize(2);
         assertThat(result.getMaterials()).hasSize(1);
         assertThat(result.getDataCompleteness()).isEqualTo("PARTIAL");
-        assertThat(result.getWarnings()).anyMatch(warning -> warning.startsWith("QUALITY_INSPECTION"));
+        assertThat(result.getQualityDefects()).hasSize(1);
+        assertThat(result.getEquipmentStatuses()).hasSize(1);
+        assertThat(result.getAndonExceptions()).hasSize(1);
+        assertThat(result.getWarnings()).noneMatch(warning -> warning.startsWith("QUALITY_INSPECTION"));
     }
 
     @Test
@@ -112,9 +123,24 @@ class ReportM4IntegrationTest {
         assertThat(result.getSceneOccurrenceQuantity()).isEqualTo(5);
         assertThat(result.getSceneReversalQuantity()).isEqualTo(2);
         assertThat(result.getSceneDefectQuantity()).isEqualTo(3);
+        assertThat(result.getQualityDefectQuantity()).isEqualTo(3);
         assertThat(result.getComprehensiveDefectQuantity()).isEqualTo(3);
         assertThat(result.getComprehensiveEventCount()).isEqualTo(1);
-        assertThat(result.getWarnings()).hasSize(2);
+        assertThat(result.getWarnings()).isEmpty();
+    }
+
+    @Test
+    void realtimeOverviewIncludesEquipmentAndAndonSupport() {
+        RealtimeReportQueryReqVO request = new RealtimeReportQueryReqVO();
+        request.setWorkshopId(WORKSHOP_ID);
+        request.setLineId(LINE_ID);
+
+        var result = realtimeProductionService.overview(request);
+
+        assertThat(result.getEquipmentTotalCount()).isEqualTo(1);
+        assertThat(result.getRunningEquipmentCount()).isEqualTo(1);
+        assertThat(result.getOpenAndonCount()).isEqualTo(1);
+        assertThat(result.getCriticalAndonCount()).isEqualTo(1);
     }
 
     @Test
@@ -194,9 +220,10 @@ class ReportM4IntegrationTest {
                 """, BARCODE_ID, BATCH_NO, WORK_ORDER_ID, TASK_ID);
         jdbcTemplate.update("""
                 INSERT INTO barcode_use_record
-                    (barcode_id, task_id, process_id, user_id, use_type, business_time, is_deleted)
-                VALUES (?, ?, 9400500, 1, 3, NOW(), 0)
-                """, BARCODE_ID, TASK_ID);
+                    (barcode_id, task_id, process_id, user_id, equipment_id,
+                     use_type, business_time, is_deleted)
+                VALUES (?, ?, 9400500, 1, ?, 3, NOW(), 0)
+                """, BARCODE_ID, TASK_ID, EQUIPMENT_ID);
         jdbcTemplate.update("""
                 INSERT INTO prod_batch_process_history
                     (batch_status_id, task_id, dispatch_detail_id, batch_no, process_id,
@@ -214,6 +241,34 @@ class ReportM4IntegrationTest {
                     (work_order_id, material_id, require_quantity, issued_quantity, is_deleted)
                 VALUES (?, ?, 100.0000, 80.0000, 0)
                 """, WORK_ORDER_ID, MATERIAL_ID);
+        jdbcTemplate.update("""
+                INSERT INTO quality_inspection_record
+                    (id, inspection_no, inspection_type, plan_id, plan_code_snapshot,
+                     plan_version_snapshot, work_order_id, production_task_id, product_id,
+                     production_line_id, process_id, batch_no, sample_quantity, record_status,
+                     conclusion, release_status, defect_group_no, defect_quantity,
+                     nonconformance_description, disposition, inspector_id, inspected_at,
+                     create_by, is_deleted)
+                VALUES (?, 'M4-QI', 'PATROL', 9400900, 'M4-PLAN', 1, ?, ?, 9400200,
+                        ?, 9400500, ?, 10, 'SUBMITTED', 'REWORK', 'BLOCKED', 'M4-D001', 3,
+                        '外观破损', '返修', 1, NOW(), 1, 0)
+                """, QUALITY_RECORD_ID, WORK_ORDER_ID, TASK_ID, LINE_ID, BATCH_NO);
+        jdbcTemplate.update("""
+                INSERT INTO equip_ledger
+                    (id, equipment_code, equipment_name, category_id, workshop_id,
+                     production_line_id, equipment_status, status, create_by, is_deleted)
+                VALUES (?, 'M4-EQ', 'M4设备', 1, ?, ?, 'RUNNING', 1, 1, 0)
+                """, EQUIPMENT_ID, WORKSHOP_ID, LINE_ID);
+        jdbcTemplate.update("""
+                INSERT INTO andon_event
+                    (id, event_no, andon_type_id, source_channel, severity, workshop_id,
+                     production_line_id, work_order_id, production_task_id, process_id,
+                     equipment_id, batch_no, description, event_status, timeout_status,
+                     light_status, initiated_by, is_deleted)
+                VALUES (?, 'M4-ANDON', 1, 'SYSTEM', 'CRITICAL', ?, ?, ?, ?, 9400500,
+                        ?, ?, '设备异常停机', 'PROCESSING', 'NORMAL', 'NOT_REQUIRED', 1, 0)
+                """, ANDON_EVENT_ID, WORKSHOP_ID, LINE_ID, WORK_ORDER_ID, TASK_ID,
+                EQUIPMENT_ID, BATCH_NO);
     }
 
     private void login(String role, Long workshopId, Long lineId) {
@@ -227,10 +282,13 @@ class ReportM4IntegrationTest {
     }
 
     private void cleanup() {
+        jdbcTemplate.update("DELETE FROM andon_event WHERE id=?", ANDON_EVENT_ID);
+        jdbcTemplate.update("DELETE FROM quality_inspection_record WHERE id=?", QUALITY_RECORD_ID);
         jdbcTemplate.update("DELETE FROM prod_work_order_material WHERE work_order_id=?", WORK_ORDER_ID);
         jdbcTemplate.update("DELETE FROM base_material WHERE id=?", MATERIAL_ID);
         jdbcTemplate.update("DELETE FROM prod_batch_process_history WHERE task_id=?", TASK_ID);
         jdbcTemplate.update("DELETE FROM barcode_use_record WHERE barcode_id=?", BARCODE_ID);
+        jdbcTemplate.update("DELETE FROM equip_ledger WHERE id=?", EQUIPMENT_ID);
         jdbcTemplate.update("DELETE FROM barcode WHERE id=?", BARCODE_ID);
         jdbcTemplate.update("DELETE FROM prod_report_defect WHERE report_id IN (?, ?)", REPORT_ID, REVERSAL_ID);
         jdbcTemplate.update("DELETE FROM prod_report WHERE task_id=?", TASK_ID);

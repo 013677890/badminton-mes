@@ -24,6 +24,7 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/report/kanban").setAllowedOriginPatterns("*");
+        registry.addEndpoint("/ws/report/mini_app").setAllowedOriginPatterns("*");
     }
 
     @Override
@@ -61,12 +62,17 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
         LoginUser user = attributes == null ? null : (LoginUser) attributes.get(LOGIN_USER_ATTRIBUTE);
         if (user == null) throw new MessagingException("WebSocket 未认证");
         String destination = accessor.getDestination();
-        if (destination == null || !destination.startsWith("/topic/report/kanban/")) throw new MessagingException("非法订阅主题");
+        if (destination == null) throw new MessagingException("非法订阅主题");
+        boolean kanbanTopic = destination.startsWith("/topic/report/kanban/");
+        boolean miniAppTopic = destination.startsWith("/topic/report/mini_app/realtime/");
+        if (!kanbanTopic && !miniAppTopic) throw new MessagingException("非法订阅主题");
         if (user.getRoleCodes().contains(RoleCodeConstants.ADMIN) || user.getRoleCodes().contains(RoleCodeConstants.PMC)) return;
         String[] parts = destination.split("/");
-        if (parts.length < 7) throw new MessagingException("非法订阅主题");
-        String scopeType = parts[5]; Long scopeId;
-        try { scopeId = Long.valueOf(parts[6]); } catch (NumberFormatException exception) { throw new MessagingException("非法订阅范围", exception); }
+        int scopeTypeIndex = miniAppTopic ? 5 : 5;
+        int scopeIdIndex = miniAppTopic ? 6 : 6;
+        if (parts.length <= scopeIdIndex) throw new MessagingException("非法订阅主题");
+        String scopeType = parts[scopeTypeIndex]; Long scopeId;
+        try { scopeId = Long.valueOf(parts[scopeIdIndex]); } catch (NumberFormatException exception) { throw new MessagingException("非法订阅范围", exception); }
         boolean allowed = "workshop".equals(scopeType) ? scopeId.equals(user.getWorkshopId())
                 : "line".equals(scopeType) && scopeId.equals(user.getLineId());
         if (!allowed) throw new MessagingException("无权订阅该看板范围");

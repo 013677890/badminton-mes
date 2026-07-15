@@ -41,6 +41,9 @@ public class QualityInspectionRecordEntity {
     @Column(name = "work_order_id")
     private Long workOrderId;
 
+    @Column(name = "production_task_id")
+    private Long productionTaskId;
+
     @Column(name = "source_document_id")
     private Long sourceDocumentId;
 
@@ -56,6 +59,9 @@ public class QualityInspectionRecordEntity {
     @Column(name = "production_line_id")
     private Long productionLineId;
 
+    @Column(name = "process_id")
+    private Long processId;
+
     @Column(name = "batch_no")
     private String batchNo;
 
@@ -70,6 +76,12 @@ public class QualityInspectionRecordEntity {
 
     @Column(name = "release_status")
     private String releaseStatus;
+
+    @Column(name = "defect_group_no")
+    private String defectGroupNo;
+
+    @Column(name = "defect_quantity")
+    private Integer defectQuantity;
 
     @Column(name = "nonconformance_description")
     private String nonconformanceDescription;

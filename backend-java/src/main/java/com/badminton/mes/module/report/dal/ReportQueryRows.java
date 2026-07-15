@@ -70,6 +70,13 @@ public final class ReportQueryRows {
                                LocalDateTime updateTime) {
     }
 
+    public record RealtimeSupport(long equipmentTotalCount,
+                                  long runningEquipmentCount,
+                                  long unavailableEquipmentCount,
+                                  long openAndonCount,
+                                  long criticalAndonCount) {
+    }
+
     public record TraceTask(Long id,
                             String taskNo,
                             Long workOrderId,
@@ -142,6 +149,12 @@ public final class ReportQueryRows {
                                 String materialName,
                                 BigDecimal requireQuantity,
                                 BigDecimal issuedQuantity) {
+    }
+
+    public record TraceOptionalSource(String sourceType,
+                                      String sourceId,
+                                      String summary,
+                                      LocalDateTime eventTime) {
     }
 
     private ReportQueryRows() {

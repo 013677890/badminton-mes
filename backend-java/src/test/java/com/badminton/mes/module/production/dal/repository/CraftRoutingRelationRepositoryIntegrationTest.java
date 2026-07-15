@@ -45,24 +45,26 @@ class CraftRoutingRelationRepositoryIntegrationTest {
                 VALUES (?, ?, ?, 'MANUAL', 1, 1, 1, 1, 0)
                 """, PROCESS_ID, "M0-PROCESS", "M0验证工序");
         jdbcTemplate.update("""
-                INSERT INTO craft_sop
-                    (id, sop_code, sop_name, version, effect_date, sop_status, create_by, is_deleted)
-                VALUES (?, ?, ?, 'V1', CURRENT_DATE, 1, 1, 0)
-                """, SOP_ID, "M0-SOP", "M0验证SOP");
+                INSERT INTO craft_process_sop
+                    (id, process_id, sop_code, sop_name, sop_version, file_url,
+                     status, create_by, update_by, is_deleted)
+                VALUES (?, ?, ?, ?, 'V1', '/sop/m0.pdf', 1, 1, 1, 0)
+                """, SOP_ID, PROCESS_ID, "M0-SOP", "M0验证SOP");
         jdbcTemplate.update("""
-                INSERT INTO craft_routing
-                    (id, routing_code, routing_name, version, routing_status, create_by, is_deleted)
-                VALUES (?, ?, ?, 'V1', 1, 1, 0)
+                INSERT INTO craft_route
+                    (id, routing_code, routing_name, routing_version, routing_status,
+                     create_by, update_by, is_deleted)
+                VALUES (?, ?, ?, 'V1', 1, 1, 1, 0)
                 """, ROUTING_ID, "M0-ROUTING", "M0验证路线");
         jdbcTemplate.update("""
-                INSERT INTO craft_routing_detail
-                    (routing_id, seq, process_id, sop_id, is_deleted)
-                VALUES (?, 1, ?, ?, 0)
+                INSERT INTO craft_route_detail
+                    (route_id, sequence_no, process_id, sop_id, create_by, update_by, is_deleted)
+                VALUES (?, 1, ?, ?, 1, 1, 0)
                 """, ROUTING_ID, PROCESS_ID, SOP_ID);
         jdbcTemplate.update("""
-                INSERT INTO craft_routing_product
-                    (routing_id, product_id, is_default, is_deleted)
-                VALUES (?, ?, 1, 0)
+                INSERT INTO craft_route_product
+                    (route_id, product_id, is_default, create_by, update_by, is_deleted)
+                VALUES (?, ?, 1, 1, 1, 0)
                 """, ROUTING_ID, PRODUCT_ID);
     }
 
@@ -83,7 +85,7 @@ class CraftRoutingRelationRepositoryIntegrationTest {
     @Test
     @DisplayName("真实数据库：停用SOP会被原生查询识别为不可用")
     void detectsDisabledSopFromMysql() {
-        jdbcTemplate.update("UPDATE craft_sop SET sop_status = 0 WHERE id = ?", SOP_ID);
+        jdbcTemplate.update("UPDATE craft_process_sop SET status = 0 WHERE id = ?", SOP_ID);
 
         RoutingRelationSnapshot snapshot = repository.findRelationSnapshot(ROUTING_ID, PRODUCT_ID);
 

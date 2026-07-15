@@ -17,17 +17,17 @@ public class MiniAppDashboardController {
     }
 
     @GetMapping("/realtime_dashboard")
-    public CommonResult<?> realtime(@Valid RealtimeReportQueryReqVO request) {
+    public CommonResult<MiniAppRealtimeDashboardRespVO> realtime(@Valid RealtimeReportQueryReqVO request) {
         return CommonResult.success(dashboardService.realtimeDashboard(request));
     }
 
     @GetMapping("/production_analysis")
-    public CommonResult<?> production(@Valid ReportQueryReqVO request) {
+    public CommonResult<ProductionReportRespVO.Summary> production(@Valid ReportQueryReqVO request) {
         return CommonResult.success(dashboardService.productionAnalysis(request));
     }
 
     @GetMapping("/product_trace")
-    public CommonResult<?> trace(@Valid ProductTraceQueryReqVO request) {
+    public CommonResult<ProductTraceRespVO> trace(@Valid ProductTraceQueryReqVO request) {
         return CommonResult.success(dashboardService.productTrace(request));
     }
 }

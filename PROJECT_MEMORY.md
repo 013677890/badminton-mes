@@ -1,6 +1,6 @@
 # Badminton MES 项目进度 Memory
 
-> 更新时间：2026-07-13
+> 更新时间：2026-07-14
 >
 > 当前工作分支：`PartB`
 >
@@ -9,8 +9,8 @@
 ## 1. 项目整体状态
 
 - 后端位于 `backend-java`，技术栈为 Java、Spring Boot、Spring Data JPA、MySQL、Redis、Flyway、Gradle、JUnit 5 和 Mockito。
-- 当前已有 `system`、`production`、`equipment`、`barcode` 四个业务包；`scene`、`report`、`quality`、`andon`、`craft`、`wage`、`integration` 等规划模块尚未完整落地。
-- 当前主分支为 `main`，B 组开发分支为 `PartB`；本记录创建时 `PartB` 已跟踪 `origin/PartB`。
+- 当前仓库已包含 `system`、`production`、`craft`、`wage`、`integration`、`equipment`、`quality`、`andon`、`barcode`、`scene`、`report` 等 A/B/C 业务包，B 组 M0-M6 已完成本地实现与联调。
+- 当前工作分支为 `PartB`，已包含合入的 A/C 组代码；本轮未执行提交或推送。
 - 三组职责边界：A 组负责生产订单、工艺、计件工资和 ERP/API；B 组负责条码、现场执行、报工完工、追溯报表、小程序和看板聚合；C 组负责设备、质量和安灯异常闭环。
 
 ## 2. 已完成能力
@@ -23,9 +23,9 @@
 
 ### A/C 组已进入当前仓库的能力
 
-- `production` 已有生产工单样例、状态机、物料需求、状态日志及相关 Repository/Service/Controller 基础能力。
-- `equipment` 已有设备类别 CRUD、层级校验、循环引用检测和数据库迁移。
-- A、C 组的其余规划模块仍需对应责任组继续实现；B 组不得直接访问其他模块的 `dal.repository`。
+- A 组 `production` 已提供生产工单、组织、派工和物料汇总能力，`integration` 已提供 `prod_completion_order` 及 ERP/WMS 读取接口，`craft`、`wage` 也已落库。
+- C 组 `quality` 已提供质量检验记录，`equipment`/`device` 已提供设备台账和状态，`andon` 已提供现场异常事件。
+- B 组通过稳定 Service 或 B 组查询适配器协作：仅更新 A 组约定的工单执行汇总字段，只读 C 组质量、设备和安灯事实，不修改 C 组核心业务状态。
 
 ### B 组 M0：运行、契约与联调基线
 
@@ -43,13 +43,13 @@
 - 已提供 Controller、Service、Repository、DTO/VO、Entity、错误码、数据库迁移和单元测试。
 - 条码表的 MySQL `unsigned` 类型已通过 JPA `columnDefinition` 对齐，Jackson 引用已适配当前 Spring Boot 依赖版本。
 
-## 3. B 组待完成里程碑
+## 3. B 组里程碑状态
 
-- **M2 `scene` 任务与工序作业：未开始。** 需要实现生产任务单、生产派工单、任务分解、工序开工/暂停/恢复/完成及现场作业查询。
-- **M3 报工、完工与返修：未开始。** 需要实现产品生产状态、扫码报工、生产完工、返修工单和关键物料绑定。
-- **M4 `report` 追溯与报表：未开始。** 需要实现关键物料追溯、产品追溯、产量、不良、实时生产信息和车间生产时段报表。
-- **M5 展示聚合：未开始。** 在 `report` 下实现微信小程序实时看板/生产分析/产品追溯，以及产线、车间、中控电子看板接口。
-- 条码模块仍建议补充唯一索引冲突、生成列约束等专项 Repository 集成测试。
+- **M0-M2 已完成。** 基线、条码、任务、派工、扫码作业和状态履历均已落地。
+- **M3 已完成本地 A/B 闭环。** 报工、冲销、完工审核与 A 工单汇总同事务更新，审核完工单可由 A 组读取接口消费。
+- **M4 已完成 A/B/C 报表联调。** C 组质量不良、设备状态和安灯事件已进入 B 组不良聚合、产品追溯和实时总览。
+- **M5-M6 已完成。** 返修、小程序独立目录、电子看板、自动化验收和交付清单均已落地。
+- 当前仅保留真实 ERP/WMS 部署地址与凭据、C 组 OEE 事实表、实际物料消耗批次、装箱明细和多实例 WebSocket 广播等客观边界。
 
 ## 4. 当前协作约束
 
@@ -111,7 +111,7 @@
 - 已新增 `V2026071302__add_b_group_scene_m3_schema.sql` 和独立数据库变更说明，没有修改 Wiki 四个数据库基线文件和历史迁移。
 - 已新增报工与完工聚焦单元测试；通过 `Z:\gradlew.bat -p Z:\ clean test --no-daemon` 完成全量单元测试。
 - 已使用当前 Docker MySQL 8.4/Redis 运行 `integrationTest --rerun-tasks`，Flyway、Hibernate 映射、Spring 上下文和既有真实 Repository 测试通过。
-- 尚未完成的外部项：真实 ERP/WMS 地址端到端演示，以及 A 组工单执行汇总字段的正式写入契约；因此 M3 总里程碑暂不标记为完全完成。
+- 2026-07-14 已补齐 A 组工单执行汇总和完工读取表契约；真实 ERP/WMS 地址端到端演示仍需部署环境提供地址与凭据，但不再阻塞 M3 本地里程碑。
 
 ## 10. B 组 M3 扫码报工、完工草稿与专项测试补充（2026-07-13）
 
@@ -126,21 +126,21 @@
 - 已新增真实 MySQL 事务测试，覆盖报工下游失败时条码状态、条码使用记录、报工和汇总全部回滚；相同请求并发提交只形成一条报工；完工审核失败回滚；同步记录和完工单状态原子回滚。
 - 验证结果：`compileJava`、ASCII 路径下 `clean test`、连接 Docker MySQL/Redis 的 `integrationTest --rerun-tasks` 全部通过。
 - `application-test.yml` 使用 `MES_TEST_DB_*` 和 `MES_TEST_REDIS_*`；从 `.env` 注入测试密码时需要去除外层引号，禁止在日志或文档中输出实际密码。
-- M3 仍未整体完成：真实 ERP/WMS 地址端到端演示和 A 组工单汇总写入契约仍待后续完成；报表默认净额/审计发生额展示已在 M4 闭环。
+- M3 已完成本地闭环：真实 MySQL 测试验证报工、冲销、任务汇总、A 工单汇总、完工审核和 A 组完工读取表；报表默认净额/审计发生额展示已在 M4 闭环。
 
 ## 11. B 组 M4 追溯、报表与同步导出（2026-07-13）
 
 - 已创建 `com.badminton.mes.module.report`，落地产品/条码追溯、产量报表、实时生产、车间时段、不良聚合和同步导出。
 - 产品追溯真实读取当前已落库的 A/B 数据：生产工单、生产任务、条码、扫码使用记录、工序履历、正常/冲销报工和工单物料需求。
-- C 组质量、设备、安灯、M5 返修、实际物料消耗批次和装箱明细尚未落库时，响应返回 `dataCompleteness=PARTIAL` 和明确来源警告；禁止伪造空缺业务事实。
+- C 组质量、设备状态、安灯事件和 M5 返修均已真实接入；实际物料消耗批次、装箱明细和 OEE 事实表尚未提供时，响应返回 `dataCompleteness=PARTIAL` 和明确来源警告，禁止伪造空缺业务事实。
 - 产量和车间时段报表默认使用报工净额，明细同时保留发生额、冲销额、`recordType`、`sourceReportId` 和冲销原因，M3“报表净额/审计发生额”事项已闭环。
-- 不良报表使用 `SCENE_WORK_REPORT`、`QUALITY_INSPECTION`、`REPAIR_RECHECK` 统一来源 DTO；B 组来源已真实接入，C/返修通过可替换适配器降级，聚焦测试验证了跨来源 `defectGroupNo` 去重和无归并号时不自动去重。
+- 不良报表使用 `SCENE_WORK_REPORT`、`QUALITY_INSPECTION`、`REPAIR_RECHECK` 统一来源 DTO；三类来源均已真实接入，测试验证跨来源 `defectGroupNo` 去重和无归并号时不自动去重。
 - 综合不良率分母冻结为同一查询范围内的报工投入数量净额；分母为 0 时返回 0。
 - 同步导出冻结为 UTF-8 CSV、最多 31 天、最多 10000 行；第 10001 行只用于超限判断，超限返回明确业务错误；不建立异步导出队列，不使用 Redis Pub/Sub。
 - 查询和导出均由服务端收敛车间、产线范围：管理员可按请求范围查询；非管理员不得扩大所属车间/产线；车间主管可查询本车间其他产线；导出只允许管理员、PMC 和车间主管。
 - 已新增 Flyway 迁移 `V2026071303__add_b_group_report_m4_indexes.sql`，只为 `prod_report` 和 `prod_task` 增加报表查询索引，并新增独立数据库变更说明。
-- 验证结果：M4 聚焦单元测试在 ASCII 路径通过；Docker MySQL 8.4/Redis `integrationTest --rerun-tasks` 共 10 项、0 失败，覆盖真实 SQL、Flyway、净额、追溯、去重和越权拒绝。
-- M4 代码与测试完成；后续进入 M5。M3 仍保留真实 ERP/WMS 端到端演示和 A 组工单汇总写入两个外部依赖事项。
+- 验证结果：M4 聚焦单元测试在 ASCII 路径通过；2026-07-14 Docker MySQL 8.4/Redis 全量 `integrationTest --rerun-tasks` 共 14 项、0 失败，覆盖真实 SQL、Flyway、净额、追溯、B/C 去重、C 设备/安灯聚合和越权拒绝。
+- M4 代码与 A/B/C 联调测试完成；真实 ERP/WMS 部署地址继续作为外部环境边界记录。
 
 ## 12. B 组 M5 返修、小程序和电子看板（2026-07-14）
 
@@ -153,13 +153,23 @@
 - Redis 快照 Key 为 `report:kanban:snapshot:{scopeType}:{scopeId}`，TTL 90 秒；已访问范围每 60 秒强制刷新并通过 STOMP 推送。
 - WebSocket 端点为 `/ws/report/kanban`，主题为 `/topic/report/kanban/{scopeType}/{scopeId}`；CONNECT 校验 Bearer Redis 会话，SUBSCRIBE 再次校验车间或产线范围。
 - 第一阶段采用单实例 Spring SimpleBroker；不使用 Redis Pub/Sub 承担可靠业务任务。客户端断线后先通过 HTTP 获取含版本号的完整快照，再恢复订阅。
-- 验证结果：ASCII 虚拟盘路径下 `clean test` 全量单元测试通过；加载当前 Docker Compose 连接参数后，真实 MySQL 8.4/Redis `integrationTest --rerun-tasks` 共 10 项、0 失败，Flyway、JPA、Spring 上下文和既有并发事务测试通过。
-- M5 已完成；下一步进入 M6 集成验收与交付，同时保留 M3 的真实 ERP/WMS 端到端演示和 A 组工单汇总写入两个外部依赖事项。
+- 验证结果：ASCII 虚拟盘路径下 `clean test` 全量单元测试通过；2026-07-14 真实 MySQL 8.4/Redis 全量 `integrationTest --rerun-tasks` 共 14 项、0 失败，Flyway、JPA、Spring 上下文和并发事务测试通过。
+- M5 已完成；小程序与看板可复用 M4 返回真实 C 组质量、设备和安灯聚合结果，OEE 缺失继续显式降级。
 
 ## 13. B 组 M6 集成验收与交付（2026-07-14）
 
 - 新增 `M6IntegrationAcceptanceTest`，验证返修、小程序聚合、看板、生产报表和产品追溯服务可在同一 Spring Boot 上下文装配。
 - 新增 `backend-java/docs/M6集成验收与交付清单.md`，固化自动化门槛、最小闭环演示顺序、交付物位置和外部依赖边界。
 - `backend-java/docs/B组后端项目总体实施规划.md` 的 M6 全链路验证和交付物清单已全部勾选。
-- ASCII 虚拟盘路径下执行 `clean test` 成功；真实 Docker MySQL 8.4/Redis 执行全部 `integrationTest` 成功，共 11 项、0 失败。
-- M6 本地代码、自动化验收和交付资料已完成。真实 ERP/WMS 地址演示及 A 组工单汇总写入仍是跨组/部署环境外部事项，不影响 B 组交付包完成状态。
+- ASCII 虚拟盘路径下执行 `clean test` 成功，共 609 项、0 失败；真实 Docker MySQL 8.4/Redis 执行全部 `integrationTest` 成功，共 14 项、0 失败。
+- M6 本地代码、A/B/C 自动化验收和交付资料已完成。真实 ERP/WMS 地址与凭据及多实例 WebSocket 广播仍是部署环境边界，不影响 B 组交付包完成状态。
+
+## 14. A/B/C 联调补齐（2026-07-14）
+
+- B 组报工和全额冲销通过 `WorkOrderExecutionSummaryService` 原子调整 A 组 `prod_work_order.input_quantity`、`defect_quantity`、`rework_quantity`，数据库约束保证非负、数量关系和超产上限。
+- B 组完工审核通过后原子累加 A 工单 `finish_quantity`，且不得超过当前报工良品净额；同一事务通过 `CompletionOrderPublishService` 幂等写入 A 组 `prod_completion_order`。
+- C 组 `quality_inspection_record` 新增任务、工序、不良归并号和精确不良数量契约；PASS 不允许非零不良数量，失败结果的不良数量必须在抽样范围内。
+- B 组不良报表真实读取 C 组质检不良，产品追溯真实读取 C 组质量、设备台账和安灯事件，实时总览返回设备与未关闭安灯统计。
+- `SceneM3TransactionIntegrationTest` 使用真实 MySQL 验证报工/冲销与 A 工单同事务、失败回滚、并发幂等、完工审核和 A 组读取表发布；`ReportM4IntegrationTest` 使用真实 A/B/C 夹具验证跨来源去重和 C 组追溯/总览数据。
+- 最终门禁：`clean test` 609 项、0 失败；`integrationTest --rerun-tasks` 14 项、0 失败；`git diff --check` 无空白错误。
+- 明确边界：不伪造 OEE，不把本地完工发布标记为真实外部 ERP HTTP 同步成功，不在文档或日志中输出 `.env` 密码。

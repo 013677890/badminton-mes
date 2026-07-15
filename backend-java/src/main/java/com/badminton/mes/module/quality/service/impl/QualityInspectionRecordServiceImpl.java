@@ -161,6 +161,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         record.setRecordStatus(RECORD_STATUS_SUBMITTED);
         record.setConclusion(request.getConclusion());
         record.setReleaseStatus(resolveReleaseStatus(request.getConclusion()));
+        applyDefectResult(record, request, hasFailedResult);
         record.setNonconformanceDescription(request.getNonconformanceDescription());
         record.setDisposition(request.getDisposition());
         record.setInspectorId(getCurrentOperatorId());
@@ -208,15 +209,18 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         record.setPlanCodeSnapshot(plan.getPlanCode());
         record.setPlanVersionSnapshot(plan.getVersionNo());
         record.setWorkOrderId(request.getWorkOrderId());
+        record.setProductionTaskId(request.getProductionTaskId());
         record.setSourceDocumentId(request.getSourceDocumentId());
         record.setSourceDocumentNo(request.getSourceDocumentNo());
         record.setProductId(request.getProductId());
         record.setCustomerId(request.getCustomerId());
         record.setProductionLineId(request.getProductionLineId());
+        record.setProcessId(request.getProcessId());
         record.setBatchNo(request.getBatchNo());
         record.setSampleQuantity(request.getSampleQuantity());
         record.setRecordStatus(RECORD_STATUS_DRAFT);
         record.setReleaseStatus(RELEASE_PENDING);
+        record.setDefectQuantity(0);
         record.setCreateBy(getCurrentOperatorId());
         record.setDeleted(false);
         return record;
@@ -343,6 +347,21 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
     private String resolveReleaseStatus(String conclusion) {
         return CONCLUSION_PASS.equals(conclusion) || CONCLUSION_CONCESSION.equals(conclusion)
                 ? RELEASED : BLOCKED;
+    }
+
+    private void applyDefectResult(QualityInspectionRecordEntity record,
+                                   QualityInspectionRecordSubmitReqVO request,
+                                   boolean hasFailedResult) {
+        int defectQuantity = request.getDefectQuantity() == null ? 0 : request.getDefectQuantity();
+        if (!hasFailedResult && defectQuantity != 0) {
+            throw new ServiceException(QualityErrorCodeConstants.RECORD_CONCLUSION_INVALID);
+        }
+        if (hasFailedResult && (defectQuantity <= 0 || defectQuantity > record.getSampleQuantity())) {
+            throw new ServiceException(QualityErrorCodeConstants.RECORD_RESULTS_INCOMPLETE);
+        }
+        record.setDefectQuantity(defectQuantity);
+        record.setDefectGroupNo(StringUtils.hasText(request.getDefectGroupNo())
+                ? request.getDefectGroupNo().trim() : null);
     }
 
     private String generateInspectionNo() {

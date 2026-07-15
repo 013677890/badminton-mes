@@ -23,6 +23,11 @@ public final class RealtimeProductionRespVO {
         private long inputQuantity;
         private long goodQuantity;
         private long defectQuantity;
+        private long equipmentTotalCount;
+        private long runningEquipmentCount;
+        private long unavailableEquipmentCount;
+        private long openAndonCount;
+        private long criticalAndonCount;
         private LocalDateTime lastRefreshTime;
         private String dataStatus;
         private List<String> warnings = List.of();

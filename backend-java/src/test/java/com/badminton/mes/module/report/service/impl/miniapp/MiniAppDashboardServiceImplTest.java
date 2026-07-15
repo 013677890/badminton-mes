@@ -18,7 +18,7 @@ class MiniAppDashboardServiceImplTest {
         when(realtime.overview(any())).thenReturn(overview); when(realtime.tasks(any())).thenReturn(List.of());
         var service = new MiniAppDashboardServiceImpl(realtime, production, trace);
         var result = service.realtimeDashboard(new RealtimeReportQueryReqVO());
-        assertSame(overview, result.get("overview")); assertEquals(List.of(), result.get("tasks"));
+        assertSame(overview, result.getOverview()); assertEquals(List.of(), result.getTasks());
         verify(realtime).overview(any()); verify(realtime).tasks(any());
     }
 }

@@ -307,6 +307,8 @@ B：记录同步状态，支持失败重试
 | `lastErrorMessage` | 最近失败原因 |
 | `lastSyncTime` | 最近同步时间 |
 
+2026-07-14 已落地契约：B 组正常报工和冲销仅原子调整 A 组 `prod_work_order` 的 `input_quantity`、`defect_quantity`、`rework_quantity`，完工审核通过时仅累加 `finish_quantity`；审核通过的完工单同时按 `finish_no` 幂等写入 A 组 `prod_completion_order`，供现有集成读取接口消费。上述操作与 B 组任务、报工或完工审核处于同一事务，任一步失败整体回滚。真实外部 ERP/WMS HTTP 调用仍通过独立同步接口和失败记录管理，本地发布成功不等同于外部同步成功。
+
 ## 6. 与 C 组协作细节
 
 ### 6.1 质量数据协作
@@ -340,6 +342,13 @@ B 组需要安灯数据用于：
 - 车间时段报表统计异常次数和停线时长。
 
 B 组不负责关闭安灯异常，只展示 C 组安灯模块的处理状态。
+
+### 6.4 当前 C/B 读取契约（2026-07-14）
+
+- 质量不良读取 `quality_inspection_record` 的 `production_task_id`、`work_order_id`、`process_id`、`batch_no`、`defect_group_no`、`defect_quantity` 和检验结论；B 组不修改质检记录。
+- 设备状态读取 `equip_ledger`，按授权车间、产线和任务实际关联设备过滤；B 组不修改设备台账或状态。
+- 安灯事件读取 `andon_event`，按任务、工单或批次关联，并继续应用授权车间和产线范围；B 组不关闭或处理安灯事件。
+- C 组当前没有 OEE 事实表，B 组仅返回已验证的设备状态统计，并用 `PARTIAL` 明确标识 OEE 缺失，不推算或伪造 OEE。
 
 ## 7. 不良数据统一口径
 
