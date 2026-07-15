@@ -12,6 +12,8 @@ import { ANDON_VIEW_ROLES } from '@/constants/andon'
 import { SCENE_VIEW_ROLES } from '@/constants/scene'
 import { BARCODE_VIEW_ROLES } from '@/constants/barcode'
 import { REPORT_VIEW_ROLES } from '@/constants/report'
+import { EQUIPMENT_VIEW_ROLES } from '@/constants/equipment'
+import { QUALITY_VIEW_ROLES } from '@/constants/quality'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -215,6 +217,19 @@ export const menuRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/equipment',
+    redirect: '/equipment/management',
+    meta: { title: '设备管理', icon: 'Tools', roles: EQUIPMENT_VIEW_ROLES },
+    children: [
+      {
+        path: '/equipment/management',
+        name: 'EquipmentManagement',
+        component: () => import('@/views/equipment/EquipmentManagement.vue'),
+        meta: { title: '设备综合管理', roles: EQUIPMENT_VIEW_ROLES },
+      },
+    ],
+  },
+  {
     path: '/device',
     redirect: '/device/access',
     meta: { title: '设备接入', icon: 'Monitor', roles: DEVICE_VIEW_ROLES },
@@ -224,6 +239,19 @@ export const menuRoutes: RouteRecordRaw[] = [
         name: 'DeviceManagement',
         component: () => import('@/views/device/DeviceManagement.vue'),
         meta: { title: '设备数据接入', roles: DEVICE_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/quality',
+    redirect: '/quality/management',
+    meta: { title: '质量管理', icon: 'CircleCheck', roles: QUALITY_VIEW_ROLES },
+    children: [
+      {
+        path: '/quality/management',
+        name: 'QualityManagement',
+        component: () => import('@/views/quality/QualityManagement.vue'),
+        meta: { title: '质量检验管理', roles: QUALITY_VIEW_ROLES },
       },
     ],
   },
@@ -263,6 +291,19 @@ export const menuRoutes: RouteRecordRaw[] = [
         name: 'ReportCenter',
         component: () => import('@/views/report/ReportCenter.vue'),
         meta: { title: '报表分析中心', roles: REPORT_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/kanban',
+    redirect: '/kanban/business',
+    meta: { title: '业务看板', icon: 'DataBoard', roles: REPORT_VIEW_ROLES },
+    children: [
+      {
+        path: '/kanban/business',
+        name: 'BusinessKanban',
+        component: () => import('@/views/kanban/BusinessKanban.vue'),
+        meta: { title: 'MES 业务看板', roles: REPORT_VIEW_ROLES },
       },
     ],
   },

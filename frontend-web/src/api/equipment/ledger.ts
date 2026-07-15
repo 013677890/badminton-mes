@@ -50,7 +50,7 @@ export interface EquipmentLedgerSaveParams {
   status?: number | null
 }
 
-export interface EquipmentLedgerPageParams extends PageParam {
+export interface EquipmentLedgerPageParams {
   keyword?: string
   categoryId?: number
   manufacturerId?: number
@@ -62,7 +62,7 @@ export interface EquipmentLedgerPageParams extends PageParam {
 
 /** 分页查询设备台账。 */
 export function getEquipmentLedgerPage(
-  params: EquipmentLedgerPageParams,
+  params: EquipmentLedgerPageParams & PageParam,
 ): Promise<PageResult<EquipmentLedger>> {
   return get('/equipment/ledgers/page', params)
 }

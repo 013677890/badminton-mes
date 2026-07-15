@@ -13,6 +13,10 @@ function stringStatusMapToOptions(statusMap: StatusMap): OptionItem[] {
 
 // ---------- 权限 ----------
 
+/** 设备主档、台账与报修接口当前仅要求登录，所有系统角色均可访问。 */
+export const EQUIPMENT_VIEW_ROLES = Object.values(ROLES)
+export const EQUIPMENT_COMMON_WRITE_ROLES = Object.values(ROLES)
+
 /** 保养计划查询权限。 */
 export const MAINTENANCE_PLAN_VIEW_ROLES = [
   ROLES.ADMIN,

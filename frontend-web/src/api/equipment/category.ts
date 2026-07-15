@@ -24,7 +24,7 @@ export interface EquipmentCategorySaveParams {
   status?: number | null
 }
 
-export interface EquipmentCategoryPageParams extends PageParam {
+export interface EquipmentCategoryPageParams {
   keyword?: string
   parentId?: number
   status?: number
@@ -32,7 +32,7 @@ export interface EquipmentCategoryPageParams extends PageParam {
 
 /** 分页查询设备类别。 */
 export function getEquipmentCategoryPage(
-  params: EquipmentCategoryPageParams,
+  params: EquipmentCategoryPageParams & PageParam,
 ): Promise<PageResult<EquipmentCategory>> {
   return get('/equipment/categories/page', params)
 }

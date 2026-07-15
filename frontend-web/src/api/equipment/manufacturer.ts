@@ -30,14 +30,14 @@ export interface EquipmentManufacturerSaveParams {
   status?: number | null
 }
 
-export interface EquipmentManufacturerPageParams extends PageParam {
+export interface EquipmentManufacturerPageParams {
   keyword?: string
   status?: number
 }
 
 /** 分页查询设备制造商。 */
 export function getEquipmentManufacturerPage(
-  params: EquipmentManufacturerPageParams,
+  params: EquipmentManufacturerPageParams & PageParam,
 ): Promise<PageResult<EquipmentManufacturer>> {
   return get('/equipment/manufacturers/page', params)
 }

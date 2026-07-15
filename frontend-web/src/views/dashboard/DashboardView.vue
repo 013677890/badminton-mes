@@ -117,9 +117,19 @@ const businessEntries: DemoEntry[] = [
     path: '/barcode/config',
   },
   {
+    title: '设备管理',
+    description: '设备类别、制造商、故障原理、台账、保养计划、保养记录与报修任务',
+    path: '/equipment/management',
+  },
+  {
     title: '设备数据接入',
     description: '设备接入配置、联调验证、计数采集与异常处理闭环',
     path: '/device/access',
+  },
+  {
+    title: '质量管理',
+    description: '检验分类与项目、标准方案、首末件巡检和成品检验单闭环',
+    path: '/quality/management',
   },
   {
     title: '安灯管理',
@@ -135,6 +145,11 @@ const businessEntries: DemoEntry[] = [
     title: '报表分析',
     description: '实时生产、产出与不良统计、全链路产品追溯和看板快照',
     path: '/report/center',
+  },
+  {
+    title: '业务看板',
+    description: '中控、车间和产线三类实时业务看板，自动刷新生产质量设备与安灯指标',
+    path: '/kanban/business',
   },
 ]
 

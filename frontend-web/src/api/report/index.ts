@@ -45,6 +45,14 @@ export interface RealtimeTask {
   planQuantity: number; inputQuantity: number; goodQuantity: number; defectQuantity: number
   finishQuantity: number; taskStatus: number; abnormal: boolean; actualStartTime: string | null; updateTime: string
 }
+export interface KanbanSnapshot {
+  snapshotTime: string
+  lastRefreshTime: string
+  dataStatus: string
+  sourceWarnings: string[]
+  version: number
+  overview: RealtimeOverview
+}
 export interface ProductTrace {
   dataCompleteness: string; warnings: string[]; task: Record<string, any> | null; workOrder: Record<string, any> | null
   barcodes: Array<Record<string, any>>; barcodeUses: Array<Record<string, any>>
@@ -66,7 +74,7 @@ export function getRealtimeOverview(params?: { workshopId?: number; lineId?: num
 export function getRealtimeTasks(params?: { workshopId?: number; lineId?: number; productId?: number }): Promise<RealtimeTask[]> { return get('/report/realtime_production/tasks', params) }
 export function traceProduct(params: { batchCode?: string; barcodeValue?: string; workOrderNo?: string; taskNo?: string }): Promise<ProductTrace> { return get('/report/traces/products', params) }
 export function traceBarcode(barcodeValue: string): Promise<ProductTrace> { return get(`/report/traces/barcodes/${encodeURIComponent(barcodeValue)}`) }
-export function getKanbanSnapshot(scope: 'central' | 'line' | 'workshop', id?: number): Promise<Record<string, any>> {
+export function getKanbanSnapshot(scope: 'central' | 'line' | 'workshop', id?: number): Promise<KanbanSnapshot> {
   if (scope === 'central') return get('/report/kanban/central')
   return get(`/report/kanban/${scope === 'line' ? 'lines' : 'workshops'}/${id}`)
 }

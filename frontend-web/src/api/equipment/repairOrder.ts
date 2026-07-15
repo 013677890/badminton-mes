@@ -43,7 +43,7 @@ export interface EquipmentRepairOrderSaveParams {
   remark?: string | null
 }
 
-export interface EquipmentRepairOrderPageParams extends PageParam {
+export interface EquipmentRepairOrderPageParams {
   keyword?: string
   equipmentId?: number
   faultPrincipleId?: number
@@ -54,7 +54,7 @@ export interface EquipmentRepairOrderPageParams extends PageParam {
 
 /** 分页查询设备报修任务。 */
 export function getEquipmentRepairOrderPage(
-  params: EquipmentRepairOrderPageParams,
+  params: EquipmentRepairOrderPageParams & PageParam,
 ): Promise<PageResult<EquipmentRepairOrder>> {
   return get('/equipment/repair-orders/page', params)
 }

@@ -32,7 +32,7 @@ export interface EquipmentFaultPrincipleSaveParams {
   status?: number | null
 }
 
-export interface EquipmentFaultPrinciplePageParams extends PageParam {
+export interface EquipmentFaultPrinciplePageParams {
   keyword?: string
   categoryId?: number
   faultLevel?: EquipmentFaultLevel
@@ -41,7 +41,7 @@ export interface EquipmentFaultPrinciplePageParams extends PageParam {
 
 /** 分页查询设备故障原理。 */
 export function getEquipmentFaultPrinciplePage(
-  params: EquipmentFaultPrinciplePageParams,
+  params: EquipmentFaultPrinciplePageParams & PageParam,
 ): Promise<PageResult<EquipmentFaultPrinciple>> {
   return get('/equipment/fault-principles/page', params)
 }

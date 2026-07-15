@@ -7,11 +7,13 @@ defineOptions({ name: 'StatusTag' })
 const props = defineProps<{
   status: string | number | undefined | null
   statusMap?: StatusMap
+  /** 兼容早期页面使用的 map 属性，优先使用 statusMap。 */
+  map?: StatusMap
 }>()
 
 const meta = computed(() => {
   if (props.status === undefined || props.status === null) return undefined
-  return props.statusMap?.[String(props.status)]
+  return (props.statusMap ?? props.map)?.[String(props.status)]
 })
 
 const hasValue = computed(

@@ -35,7 +35,7 @@ export interface EquipmentMaintenancePlanSaveParams {
   status?: number | null
 }
 
-export interface EquipmentMaintenancePlanPageParams extends PageParam {
+export interface EquipmentMaintenancePlanPageParams {
   keyword?: string
   equipmentId?: number
   maintenanceType?: EquipmentMaintenanceType
@@ -46,7 +46,7 @@ export interface EquipmentMaintenancePlanPageParams extends PageParam {
 
 /** 分页查询设备保养计划。 */
 export function getEquipmentMaintenancePlanPage(
-  params: EquipmentMaintenancePlanPageParams,
+  params: EquipmentMaintenancePlanPageParams & PageParam,
 ): Promise<PageResult<EquipmentMaintenancePlan>> {
   return get('/equipment/maintenance-plans/page', params)
 }

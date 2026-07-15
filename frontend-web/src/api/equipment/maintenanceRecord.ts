@@ -42,7 +42,7 @@ export interface EquipmentMaintenanceRecordSaveParams {
   remark?: string | null
 }
 
-export interface EquipmentMaintenanceRecordPageParams extends PageParam {
+export interface EquipmentMaintenanceRecordPageParams {
   keyword?: string
   planId?: number
   equipmentId?: number
@@ -54,7 +54,7 @@ export interface EquipmentMaintenanceRecordPageParams extends PageParam {
 
 /** 分页查询设备保养记录。 */
 export function getEquipmentMaintenanceRecordPage(
-  params: EquipmentMaintenanceRecordPageParams,
+  params: EquipmentMaintenanceRecordPageParams & PageParam,
 ): Promise<PageResult<EquipmentMaintenanceRecord>> {
   return get('/equipment/maintenance-records/page', params)
 }
