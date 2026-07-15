@@ -7,6 +7,9 @@ import {
   INTEGRATION_GROUP_ROLES,
   INTEGRATION_MANAGE_ROLES,
 } from '@/constants/integration'
+import { DEVICE_VIEW_ROLES } from '@/constants/device'
+import { ANDON_VIEW_ROLES } from '@/constants/andon'
+import { SCENE_EXECUTION_ROLES } from '@/constants/scene'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -187,6 +190,45 @@ export const menuRoutes: RouteRecordRaw[] = [
         name: 'CompletionOrderList',
         component: () => import('@/views/integration/CompletionOrderList.vue'),
         meta: { title: '完工单读取', roles: INTEGRATION_MANAGE_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/device',
+    redirect: '/device/access',
+    meta: { title: '设备接入', icon: 'Monitor', roles: DEVICE_VIEW_ROLES },
+    children: [
+      {
+        path: '/device/access',
+        name: 'DeviceManagement',
+        component: () => import('@/views/device/DeviceManagement.vue'),
+        meta: { title: '设备数据接入', roles: DEVICE_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/andon',
+    redirect: '/andon/management',
+    meta: { title: '安灯管理', icon: 'WarnTriangleFilled', roles: ANDON_VIEW_ROLES },
+    children: [
+      {
+        path: '/andon/management',
+        name: 'AndonManagement',
+        component: () => import('@/views/andon/AndonManagement.vue'),
+        meta: { title: '安灯异常管理', roles: ANDON_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/scene',
+    redirect: '/scene/execution',
+    meta: { title: '现场执行', icon: 'Guide', roles: SCENE_EXECUTION_ROLES },
+    children: [
+      {
+        path: '/scene/execution',
+        name: 'SceneExecution',
+        component: () => import('@/views/scene/SceneExecution.vue'),
+        meta: { title: '现场执行操作台', roles: SCENE_EXECUTION_ROLES },
       },
     ],
   },

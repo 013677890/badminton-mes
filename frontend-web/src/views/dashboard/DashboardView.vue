@@ -111,6 +111,21 @@ const businessEntries: DemoEntry[] = [
     description: 'ERP 同步、外部写入日志、设备计数异常池与完工单读取的统一运维入口',
     path: '/integration/write-logs',
   },
+  {
+    title: '设备数据接入',
+    description: '设备接入配置、联调验证、计数采集与异常处理闭环',
+    path: '/device/access',
+  },
+  {
+    title: '安灯管理',
+    description: '安灯类型和响应规则配置，现场异常发起、转派、升级与关闭',
+    path: '/andon/management',
+  },
+  {
+    title: '现场执行',
+    description: '报工审核与生产完工单创建、审核、作废操作台',
+    path: '/scene/execution',
+  },
 ]
 
 const demoEntries: DemoEntry[] = [
