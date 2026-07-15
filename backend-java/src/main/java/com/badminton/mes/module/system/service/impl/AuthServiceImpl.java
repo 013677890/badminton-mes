@@ -23,6 +23,7 @@ import com.badminton.mes.module.system.dal.repository.RoleRepository;
 import com.badminton.mes.module.system.dal.repository.UserRepository;
 import com.badminton.mes.module.system.dal.repository.UserRoleRepository;
 import com.badminton.mes.module.system.service.AuthService;
+import com.badminton.mes.module.system.service.AuthenticationSupport;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,7 +48,6 @@ public class AuthServiceImpl implements AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthServiceImpl.class);
 
-    /** token 随机字节数：128 位随机量，hex 编码后 32 字符 */
     private static final int TOKEN_BYTES = 16;
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -62,6 +62,8 @@ public class AuthServiceImpl implements AuthService {
 
     private final PasswordEncoder passwordEncoder;
 
+    private final AuthenticationSupport authenticationSupport;
+
     /**
      * 构造器注入，依赖不可变。
      *
@@ -70,20 +72,31 @@ public class AuthServiceImpl implements AuthService {
      * @param roleRepository       角色 Repository
      * @param loginSessionRedisDAO 登录会话 DAO
      * @param passwordEncoder      密码编码器
+     * @param authenticationSupport 认证公共能力
      */
     public AuthServiceImpl(UserRepository userRepository, UserRoleRepository userRoleRepository,
                            RoleRepository roleRepository, LoginSessionRedisDAO loginSessionRedisDAO,
-                           PasswordEncoder passwordEncoder) {
+                           PasswordEncoder passwordEncoder, AuthenticationSupport authenticationSupport) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.loginSessionRedisDAO = loginSessionRedisDAO;
         this.passwordEncoder = passwordEncoder;
+        this.authenticationSupport = authenticationSupport;
     }
 
     @Override
     public AuthLoginRespVO login(AuthLoginReqVO reqVO) {
-        // 锁定判断先于密码校验，锁定期内正确密码同样被拒，阻断继续爆破
+        if (authenticationSupport == null) {
+            return loginWithLocalDependencies(reqVO);
+        }
+        UserEntity user = authenticationSupport.authenticate(reqVO.getUserNo(), reqVO.getPassword());
+        AuthLoginRespVO response = authenticationSupport.createSession(user);
+        logger.info("[登录成功] userId: {}, userNo: {}", user.getId(), user.getUserNo());
+        return response;
+    }
+
+    private AuthLoginRespVO loginWithLocalDependencies(AuthLoginReqVO reqVO) {
         if (loginSessionRedisDAO.isLoginLocked(reqVO.getUserNo())) {
             throw new ServiceException(SystemErrorCodeConstants.LOGIN_LOCKED);
         }
@@ -95,7 +108,6 @@ public class AuthServiceImpl implements AuthService {
             throw loginFail(reqVO.getUserNo(), "密码错误");
         }
         if (!CommonStatusEnum.ENABLED.getStatus().equals(user.getStatus())) {
-            logger.warn("[登录失败] userNo: {}, 原因: 账户已停用", reqVO.getUserNo());
             throw new ServiceException(SystemErrorCodeConstants.LOGIN_USER_DISABLED);
         }
         loginSessionRedisDAO.clearLoginFail(reqVO.getUserNo());
@@ -104,15 +116,14 @@ public class AuthServiceImpl implements AuthService {
         LoginUser loginUser = buildLoginUser(user, roles);
         String token = generateToken();
         loginSessionRedisDAO.createSession(token, loginUser);
-        logger.info("[登录成功] userId: {}, userNo: {}", user.getId(), user.getUserNo());
 
-        AuthLoginRespVO respVO = new AuthLoginRespVO();
-        respVO.setToken(token);
-        respVO.setUserId(user.getId());
-        respVO.setUserNo(user.getUserNo());
-        respVO.setUserName(user.getUserName());
-        respVO.setRoleCodes(loginUser.getRoleCodes());
-        return respVO;
+        AuthLoginRespVO response = new AuthLoginRespVO();
+        response.setToken(token);
+        response.setUserId(user.getId());
+        response.setUserNo(user.getUserNo());
+        response.setUserName(user.getUserName());
+        response.setRoleCodes(loginUser.getRoleCodes());
+        return response;
     }
 
     @Override
@@ -176,13 +187,6 @@ public class AuthServiceImpl implements AuthService {
                 .toList();
     }
 
-    /**
-     * 组装会话载荷。
-     *
-     * @param user  用户实体
-     * @param roles 启用角色列表
-     * @return 会话载荷
-     */
     private LoginUser buildLoginUser(UserEntity user, List<RoleEntity> roles) {
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(user.getId());
@@ -194,27 +198,12 @@ public class AuthServiceImpl implements AuthService {
         return loginUser;
     }
 
-    /**
-     * 生成登录令牌：SecureRandom 128 位随机量的 hex 串，不含任何业务含义。
-     *
-     * @return 登录令牌
-     */
     private String generateToken() {
         byte[] bytes = new byte[TOKEN_BYTES];
         SECURE_RANDOM.nextBytes(bytes);
         return HexFormat.of().formatHex(bytes);
     }
 
-    /**
-     * 记录登录失败并返回对应异常：达到锁定阈值返回 A0211，否则返回 A0200。
-     *
-     * <p>账户不存在与密码错误共用此方法，对外提示一致以防撞库；
-     * 失败次数刚好达到阈值时直接告知已锁定，避免用户不知道被锁而继续尝试。
-     *
-     * @param userNo 工号
-     * @param reason 服务端日志区分用失败原因
-     * @return 待抛出的业务异常
-     */
     private ServiceException loginFail(String userNo, String reason) {
         long failCount = loginSessionRedisDAO.recordLoginFail(userNo);
         logger.warn("[登录失败] userNo: {}, 原因: {}", userNo, reason);

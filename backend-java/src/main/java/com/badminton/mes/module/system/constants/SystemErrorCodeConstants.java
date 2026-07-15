@@ -61,6 +61,30 @@ public final class SystemErrorCodeConstants {
     public static final ErrorCode USER_OPERATE_SELF_FORBIDDEN =
             new ErrorCode("A0440", "不能停用或删除当前登录账号", "不能对当前登录账号执行该操作");
 
+    /** 微信登录 code 无效或已过期 */
+    public static final ErrorCode WECHAT_CODE_INVALID =
+            new ErrorCode("A0203", "微信登录 code 无效", "微信登录凭证已失效，请重新登录");
+
+    /** 微信服务暂时不可用 */
+    public static final ErrorCode WECHAT_SERVICE_UNAVAILABLE =
+            new ErrorCode("C0001", "调用微信登录服务失败", "微信服务暂时不可用，请稍后重试");
+
+    /** 微信小程序配置缺失 */
+    public static final ErrorCode WECHAT_CONFIG_MISSING =
+            new ErrorCode("B0001", "微信小程序 AppID 或 AppSecret 未配置", "微信登录尚未配置，请联系管理员");
+
+    /** 短期绑定票据无效 */
+    public static final ErrorCode WECHAT_BIND_TICKET_INVALID =
+            new ErrorCode("A0203", "微信绑定票据无效或已过期", "绑定页面已过期，请重新进行微信登录");
+
+    /** 微信身份或 MES 用户绑定冲突 */
+    public static final ErrorCode WECHAT_BINDING_CONFLICT =
+            new ErrorCode("A0111", "微信身份已绑定其他 MES 账号", "该微信已绑定其他账号，请联系管理员");
+
+    /** MES 用户已绑定微信身份 */
+    public static final ErrorCode WECHAT_USER_ALREADY_BOUND =
+            new ErrorCode("A0111", "MES 用户已绑定其他微信身份", "该工号已绑定其他微信，请先解除绑定");
+
     private SystemErrorCodeConstants() {
     }
 }

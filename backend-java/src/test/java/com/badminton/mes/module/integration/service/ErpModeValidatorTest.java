@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * {@link ErpModeValidator} 单元测试。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 class ErpModeValidatorTest {

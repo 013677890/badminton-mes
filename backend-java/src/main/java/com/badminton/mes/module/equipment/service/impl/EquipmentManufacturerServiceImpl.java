@@ -88,7 +88,7 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
             throw e;
         }
 
-        logger.info("[创建设备制造商] id: {}, manufacturerCode: {}", 
+        logger.info("[创建设备制造商] id: {}, manufacturerCode: {}",
                     manufacturer.getId(), manufacturer.getManufacturerCode());
         return manufacturer.getId();
     }

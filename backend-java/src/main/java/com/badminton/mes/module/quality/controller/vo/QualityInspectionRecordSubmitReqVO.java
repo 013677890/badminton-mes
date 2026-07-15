@@ -2,6 +2,7 @@ package com.badminton.mes.module.quality.controller.vo;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -18,4 +19,10 @@ public class QualityInspectionRecordSubmitReqVO {
 
     @Size(max = 500, message = "处置意见长度不能超过 500")
     private String disposition;
+
+    @PositiveOrZero(message = "不良数量不能为负数")
+    private Integer defectQuantity;
+
+    @Size(max = 64, message = "不良归并号长度不能超过 64")
+    private String defectGroupNo;
 }

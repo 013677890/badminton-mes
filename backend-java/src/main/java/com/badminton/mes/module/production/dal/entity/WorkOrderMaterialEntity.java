@@ -42,11 +42,11 @@ public class WorkOrderMaterialEntity {
     private Long materialId;
 
     /** 需求数量(计划数×BOM用量) */
-    @Column(name = "require_quantity")
+    @Column(name = "require_quantity", precision = 12, scale = 4)
     private BigDecimal requireQuantity;
 
     /** 已领/已发数量 */
-    @Column(name = "issued_quantity")
+    @Column(name = "issued_quantity", precision = 12, scale = 4)
     private BigDecimal issuedQuantity;
 
     /** 创建时间 */
@@ -58,6 +58,6 @@ public class WorkOrderMaterialEntity {
     private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

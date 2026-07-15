@@ -6,6 +6,7 @@ import com.badminton.mes.module.integration.dal.entity.DeviceCountRecordEntity;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 
@@ -15,6 +16,7 @@ import jakarta.persistence.LockModeType;
  * @author 张竹灏
  * @date 2026/07/13
  */
+@Repository("integrationDeviceCountRecordRepository")
 public interface DeviceCountRecordRepository extends JpaRepository<DeviceCountRecordEntity, Long> {
 
     /**

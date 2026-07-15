@@ -18,6 +18,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessStatusReqVO;
 import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessChangeLogEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
+import com.badminton.mes.module.craft.dal.entity.CraftQualityPlanReferenceEntity;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessRepository;
@@ -223,7 +224,8 @@ class CraftProcessServiceImplTest {
         CraftProcessSaveReqVO reqVO = buildSaveReqVO();
         reqVO.setQualityRequired(true);
         reqVO.setQualityPlanId(20L);
-        when(qualityPlanRepository.existsByIdAndStatusAndDeletedFalse(20L, 1)).thenReturn(false);
+        when(qualityPlanRepository.existsByIdAndPlanStatusAndDeletedFalse(
+                20L, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)).thenReturn(false);
 
         assertThatThrownBy(() -> processService.createProcess(reqVO))
                 .isInstanceOfSatisfying(ServiceException.class, exception ->

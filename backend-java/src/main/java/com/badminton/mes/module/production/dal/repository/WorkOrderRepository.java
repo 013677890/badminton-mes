@@ -305,6 +305,60 @@ public interface WorkOrderRepository extends JpaRepository<WorkOrderEntity, Long
                                    @Param("defectQuantity") Integer defectQuantity);
 
     /**
+     * 按现场报工方向原子调整工单执行汇总，并在数据库层保证数量不为负、
+     * 不良不超过投入、返修不超过不良以及投入不超过允许超产上限。
+     *
+     * @param id             工单主键
+     * @param inputDelta     投入数量增量，冲销时为负数
+     * @param defectDelta    不良数量增量，冲销时为负数
+     * @param reworkDelta    返修数量增量，冲销时为负数
+     * @return 影响行数；0 表示工单不存在或数量约束不满足
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.inputQuantity = workOrder.inputQuantity + :inputDelta,
+                workOrder.defectQuantity = workOrder.defectQuantity + :defectDelta,
+                workOrder.reworkQuantity = workOrder.reworkQuantity + :reworkDelta,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+              AND workOrder.inputQuantity + :inputDelta >= 0
+              AND workOrder.defectQuantity + :defectDelta >= 0
+              AND workOrder.reworkQuantity + :reworkDelta >= 0
+              AND workOrder.defectQuantity + :defectDelta
+                  <= workOrder.inputQuantity + :inputDelta
+              AND workOrder.reworkQuantity + :reworkDelta
+                  <= workOrder.defectQuantity + :defectDelta
+              AND workOrder.inputQuantity + :inputDelta
+                  <= FLOOR(workOrder.planQuantity * (1 + COALESCE(workOrder.overRatio, 0) / 100))
+            """)
+    int adjustExecutionSummary(@Param("id") Long id,
+                               @Param("inputDelta") Integer inputDelta,
+                               @Param("defectDelta") Integer defectDelta,
+                               @Param("reworkDelta") Integer reworkDelta);
+
+    /**
+     * 累加已审核完工数量，完工量不得超过当前报工良品净额。
+     *
+     * @param id                 工单主键
+     * @param completionQuantity 本次审核通过的完工数量
+     * @return 影响行数；0 表示工单不存在或完工数量超过良品净额
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE WorkOrderEntity workOrder
+            SET workOrder.finishQuantity = workOrder.finishQuantity + :completionQuantity,
+                workOrder.updateTime = CURRENT_TIMESTAMP
+            WHERE workOrder.id = :id
+              AND workOrder.deleted = false
+              AND workOrder.finishQuantity + :completionQuantity
+                  <= workOrder.inputQuantity - workOrder.defectQuantity
+            """)
+    int increaseApprovedFinishQuantity(@Param("id") Long id,
+                                       @Param("completionQuantity") Integer completionQuantity);
+
+    /**
      * 判断工艺路线是否已被生产工单引用。
      *
      * @param routingId 工艺路线主键

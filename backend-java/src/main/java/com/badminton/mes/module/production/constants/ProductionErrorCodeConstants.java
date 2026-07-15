@@ -82,6 +82,30 @@ public final class ProductionErrorCodeConstants {
     public static final ErrorCode BOM_DETAIL_EMPTY =
             new ErrorCode("A0440", "BOM 未维护明细", "请先维护 BOM 物料明细再下达工单");
 
+    /** BOM 明细引用的物料不存在、已删除或已停用 */
+    public static final ErrorCode MATERIAL_NOT_AVAILABLE =
+            new ErrorCode("A0402", "BOM 明细存在不可用物料", "请检查 BOM 物料档案后重试");
+
+    /** 工艺路线不存在、已删除或未生效 */
+    public static final ErrorCode ROUTING_NOT_AVAILABLE =
+            new ErrorCode("A0402", "工艺路线不存在或未生效", "所选工艺路线不可用，请重新维护");
+
+    /** 工艺路线未绑定工单产品 */
+    public static final ErrorCode ROUTING_PRODUCT_NOT_MATCH =
+            new ErrorCode("A0402", "工艺路线未绑定工单产品", "请为产品维护可用的工艺路线后重试");
+
+    /** 工艺路线明细为空或工序顺序不连续 */
+    public static final ErrorCode ROUTING_DETAIL_INVALID =
+            new ErrorCode("A0440", "工艺路线明细不完整", "请维护从 1 开始且连续的工序顺序");
+
+    /** 工艺路线明细引用的工序不存在、已删除或已停用 */
+    public static final ErrorCode ROUTING_PROCESS_NOT_AVAILABLE =
+            new ErrorCode("A0402", "工艺路线存在不可用工序", "请检查工艺路线中的工序档案后重试");
+
+    /** 工艺路线明细引用的 SOP 不存在、未生效或生效日期未到 */
+    public static final ErrorCode ROUTING_SOP_NOT_AVAILABLE =
+            new ErrorCode("A0402", "工艺路线存在不可用 SOP", "请检查工艺路线中的 SOP 后重试");
+
     /** 已下达工单修改计划必须填写变更原因(业务规则：见 01-生产订单需求分析) */
     public static final ErrorCode WORK_ORDER_CHANGE_REASON_REQUIRED =
             new ErrorCode("A0402", "修改已下达工单必须填写变更原因", "请填写变更原因后重试");
@@ -93,6 +117,10 @@ public final class ProductionErrorCodeConstants {
     /** 完工数量超过计划数量与允许超产比例的上限 */
     public static final ErrorCode WORK_ORDER_FINISH_EXCEED_LIMIT =
             new ErrorCode("A0420", "完工数量超过允许超产上限", "完工数量超出计划数量与超产比例限制，请核对报工数据");
+
+    /** 现场执行汇总与工单数量约束不一致 */
+    public static final ErrorCode WORK_ORDER_EXECUTION_QUANTITY_INVALID =
+            new ErrorCode("A0420", "工单执行汇总数量不合法", "报工、冲销或完工数量与工单汇总不一致，请刷新后重试");
 
     /** 计划变更后物料需求数量低于已领数量 */
     public static final ErrorCode WORK_ORDER_MATERIAL_ISSUED_EXCEED =
