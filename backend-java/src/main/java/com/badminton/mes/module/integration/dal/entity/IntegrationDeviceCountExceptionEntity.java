@@ -23,7 +23,7 @@ import jakarta.persistence.Table;
 @Entity
 @DynamicInsert
 @Table(name = "integration_device_count_exception")
-public class DeviceCountExceptionEntity {
+public class IntegrationDeviceCountExceptionEntity {
 
     /** 主键 */
     @Id

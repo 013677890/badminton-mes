@@ -15,11 +15,11 @@ import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPa
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionRespVO;
 import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
-import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
+import com.badminton.mes.module.integration.dal.entity.IntegrationDeviceCountExceptionEntity;
 import com.badminton.mes.module.integration.dal.entity.DeviceCountRecordEntity;
 import com.badminton.mes.module.integration.dal.entity.EquipmentBindingEntity;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
-import com.badminton.mes.module.integration.dal.repository.DeviceCountExceptionRepository;
+import com.badminton.mes.module.integration.dal.repository.IntegrationDeviceCountExceptionRepository;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountExceptionSpecifications;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountRecordRepository;
 import com.badminton.mes.module.integration.dal.repository.EquipmentBindingRepository;
@@ -68,7 +68,7 @@ public class DeviceCountWriteCommandService {
 
     private final DeviceCountRecordRepository recordRepository;
 
-    private final DeviceCountExceptionRepository exceptionRepository;
+    private final IntegrationDeviceCountExceptionRepository exceptionRepository;
 
     private final IntegrationWriteLogRepository writeLogRepository;
 
@@ -95,7 +95,7 @@ public class DeviceCountWriteCommandService {
     @Autowired
     public DeviceCountWriteCommandService(
             DeviceCountRecordRepository recordRepository,
-            DeviceCountExceptionRepository exceptionRepository,
+            IntegrationDeviceCountExceptionRepository exceptionRepository,
             IntegrationWriteLogRepository writeLogRepository,
             DispatchOrderRepository dispatchOrderRepository,
             CraftProcessRepository craftProcessRepository,
@@ -115,7 +115,7 @@ public class DeviceCountWriteCommandService {
     /** 兼容既有聚焦单测的构造入口。 */
     public DeviceCountWriteCommandService(
             DeviceCountRecordRepository recordRepository,
-            DeviceCountExceptionRepository exceptionRepository,
+            IntegrationDeviceCountExceptionRepository exceptionRepository,
             IntegrationWriteLogRepository writeLogRepository,
             DispatchOrderRepository dispatchOrderRepository,
             CraftProcessRepository craftProcessRepository,
@@ -176,7 +176,7 @@ public class DeviceCountWriteCommandService {
     public PageResult<DeviceCountExceptionRespVO> getExceptionPage(
             DeviceCountExceptionPageReqVO reqVO) {
         validateExceptionTimeRange(reqVO);
-        Specification<DeviceCountExceptionEntity> specification =
+        Specification<IntegrationDeviceCountExceptionEntity> specification =
                 DeviceCountExceptionSpecifications.page(reqVO);
         long total = exceptionRepository.count(specification);
         if (total == 0) {
@@ -187,7 +187,7 @@ public class DeviceCountWriteCommandService {
         int pageNo = normalizePageNo(reqVO.getPageNo(), pageSize, total);
         PageRequest pageRequest = PageRequest.of(
                 pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "id"));
-        Page<DeviceCountExceptionEntity> page =
+        Page<IntegrationDeviceCountExceptionEntity> page =
                 exceptionRepository.findAll(specification, pageRequest);
         return PageResult.of(page.getContent().stream().map(this::toExceptionRespVO).toList(),
                 total, pageNo, pageSize);
@@ -407,7 +407,7 @@ public class DeviceCountWriteCommandService {
                     equipmentCode, dispatchNo, processCode, dispatchOrderId, processId,
                     exceptionType, errorCode, retryContext);
         }
-        DeviceCountExceptionEntity exception = new DeviceCountExceptionEntity();
+        IntegrationDeviceCountExceptionEntity exception = new IntegrationDeviceCountExceptionEntity();
         exception.setSourceSystem(sourceSystem);
         exception.setExternalKey(externalKey);
         exception.setEquipmentCode(equipmentCode);
@@ -457,7 +457,7 @@ public class DeviceCountWriteCommandService {
             DeviceCountExceptionTypeEnum exceptionType,
             ErrorCode errorCode,
             RetryContext retryContext) {
-        DeviceCountExceptionEntity exception = retryContext.exception();
+        IntegrationDeviceCountExceptionEntity exception = retryContext.exception();
         exception.setEquipmentCode(equipmentCode);
         exception.setDispatchOrderId(dispatchOrderId);
         exception.setDispatchNo(dispatchNo);
@@ -494,7 +494,7 @@ public class DeviceCountWriteCommandService {
         return result;
     }
 
-    private DeviceCountExceptionRespVO toExceptionRespVO(DeviceCountExceptionEntity entity) {
+    private DeviceCountExceptionRespVO toExceptionRespVO(IntegrationDeviceCountExceptionEntity entity) {
         DeviceCountExceptionRespVO response = new DeviceCountExceptionRespVO();
         response.setId(entity.getId());
         response.setSourceSystem(entity.getSourceSystem());
@@ -556,7 +556,7 @@ public class DeviceCountWriteCommandService {
     /** 将待处理异常标记为忽略。 */
     @Transactional(rollbackFor = Exception.class)
     public void ignoreException(Long id, String remark) {
-        DeviceCountExceptionEntity exception = requirePendingException(id);
+        IntegrationDeviceCountExceptionEntity exception = requirePendingException(id);
         exception.setHandleStatus(2);
         exception.setHandleBy(SecurityContextHolder.getRequiredLoginUserId());
         exception.setHandleTime(LocalDateTime.now());
@@ -574,7 +574,7 @@ public class DeviceCountWriteCommandService {
     @Transactional(rollbackFor = Exception.class)
     public IntegrationWriteResultRespVO retryException(
             Long id, DeviceCountWriteReqVO reqVO, String snapshot) {
-        DeviceCountExceptionEntity exception = requirePendingException(id);
+        IntegrationDeviceCountExceptionEntity exception = requirePendingException(id);
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String externalKey = normalizeCode(reqVO.getExternalKey());
         Optional<IntegrationWriteLogEntity> existingLog = findProcessedLog(
@@ -605,12 +605,12 @@ public class DeviceCountWriteCommandService {
     }
 
     private record RetryContext(
-            DeviceCountExceptionEntity exception,
+            IntegrationDeviceCountExceptionEntity exception,
             IntegrationWriteLogEntity log) {
     }
 
-    private DeviceCountExceptionEntity requirePendingException(Long id) {
-        DeviceCountExceptionEntity exception = exceptionRepository.findByIdForUpdate(id)
+    private IntegrationDeviceCountExceptionEntity requirePendingException(Long id) {
+        IntegrationDeviceCountExceptionEntity exception = exceptionRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.DEVICE_EXCEPTION_NOT_EXISTS));
         if (!Integer.valueOf(0).equals(exception.getHandleStatus())) {

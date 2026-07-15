@@ -11,10 +11,10 @@ import com.badminton.mes.module.integration.constants.IntegrationErrorCodeConsta
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPageReqVO;
 import com.badminton.mes.module.integration.controller.vo.DeviceCountWriteReqVO;
 import com.badminton.mes.module.integration.controller.vo.IntegrationWriteResultRespVO;
-import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
+import com.badminton.mes.module.integration.dal.entity.IntegrationDeviceCountExceptionEntity;
 import com.badminton.mes.module.integration.dal.entity.DeviceCountRecordEntity;
 import com.badminton.mes.module.integration.dal.entity.IntegrationWriteLogEntity;
-import com.badminton.mes.module.integration.dal.repository.DeviceCountExceptionRepository;
+import com.badminton.mes.module.integration.dal.repository.IntegrationDeviceCountExceptionRepository;
 import com.badminton.mes.module.integration.dal.repository.DeviceCountRecordRepository;
 import com.badminton.mes.module.integration.dal.repository.IntegrationWriteLogRepository;
 import com.badminton.mes.module.integration.enums.DeviceCountExceptionTypeEnum;
@@ -56,7 +56,7 @@ class DeviceCountWriteCommandServiceTest {
     private DeviceCountRecordRepository recordRepository;
 
     @Mock
-    private DeviceCountExceptionRepository exceptionRepository;
+    private IntegrationDeviceCountExceptionRepository exceptionRepository;
 
     @Mock
     private IntegrationWriteLogRepository writeLogRepository;
@@ -134,10 +134,10 @@ class DeviceCountWriteCommandServiceTest {
         when(dispatchOrderRepository.findByDispatchNoForUpdate("DO202607130001"))
                 .thenReturn(Optional.empty());
         doAnswer(invocation -> {
-            DeviceCountExceptionEntity entity = invocation.getArgument(0);
+            IntegrationDeviceCountExceptionEntity entity = invocation.getArgument(0);
             entity.setId(60L);
             return entity;
-        }).when(exceptionRepository).saveAndFlush(any(DeviceCountExceptionEntity.class));
+        }).when(exceptionRepository).saveAndFlush(any(IntegrationDeviceCountExceptionEntity.class));
         when(auditService.recordFailureInCurrentTransaction(
                 any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(61L);
 
@@ -146,8 +146,8 @@ class DeviceCountWriteCommandServiceTest {
 
         assertThat(result.getStatus()).isEqualTo("FAILED");
         assertThat(result.getErrorCode()).isEqualTo("A0402");
-        ArgumentCaptor<DeviceCountExceptionEntity> captor =
-                ArgumentCaptor.forClass(DeviceCountExceptionEntity.class);
+        ArgumentCaptor<IntegrationDeviceCountExceptionEntity> captor =
+                ArgumentCaptor.forClass(IntegrationDeviceCountExceptionEntity.class);
         verify(exceptionRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getExceptionType()).isEqualTo(
                 DeviceCountExceptionTypeEnum.DISPATCH_NOT_FOUND.getValue());
@@ -164,10 +164,10 @@ class DeviceCountWriteCommandServiceTest {
                 .findFirstBySourceSystemAndEquipmentCodeAndDispatchOrderIdAndProcessIdAndDeletedFalseOrderByIdDesc(
                         any(), any(), any(), any())).thenReturn(Optional.of(previous));
         doAnswer(invocation -> {
-            DeviceCountExceptionEntity entity = invocation.getArgument(0);
+            IntegrationDeviceCountExceptionEntity entity = invocation.getArgument(0);
             entity.setId(70L);
             return entity;
-        }).when(exceptionRepository).saveAndFlush(any(DeviceCountExceptionEntity.class));
+        }).when(exceptionRepository).saveAndFlush(any(IntegrationDeviceCountExceptionEntity.class));
         when(auditService.recordFailureInCurrentTransaction(
                 any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(71L);
 
@@ -177,8 +177,8 @@ class DeviceCountWriteCommandServiceTest {
         assertThat(result.getStatus()).isEqualTo("FAILED");
         assertThat(result.getErrorCode()).isEqualTo(
                 IntegrationErrorCodeConstants.DEVICE_COUNT_ROLLBACK.code());
-        ArgumentCaptor<DeviceCountExceptionEntity> captor =
-                ArgumentCaptor.forClass(DeviceCountExceptionEntity.class);
+        ArgumentCaptor<IntegrationDeviceCountExceptionEntity> captor =
+                ArgumentCaptor.forClass(IntegrationDeviceCountExceptionEntity.class);
         verify(exceptionRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getExceptionType()).isEqualTo(
                 DeviceCountExceptionTypeEnum.COUNT_ROLLBACK.getValue());
@@ -211,7 +211,7 @@ class DeviceCountWriteCommandServiceTest {
     @Test
     @DisplayName("设备异常重试：原幂等键的失败日志被原子替换为成功结果")
     void retryExceptionReusesOriginalFailedIdempotencyKey() {
-        DeviceCountExceptionEntity exception = buildPendingException();
+        IntegrationDeviceCountExceptionEntity exception = buildPendingException();
         IntegrationWriteLogEntity failedLog = new IntegrationWriteLogEntity();
         failedLog.setId(91L);
         failedLog.setWriteStatus(IntegrationWriteStatusEnum.FAILED.getStatus());
@@ -248,7 +248,7 @@ class DeviceCountWriteCommandServiceTest {
     @Test
     @DisplayName("设备异常重试：修正为已成功的新幂等键时只关闭异常不重复写入")
     void retryExceptionAcceptsDuplicateOnlyWhenOriginalResultSucceeded() {
-        DeviceCountExceptionEntity exception = buildPendingException();
+        IntegrationDeviceCountExceptionEntity exception = buildPendingException();
         IntegrationWriteLogEntity successLog = new IntegrationWriteLogEntity();
         successLog.setId(93L);
         successLog.setWriteStatus(IntegrationWriteStatusEnum.SUCCESS.getStatus());
@@ -310,8 +310,8 @@ class DeviceCountWriteCommandServiceTest {
         return reqVO;
     }
 
-    private DeviceCountExceptionEntity buildPendingException() {
-        DeviceCountExceptionEntity exception = new DeviceCountExceptionEntity();
+    private IntegrationDeviceCountExceptionEntity buildPendingException() {
+        IntegrationDeviceCountExceptionEntity exception = new IntegrationDeviceCountExceptionEntity();
         exception.setId(90L);
         exception.setSourceSystem("DEVICE-GATEWAY");
         exception.setExternalKey("COUNT-001");
