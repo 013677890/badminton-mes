@@ -112,6 +112,11 @@ const businessEntries: DemoEntry[] = [
     path: '/integration/write-logs',
   },
   {
+    title: '条码应用',
+    description: '条码类型、编码规则、标签模板、应用规则，以及生成打印和使用履历',
+    path: '/barcode/config',
+  },
+  {
     title: '设备数据接入',
     description: '设备接入配置、联调验证、计数采集与异常处理闭环',
     path: '/device/access',
@@ -123,8 +128,13 @@ const businessEntries: DemoEntry[] = [
   },
   {
     title: '现场执行',
-    description: '报工审核与生产完工单创建、审核、作废操作台',
+    description: '任务下发、派工与工位作业、批次流转、报工完工和返修闭环',
     path: '/scene/execution',
+  },
+  {
+    title: '报表分析',
+    description: '实时生产、产出与不良统计、全链路产品追溯和看板快照',
+    path: '/report/center',
   },
 ]
 

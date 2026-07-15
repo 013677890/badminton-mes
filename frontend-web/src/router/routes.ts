@@ -9,7 +9,9 @@ import {
 } from '@/constants/integration'
 import { DEVICE_VIEW_ROLES } from '@/constants/device'
 import { ANDON_VIEW_ROLES } from '@/constants/andon'
-import { SCENE_EXECUTION_ROLES } from '@/constants/scene'
+import { SCENE_VIEW_ROLES } from '@/constants/scene'
+import { BARCODE_VIEW_ROLES } from '@/constants/barcode'
+import { REPORT_VIEW_ROLES } from '@/constants/report'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -194,6 +196,25 @@ export const menuRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/barcode',
+    redirect: '/barcode/config',
+    meta: { title: '条码应用', icon: 'Postcard', roles: BARCODE_VIEW_ROLES },
+    children: [
+      {
+        path: '/barcode/config',
+        name: 'BarcodeConfig',
+        component: () => import('@/views/barcode/BarcodeConfig.vue'),
+        meta: { title: '条码配置', roles: BARCODE_VIEW_ROLES },
+      },
+      {
+        path: '/barcode/instances',
+        name: 'BarcodeInstanceList',
+        component: () => import('@/views/barcode/BarcodeInstanceList.vue'),
+        meta: { title: '条码实例', roles: BARCODE_VIEW_ROLES },
+      },
+    ],
+  },
+  {
     path: '/device',
     redirect: '/device/access',
     meta: { title: '设备接入', icon: 'Monitor', roles: DEVICE_VIEW_ROLES },
@@ -222,13 +243,26 @@ export const menuRoutes: RouteRecordRaw[] = [
   {
     path: '/scene',
     redirect: '/scene/execution',
-    meta: { title: '现场执行', icon: 'Guide', roles: SCENE_EXECUTION_ROLES },
+    meta: { title: '现场执行', icon: 'Guide', roles: SCENE_VIEW_ROLES },
     children: [
       {
         path: '/scene/execution',
         name: 'SceneExecution',
         component: () => import('@/views/scene/SceneExecution.vue'),
-        meta: { title: '现场执行操作台', roles: SCENE_EXECUTION_ROLES },
+        meta: { title: '现场执行操作台', roles: SCENE_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/report',
+    redirect: '/report/center',
+    meta: { title: '报表分析', icon: 'DataAnalysis', roles: REPORT_VIEW_ROLES },
+    children: [
+      {
+        path: '/report/center',
+        name: 'ReportCenter',
+        component: () => import('@/views/report/ReportCenter.vue'),
+        meta: { title: '报表分析中心', roles: REPORT_VIEW_ROLES },
       },
     ],
   },

@@ -128,6 +128,10 @@ function isApiResult(data: unknown): data is ApiResult {
 
 service.interceptors.response.use(
   (response) => {
+    // 文件下载接口直接返回二进制流，不经过 CommonResult 解包。
+    if (response.config.responseType === 'blob') {
+      return response as never
+    }
     const body = response.data as ApiResult
     if (body.code !== SUCCESS_CODE) {
       ElMessage.error(body.userTip || body.message || '请求失败')
@@ -176,6 +180,14 @@ export function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig)
 
 export function del<T>(url: string, params?: object): Promise<T> {
   return service.delete(url, { params }) as Promise<T>
+}
+
+/** 下载后端二进制文件，保留响应头以解析服务端文件名。 */
+export function download(
+  url: string,
+  params?: object,
+): Promise<AxiosResponse<Blob>> {
+  return service.get(url, { params, responseType: 'blob' }) as Promise<AxiosResponse<Blob>>
 }
 
 export default service
