@@ -106,6 +106,11 @@ const businessEntries: DemoEntry[] = [
     description: '用户账号、角色分配与密码重置（仅管理员），停用即强制下线',
     path: '/system/users',
   },
+  {
+    title: '接口管理',
+    description: 'ERP 同步、外部写入日志、设备计数异常池与完工单读取的统一运维入口',
+    path: '/integration/write-logs',
+  },
 ]
 
 const demoEntries: DemoEntry[] = [

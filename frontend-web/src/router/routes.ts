@@ -1,6 +1,12 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { BASE_DATA_VIEW_ROLES, ROLES } from '@/constants/production'
 import { WAGE_RECORD_VIEW_ROLES, WAGE_VIEW_ROLES } from '@/constants/wage'
+import {
+  ERP_CRAFT_ROLES,
+  ERP_TASK_ROLES,
+  INTEGRATION_GROUP_ROLES,
+  INTEGRATION_MANAGE_ROLES,
+} from '@/constants/integration'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -143,6 +149,44 @@ export const menuRoutes: RouteRecordRaw[] = [
         name: 'RoleList',
         component: () => import('@/views/system/RoleList.vue'),
         meta: { title: '角色管理', roles: [ROLES.ADMIN] },
+      },
+    ],
+  },
+  {
+    path: '/integration',
+    redirect: '/integration/write-logs',
+    // 组级角色取并集：CRAFT_ENGINEER 仅可见 ERP 工艺待确认
+    meta: { title: '接口管理', icon: 'Connection', roles: INTEGRATION_GROUP_ROLES },
+    children: [
+      {
+        path: '/integration/erp-tasks',
+        name: 'ErpTaskSyncList',
+        component: () => import('@/views/integration/ErpTaskSyncList.vue'),
+        meta: { title: 'ERP 任务同步', roles: ERP_TASK_ROLES },
+      },
+      {
+        path: '/integration/erp-crafts',
+        name: 'ErpCraftPendingList',
+        component: () => import('@/views/integration/ErpCraftPendingList.vue'),
+        meta: { title: 'ERP 工艺待确认', roles: ERP_CRAFT_ROLES },
+      },
+      {
+        path: '/integration/write-logs',
+        name: 'WriteLogList',
+        component: () => import('@/views/integration/WriteLogList.vue'),
+        meta: { title: '外部写入日志', roles: INTEGRATION_MANAGE_ROLES },
+      },
+      {
+        path: '/integration/device-exceptions',
+        name: 'DeviceCountExceptionList',
+        component: () => import('@/views/integration/DeviceCountExceptionList.vue'),
+        meta: { title: '设备计数异常池', roles: INTEGRATION_MANAGE_ROLES },
+      },
+      {
+        path: '/integration/completion-orders',
+        name: 'CompletionOrderList',
+        component: () => import('@/views/integration/CompletionOrderList.vue'),
+        meta: { title: '完工单读取', roles: INTEGRATION_MANAGE_ROLES },
       },
     ],
   },
