@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 /**
  * {@link MaterialStockSyncService} 单元测试。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @ExtendWith(MockitoExtension.class)

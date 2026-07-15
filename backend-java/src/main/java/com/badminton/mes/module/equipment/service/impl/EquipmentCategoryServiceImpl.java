@@ -15,6 +15,8 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentCategoryConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentRedisKeyConstants;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategorySpecifications;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
@@ -34,7 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 设备类别 Service 实现。
  *
- * <p>Service 负责编排业务校验、事务、数据库写入。
+ * <p>维护设备类别树，并在事务内协调编码唯一性、父子层级、设备与故障原理引用以及工艺模块引用。
+ * 类别停用和逻辑删除均受生效工艺数据保护；修改、删除后仅在事务提交成功时失效详情缓存，避免
+ * 数据库回滚而缓存提前清除。更新和删除先锁定当前类别，使层级及跨表引用校验基于稳定版本。
  *
  * @author 角色C
  * @date 2026/07/09
@@ -42,20 +46,29 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
+    /** 记录类别主数据关键写操作。 */
     private static final Logger logger = LoggerFactory.getLogger(EquipmentCategoryServiceImpl.class);
 
     /** TODO(角色C, 2026/07/09): 认证模块建设后，改为从登录上下文获取当前用户 id */
     private static final Long DEFAULT_OPERATOR_ID = 1L;
 
+    /** 类别仓储，提供树结构查询、悲观锁读取及编码唯一性检查。 */
     private final EquipmentCategoryRepository categoryRepository;
 
+    /** 台账仓储，用于阻止删除仍被设备引用的类别。 */
     private final EquipmentLedgerRepository ledgerRepository;
 
+    /** 故障原理仓储，用于保护故障知识所依赖的适用类别。 */
     private final EquipmentFaultPrincipleRepository faultPrincipleRepository;
 
+    /** 工序仓储，用于保护启用工序引用。 */
     private final CraftProcessRepository processRepository;
 
+    /** 工艺路线明细仓储，用于保护生效路线引用。 */
     private final CraftRouteDetailRepository routeDetailRepository;
+
+    /** 类别详情缓存协调器，写事务提交后负责失效。 */
+    private final EquipmentCache equipmentCache;
 
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
@@ -65,20 +78,32 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
      * @param faultPrincipleRepository 设备故障原理 Repository
      * @param processRepository 工序 Repository
      * @param routeDetailRepository 路线明细 Repository
+     * @param equipmentCache 设备缓存组件
      */
     public EquipmentCategoryServiceImpl(
             EquipmentCategoryRepository categoryRepository,
             EquipmentLedgerRepository ledgerRepository,
             EquipmentFaultPrincipleRepository faultPrincipleRepository,
             CraftProcessRepository processRepository,
-            CraftRouteDetailRepository routeDetailRepository) {
+            CraftRouteDetailRepository routeDetailRepository,
+            EquipmentCache equipmentCache) {
         this.categoryRepository = categoryRepository;
         this.ledgerRepository = ledgerRepository;
         this.faultPrincipleRepository = faultPrincipleRepository;
         this.processRepository = processRepository;
         this.routeDetailRepository = routeDetailRepository;
+        this.equipmentCache = equipmentCache;
     }
 
+    /**
+     * 创建类别并校验编码及可选父级。
+     *
+     * <p>应用层查重便于快速返回业务异常，{@code saveAndFlush} 触发数据库唯一索引作为并发兜底；
+     * 创建人和缺省启用状态由服务统一补齐。
+     *
+     * @param reqVO 类别创建数据
+     * @return 新类别主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEquipmentCategory(EquipmentCategorySaveReqVO reqVO) {
@@ -108,6 +133,15 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         return category.getId();
     }
 
+    /**
+     * 更新类别树节点，并保护层级闭环和生效工艺引用。
+     *
+     * <p>当前类别先以悲观写锁读取；新父级既不能是自身，也不能位于当前节点的后代链上。类别从
+     * 启用切换为停用时，还必须确认没有启用工序或生效路线依赖该能力分类。
+     *
+     * @param id 类别主键
+     * @param reqVO 类别更新数据
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentCategory(Long id, EquipmentCategorySaveReqVO reqVO) {
@@ -135,9 +169,18 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         }
 
         categoryRepository.save(existing);
+        evictCategoryCacheAfterCommit(id);
         logger.info("[修改设备类别] id: {}, categoryCode: {}", id, reqVO.getCategoryCode());
     }
 
+    /**
+     * 在全部引用保护通过后逻辑删除类别。
+     *
+     * <p>子类别、设备、故障原理以及生效工艺任一引用存在时均拒绝删除。删除采用改写编码加删除标记
+     * 的方式保留审计记录并释放原唯一键，详情缓存延迟至事务提交后失效。
+     *
+     * @param id 类别主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentCategory(Long id) {
@@ -167,17 +210,35 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         category.setCategoryCode(deletedCode);
         category.setDeleted(true);
         categoryRepository.save(category);
+        evictCategoryCacheAfterCommit(id);
 
         logger.info("[删除设备类别] id: {}", id);
     }
 
+    /**
+     * 读取类别详情，缓存未命中时加载未删除实体并生成响应快照。
+     *
+     * @param id 类别主键
+     * @return 类别详情快照
+     */
     @Override
     @Transactional(readOnly = true)
     public EquipmentCategoryRespVO getEquipmentCategory(Long id) {
-        EquipmentCategoryEntity category = validateCategoryExists(id);
-        return EquipmentCategoryConvert.toRespVO(category);
+        return equipmentCache.getOrLoadDetail(EquipmentRedisKeyConstants.CATEGORY_RESOURCE,
+                id, EquipmentCategoryRespVO.class, () -> {
+            EquipmentCategoryRespVO response = EquipmentCategoryConvert.toRespVO(validateCategoryExists(id));
+            return response;
+        });
     }
 
+    /**
+     * 分页查询类别，按排序号和主键提供稳定顺序。
+     *
+     * <p>无匹配数据时跳过列表查询；请求页码超出范围时收敛到最后一页。
+     *
+     * @param reqVO 分页及筛选条件
+     * @return 类别分页快照
+     */
     @Override
     @Transactional(readOnly = true)
     public PageResult<EquipmentCategoryRespVO> getEquipmentCategoryPage(EquipmentCategoryPageReqVO reqVO) {
@@ -216,6 +277,8 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     /**
      * 以写锁查询设备类别，供修改和删除操作保护跨表引用校验。
      *
+     * <p>锁定当前节点可避免同一类别被并发修改或删除，使后续层级与引用判断对应同一实体版本。
+     *
      * @param id 类别主键
      * @return 类别实体
      */
@@ -225,7 +288,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     }
 
     /**
-     * 校验类别编码唯一性。
+     * 校验有效类别编码唯一性；并发事务的最终冲突由数据库唯一索引处理。
      *
      * @param categoryCode 类别编码
      * @param excludeId    排除的类别 id，创建时传 null
@@ -264,6 +327,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
      *   <li>直接自引用：不能将自己设为父级</li>
      *   <li>间接循环：新父级的祖先链中不能包含当前节点</li>
      * </ol>
+     * 祖先集合由仓储一次查询得到，既避免逐层访问，也能明确识别将节点挂到自身后代下的情况。
      *
      * @param currentId 当前类别 ID
      * @param newParentId 新的父级类别 ID
@@ -288,6 +352,8 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     /**
      * 校验设备类别未被启用工序或生效路线引用。
      *
+     * <p>仅保护当前仍具业务效力的引用，允许历史停用数据保留外键快照而不阻塞主数据治理。
+     *
      * @param categoryId 设备类别主键
      */
     private void validateNoActiveCraftReferences(Long categoryId) {
@@ -302,5 +368,14 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         if (routeReferenced) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE);
         }
+    }
+
+    /**
+     * 登记类别详情缓存在当前事务成功提交后失效。
+     *
+     * @param id 类别主键
+     */
+    private void evictCategoryCacheAfterCommit(Long id) {
+        equipmentCache.evictDetailAfterCommit(EquipmentRedisKeyConstants.CATEGORY_RESOURCE, id);
     }
 }

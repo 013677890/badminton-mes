@@ -2,30 +2,13 @@ package com.badminton.mes.module.scene.enums;
 
 import lombok.Getter;
 
-/**
- * 现场任务状态。
- *
- * @author Codex
- * @date 2026/07/13
- */
+/** 生产任务状态。 @author 刘涵 */
 @Getter
 public enum SceneTaskStatusEnum {
-
-    /** 待执行 */
+    /** A 组派工兼容状态，对应 B 组待审核。 */
     PENDING(0),
-
-    /** 执行中 */
-    EXECUTING(1),
-
-    /** 已完成 */
-    COMPLETED(2),
-
-    /** 已取消 */
-    CANCELLED(3);
-
+    PENDING_AUDIT(0), AUDITED(1), RELEASED(2), IN_PRODUCTION(3),
+    PAUSED(4), FINISHED(5), CLOSED(6), CANCELLED(7);
     private final Integer status;
-
-    SceneTaskStatusEnum(Integer status) {
-        this.status = status;
-    }
+    SceneTaskStatusEnum(Integer status) { this.status = status; }
 }

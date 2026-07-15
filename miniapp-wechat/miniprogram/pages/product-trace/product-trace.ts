@@ -1,0 +1,3 @@
+import { getTrace } from '../../services/report'
+import { Trace } from '../../types/api'
+Page({ data: { batchCode: '', trace: { processHistories: [], workReports: [], repairRecords: [], warnings: [], dataCompleteness: '' } as Trace }, input(event: WechatMiniprogram.Input) { this.setData({ batchCode: event.detail.value }) }, scan() { wx.scanCode({ success: result => { this.setData({ batchCode: result.result }); this.query() } }) }, query() { if (!this.data.batchCode) { wx.showToast({ title: '请输入批次码', icon: 'none' }); return } getTrace(this.data.batchCode).then(trace => this.setData({ trace })).catch(error => wx.showToast({ title: error.message, icon: 'none' })) } })

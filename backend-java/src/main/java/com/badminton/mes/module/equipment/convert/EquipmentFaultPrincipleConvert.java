@@ -9,6 +9,9 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentFaultPrincipleEnti
 /**
  * 设备故障原理 VO 与实体的转换器。
  *
+ * <p>以显式字段映射隔离故障知识的接口模型与持久化模型。转换层只传递故障描述、建议方案、等级
+ * 和可选类别主键，不判断类别是否有效，也不处理报修引用保护、编码唯一性及逻辑删除改名。
+ *
  * @author 角色C
  * @date 2026/07/10
  */
@@ -16,6 +19,9 @@ public final class EquipmentFaultPrincipleConvert {
 
     /**
      * 保存请求 VO 转实体。
+     *
+     * <p>复制客户端可维护的故障知识字段，保留空等级、空排序或空状态供 Service 应用创建默认值；
+     * 主键、审计字段和逻辑删除标记不会由请求写入。
      *
      * @param reqVO 保存请求 VO
      * @return 设备故障原理实体
@@ -36,6 +42,9 @@ public final class EquipmentFaultPrincipleConvert {
 
     /**
      * 实体转响应 VO。
+     *
+     * <p>输出故障知识及其适用类别主键的当前快照，同时带出创建、更新时间；不展开类别对象，避免
+     * 批量转换触发额外查询，也不暴露逻辑删除控制字段。
      *
      * @param faultPrinciple 设备故障原理实体
      * @return 响应 VO
@@ -67,6 +76,7 @@ public final class EquipmentFaultPrincipleConvert {
         return list.stream().map(EquipmentFaultPrincipleConvert::toRespVO).toList();
     }
 
+    /** 工具类仅提供无状态字段转换，禁止实例化。 */
     private EquipmentFaultPrincipleConvert() {
     }
 }

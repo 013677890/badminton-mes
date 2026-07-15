@@ -16,7 +16,7 @@ import lombok.Data;
 /**
  * 现场工序任务实体，保存派工下发时的工艺快照。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Data

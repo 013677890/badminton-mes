@@ -20,14 +20,14 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * 设备类别 Controller。
+ * 设备类别主数据 HTTP 接口。
  *
- * <p>Web 层职责保持单薄：声明式参数校验、转发 Service、包装统一响应，
- * 不写业务规则。路径全小写、单词用下划线分隔、资源名词用复数。
+ * <p>类别用于组织设备台账并形成父子层级。本控制器负责请求参数绑定、Bean Validation 校验、
+ * 调用 {@link EquipmentCategoryService} 以及包装统一响应；编码唯一性、父类别有效性、层级成环检查、
+ * 删除引用检查等需要访问持久层的规则由 Service 在事务内完成。
  *
- * <p>校验失败由 {@code GlobalExceptionHandler} 统一转为 A0400 响应；
- * 请求体字段校验触发 MethodArgumentNotValidException，路径参数约束触发
- * HandlerMethodValidationException。
+ * <p>请求体校验失败和路径主键约束失败均由全局异常处理器转换为统一错误响应，端点不自行捕获或
+ * 改写业务异常。
  *
  * @author 角色C
  * @date 2026/07/09
@@ -36,6 +36,7 @@ import jakarta.validation.constraints.Positive;
 @RequestMapping("/api/equipment/categories")
 public class EquipmentCategoryController {
 
+    /** 设备类别应用服务，负责类别层级和关联引用的一致性。 */
     private final EquipmentCategoryService categoryService;
 
     /**
@@ -48,10 +49,10 @@ public class EquipmentCategoryController {
     }
 
     /**
-     * 创建设备类别。
+     * 创建设备类别，编码唯一性和父类别可用性由 Service 校验。
      *
-     * @param reqVO 创建请求，字段规则见 {@link EquipmentCategorySaveReqVO}
-     * @return 新类别主键 id
+     * @param reqVO 已通过字段校验的类别创建数据，规则见 {@link EquipmentCategorySaveReqVO}
+     * @return 包含新类别主键的统一成功响应
      */
     @PostMapping
     public CommonResult<Long> createEquipmentCategory(@Valid @RequestBody EquipmentCategorySaveReqVO reqVO) {
@@ -59,11 +60,11 @@ public class EquipmentCategoryController {
     }
 
     /**
-     * 修改设备类别。
+     * 修改指定设备类别；更换父类别时由 Service 防止自引用或形成循环层级。
      *
-     * @param id    类别主键
-     * @param reqVO 修改请求
-     * @return 空数据成功响应
+     * @param id 类别主键，必须为正数
+     * @param reqVO 已通过字段校验的类别更新数据
+     * @return 不携带业务数据的统一成功响应
      */
     @PutMapping("/{id}")
     public CommonResult<Void> updateEquipmentCategory(@PathVariable("id") @Positive Long id,
@@ -73,12 +74,12 @@ public class EquipmentCategoryController {
     }
 
     /**
-     * 删除设备类别(逻辑删除)。
+     * 逻辑删除设备类别。
      *
-     * <p>存在下级分类或该类别下存在设备时不允许删除。
+     * <p>存在下级类别或仍被设备台账引用时，Service 将拒绝删除以保持关联数据完整。
      *
-     * @param id 类别主键
-     * @return 空数据成功响应
+     * @param id 类别主键，必须为正数
+     * @return 不携带业务数据的统一成功响应
      */
     @DeleteMapping("/{id}")
     public CommonResult<Void> deleteEquipmentCategory(@PathVariable("id") @Positive Long id) {
@@ -87,10 +88,10 @@ public class EquipmentCategoryController {
     }
 
     /**
-     * 查询设备类别详情。
+     * 按主键查询未逻辑删除的设备类别详情。
      *
-     * @param id 类别主键
-     * @return 类别详情
+     * @param id 类别主键，必须为正数
+     * @return 设备类别详情统一响应
      */
     @GetMapping("/{id}")
     public CommonResult<EquipmentCategoryRespVO> getEquipmentCategory(@PathVariable("id") @Positive Long id) {
@@ -98,10 +99,10 @@ public class EquipmentCategoryController {
     }
 
     /**
-     * 分页查询设备类别列表。
+     * 按关键字、父类别和启停状态组合分页查询设备类别。
      *
-     * @param reqVO 分页筛选条件，GET 查询参数绑定
-     * @return 分页结果，无数据时 list 为空集合
+     * @param reqVO 由 GET 查询参数绑定形成的分页筛选条件
+     * @return 设备类别分页结果，无匹配数据时列表为空集合
      */
     @GetMapping("/page")
     public CommonResult<PageResult<EquipmentCategoryRespVO>> getEquipmentCategoryPage(

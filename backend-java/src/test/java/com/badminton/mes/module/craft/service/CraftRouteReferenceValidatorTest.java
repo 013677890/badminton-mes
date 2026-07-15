@@ -86,7 +86,8 @@ class CraftRouteReferenceValidatorTest {
                 .thenReturn(List.of(process));
         CraftQualityPlanReferenceEntity plan = new CraftQualityPlanReferenceEntity();
         plan.setId(60L);
-        when(qualityPlanRepository.findByIdInAndStatusAndDeletedFalse(any(), eq(1)))
+        when(qualityPlanRepository.findByIdInAndPlanStatusAndDeletedFalse(
+                any(), eq(CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)))
                 .thenReturn(List.of(plan));
         CraftRouteStepSaveReqVO step = buildStep();
 
@@ -135,7 +136,8 @@ class CraftRouteReferenceValidatorTest {
                 .thenReturn(List.of(sop));
         CraftQualityPlanReferenceEntity plan = new CraftQualityPlanReferenceEntity();
         plan.setId(60L);
-        when(qualityPlanRepository.findAvailableByIdInForUpdateOrderByIdAsc(any(), eq(1)))
+        when(qualityPlanRepository.findAvailableByIdInForUpdateOrderByIdAsc(
+                any(), eq(CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)))
                 .thenReturn(List.of(plan));
         CraftRouteDetailEntity detail = buildDetail();
         detail.setStationId(30L);
@@ -151,7 +153,8 @@ class CraftRouteReferenceValidatorTest {
         verify(workstationRepository).findAvailableByIdInForUpdateOrderByIdAsc(any(), eq(1));
         verify(equipmentCategoryRepository).findAvailableByIdInForUpdateOrderByIdAsc(any(), eq(1));
         verify(sopRepository).findAvailableByIdInForUpdateOrderByIdAsc(any(), eq(1));
-        verify(qualityPlanRepository).findAvailableByIdInForUpdateOrderByIdAsc(any(), eq(1));
+        verify(qualityPlanRepository).findAvailableByIdInForUpdateOrderByIdAsc(
+                any(), eq(CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE));
     }
 
     /** 构造启用产品。 */

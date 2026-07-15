@@ -38,7 +38,7 @@ public class WorkOrderEntity {
     private String workOrderNo;
 
     /** 来源：1 手工 2 导入 3 ERP同步 4 API写入 */
-    @Column(name = "source_type")
+    @Column(name = "source_type", columnDefinition = "tinyint unsigned")
     private Integer sourceType;
 
     /** 外部来源系统 */
@@ -110,11 +110,11 @@ public class WorkOrderEntity {
     private Integer reworkQuantity;
 
     /** 允许超产比例 */
-    @Column(name = "over_ratio")
+    @Column(name = "over_ratio", precision = 5, scale = 2)
     private BigDecimal overRatio;
 
     /** 优先级 */
-    @Column(name = "priority")
+    @Column(name = "priority", columnDefinition = "tinyint unsigned")
     private Integer priority;
 
     /** 计划开始时间 */
@@ -126,11 +126,11 @@ public class WorkOrderEntity {
     private LocalDateTime planEndTime;
 
     /** 工单状态 */
-    @Column(name = "order_status")
+    @Column(name = "order_status", columnDefinition = "tinyint unsigned")
     private Integer orderStatus;
 
     /** 齐套状态 */
-    @Column(name = "kit_status")
+    @Column(name = "kit_status", columnDefinition = "tinyint unsigned")
     private Integer kitStatus;
 
     /** 创建人用户 id */
@@ -146,6 +146,6 @@ public class WorkOrderEntity {
     private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }
