@@ -1,5 +1,6 @@
 import type { OptionItem } from '@/types/components'
 import { getRoleUsers } from '@/api/system'
+import { getProcessPage } from '@/api/craft/process'
 import { BOM_STATUS, ROUTE_STATUS } from '@/constants/production'
 import { getBomPage } from './bom'
 import { getRoutePage } from './craftRoute'
@@ -66,6 +67,15 @@ export async function loadEffectiveRouteOptions(): Promise<OptionItem[]> {
   const page = await getRoutePage({ ...FULL_PAGE, routingStatus: ROUTE_STATUS.EFFECTIVE })
   return page.list.map((item) => ({
     label: `${item.routingCode} ${item.routingName}（${item.routingVersion}）`,
+    value: item.id,
+  }))
+}
+
+/** 启用工序 → 「编码 名称」（计件规则、工艺路线步骤选工序） */
+export async function loadProcessOptions(): Promise<OptionItem[]> {
+  const page = await getProcessPage({ ...FULL_PAGE, status: 1 })
+  return page.list.map((item) => ({
+    label: `${item.processCode} ${item.processName}`,
     value: item.id,
   }))
 }
