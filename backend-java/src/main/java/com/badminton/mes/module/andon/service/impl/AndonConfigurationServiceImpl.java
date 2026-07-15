@@ -34,7 +34,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 安灯异常处理配置 Service 实现。 */
+/**
+ * 安灯协助处理配置维护实现。
+ *
+ * <p>配置按“安灯类型 + 作用范围”唯一。{@code productionLineId == null} 表示全局规则，持久化时以
+ * {@code scopeLineId = 0} 统一参与唯一约束；非空值表示具体产线规则，事件创建时优先于全局规则。
+ *
+ * <p>规则至少包含处理用户或处理角色。升级分钟数必须与升级用户/角色成组配置，并且严格晚于响应
+ * 分钟数。更新和删除会锁定类型并拒绝存在活动事件的变更，防止处理中事件的责任、时限语义漂移；
+ * 详情缓存只在事务提交后失效。
+ */
 @Service
 public class AndonConfigurationServiceImpl implements AndonConfigurationService {
 
@@ -49,6 +58,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     private final RoleService roleService;
     private final AndonCache andonCache;
 
+    /** 注入配置、类型、责任主体查询服务及详情缓存。 */
     public AndonConfigurationServiceImpl(
             AndonConfigurationRepository configurationRepository,
             AndonTypeRepository typeRepository,
@@ -62,6 +72,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         this.andonCache = andonCache;
     }
 
+    /** 锁定类型，验证责任与时限规则、范围唯一性后创建配置。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createConfiguration(AndonConfigurationSaveReqVO request) {
@@ -77,6 +88,9 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         return configuration.getId();
     }
 
+    /**
+     * 更新配置时禁止更换安灯类型，并拒绝修改仍有活动事件的类型规则。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateConfiguration(Long id, AndonConfigurationSaveReqVO request) {
@@ -101,6 +115,9 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         evictConfigurationCacheAfterCommit(id);
     }
 
+    /**
+     * 无活动事件时逻辑删除配置；将作用域哨兵改为负主键，以释放原“类型 + 范围”唯一键。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteConfiguration(Long id) {
@@ -117,6 +134,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         evictConfigurationCacheAfterCommit(id);
     }
 
+    /** 读取配置详情并装配类型展示信息，聚合作为一个详情缓存单元。 */
     @Override
     @Transactional(readOnly = true)
     public AndonConfigurationRespVO getConfiguration(Long id) {
@@ -129,6 +147,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         });
     }
 
+    /** 分页查询配置，并批量预取类型以避免逐条关联查询。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<AndonConfigurationRespVO> getConfigurationPage(
@@ -162,6 +181,9 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /**
+     * 校验处理对象、升级对象和响应/升级时限的组合关系，并确认引用的用户与角色处于启用状态。
+     */
     private void validateConfigurationRule(AndonConfigurationSaveReqVO request) {
         boolean hasHandlerUser = request.getHandlerUserId() != null;
         boolean hasHandlerRole = StringUtils.hasText(request.getHandlerRoleCode());
@@ -192,6 +214,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         }
     }
 
+    /** 要求配置引用的责任用户处于启用状态。 */
     private void validateEnabledUser(Long userId) {
         UserRespVO user = userService.getUser(userId);
         if (!Integer.valueOf(ENABLED).equals(user.getStatus())) {
@@ -199,6 +222,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         }
     }
 
+    /** 要求配置引用的角色存在于当前启用角色集合。 */
     private void validateEnabledRole(String roleCode) {
         boolean roleExists = roleService.getEnabledRoles().stream()
                 .map(RoleRespVO::getRoleCode)
@@ -208,6 +232,9 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         }
     }
 
+    /**
+     * 将空产线规范为全局范围哨兵值，校验同一类型在同一全局或产线范围内只有一条未删除配置。
+     */
     private void validateScopeUnique(AndonConfigurationSaveReqVO request, Long excludedId) {
         long scopeLineId = request.getProductionLineId() == null
                 ? GLOBAL_SCOPE_LINE_ID : request.getProductionLineId();
@@ -221,10 +248,12 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         }
     }
 
+    /** 通过统一实体读取语义验证安灯类型存在。 */
     private void validateTypeExists(Long typeId) {
         getTypeEntity(typeId);
     }
 
+    /** 锁定类型，串行化该类型下配置与其他依赖类型规则的写操作。 */
     private void lockType(Long typeId) {
         typeRepository.findByIdAndDeletedFalseForUpdate(typeId)
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
@@ -235,6 +264,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
     }
 
+    /** 从分页批量预取结果中取得有效类型，避免返回缺少类型展示信息的配置。 */
     private AndonTypeEntity requireType(Map<Long, AndonTypeEntity> typesById, Long typeId) {
         AndonTypeEntity andonType = typesById.get(typeId);
         if (andonType == null || Boolean.TRUE.equals(andonType.getDeleted())) {
@@ -248,11 +278,13 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.CONFIGURATION_NOT_EXISTS));
     }
 
+    /** 以行锁读取配置，串行化同一规则的更新和删除。 */
     private AndonConfigurationEntity getConfigurationForUpdate(Long id) {
         return configurationRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.CONFIGURATION_NOT_EXISTS));
     }
 
+    /** 刷新写入并把数据库并发唯一约束冲突转换为范围重复业务异常。 */
     private void saveConfiguration(AndonConfigurationEntity configuration) {
         try {
             configurationRepository.saveAndFlush(configuration);
@@ -261,10 +293,12 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         }
     }
 
+    /** 在事务成功提交后失效配置详情缓存。 */
     private void evictConfigurationCacheAfterCommit(Long id) {
         andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.CONFIGURATION_RESOURCE, id);
     }
 
+    /** 无登录上下文时使用系统默认操作者，兼容初始化和后台调用。 */
     private Long getCurrentOperatorId() {
         if (SecurityContextHolder.getLoginUser() == null) {
             return DEFAULT_OPERATOR_ID;

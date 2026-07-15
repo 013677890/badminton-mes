@@ -22,25 +22,38 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** {@link QualityInspectionItemServiceImpl} 单元测试。 */
+/**
+ * {@link QualityInspectionItemServiceImpl} 的单元测试。
+ *
+ * <p>通过 Mock 项目、分类和方案关系仓储以及质量缓存隔离数据库与 Redis，重点验证项目更新时的
+ * 分类有效性协作、实体持久化，以及服务是否请求缓存组件安排项目详情和全部引用方案详情的级联失效。</p>
+ */
 @ExtendWith(MockitoExtension.class)
 class QualityInspectionItemServiceImplTest {
 
+    /** 被更新检验项目的固定主键，同时用于项目缓存键断言。 */
     private static final Long ITEM_ID = 200L;
+
+    /** 项目所属启用分类的固定主键，用于模拟分类有效性校验。 */
     private static final Long CATEGORY_ID = 100L;
 
+    /** 隔离检验项目的锁定读取与更新持久化。 */
     @Mock
     private QualityInspectionItemRepository itemRepository;
 
+    /** 隔离项目更新前对所属分类存在性和启用状态的查询。 */
     @Mock
     private QualityInspectionCategoryRepository categoryRepository;
 
+    /** 隔离引用当前项目的方案主键集合查询。 */
     @Mock
     private QualityInspectionPlanItemRepository planItemRepository;
 
+    /** 隔离 Redis，并验证项目及关联方案的提交后缓存失效。 */
     @Mock
     private QualityCache qualityCache;
 
+    /** 使用全部 Mock 协作者构建的被测项目服务。 */
     private QualityInspectionItemServiceImpl itemService;
 
     @BeforeEach
@@ -69,6 +82,7 @@ class QualityInspectionItemServiceImplTest {
         itemService.updateItem(ITEM_ID, request);
 
         verify(itemRepository).saveAndFlush(item);
+        // 先核对项目自身缓存键，再核对所有引用方案，覆盖更新的级联缓存副作用边界。
         verify(qualityCache).evictDetailAfterCommit(
                 QualityRedisKeyConstants.INSPECTION_ITEM_RESOURCE,
                 ITEM_ID);
@@ -77,6 +91,9 @@ class QualityInspectionItemServiceImplTest {
                 planIds);
     }
 
+    /**
+     * 构造数据库中的既有项目快照，为更新流程提供完整且可编辑的初始状态。
+     */
     private QualityInspectionItemEntity buildItem() {
         QualityInspectionItemEntity item = new QualityInspectionItemEntity();
         item.setId(ITEM_ID);
@@ -91,6 +108,9 @@ class QualityInspectionItemServiceImplTest {
         return item;
     }
 
+    /**
+     * 构造启用且未删除的分类夹具，使测试聚焦项目更新与缓存传播而非异常分支。
+     */
     private QualityInspectionCategoryEntity buildEnabledCategory() {
         QualityInspectionCategoryEntity category = new QualityInspectionCategoryEntity();
         category.setId(CATEGORY_ID);
@@ -99,6 +119,9 @@ class QualityInspectionItemServiceImplTest {
         return category;
     }
 
+    /**
+     * 构造合法更新请求，集中表达本次更新后的项目字段快照。
+     */
     private QualityInspectionItemSaveReqVO buildUpdateRequest() {
         QualityInspectionItemSaveReqVO request = new QualityInspectionItemSaveReqVO();
         request.setItemCode("COLOR");

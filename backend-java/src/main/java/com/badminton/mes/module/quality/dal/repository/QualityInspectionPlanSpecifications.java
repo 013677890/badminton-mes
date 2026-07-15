@@ -11,9 +11,15 @@ import org.springframework.util.StringUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/** 检验标准方案动态查询条件。 */
+/**
+ * 检验标准方案版本分页查询的动态条件构造器。
+ *
+ * <p>固定排除逻辑删除版本；产品、客户、检验类型和版本状态采用精确匹配，关键词在方案编码与名称
+ * 之间执行 OR 模糊匹配，所有已提供的条件最终以 AND 组合。
+ */
 public final class QualityInspectionPlanSpecifications {
 
+    /** 根据分页请求动态拼装方案适用范围、状态及关键词条件。 */
     public static Specification<QualityInspectionPlanEntity> page(QualityInspectionPlanPageReqVO request) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -40,6 +46,7 @@ public final class QualityInspectionPlanSpecifications {
         };
     }
 
+    /** 转义 LIKE 元字符，保证关键词中的特殊字符按字面值查询。 */
     private static String escapeWildcards(String input) {
         return input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }

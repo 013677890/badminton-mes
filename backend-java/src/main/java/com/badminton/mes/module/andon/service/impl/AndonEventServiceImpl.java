@@ -59,10 +59,25 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/** 现场安灯异常 Service 实现。 */
+/**
+ * 现场安灯事件核心业务实现。
+ *
+ * <p>创建事件时根据类型选择三种处理模式：{@code NO_ACTION} 由系统立即完成并关闭，
+ * {@code SELF_HANDLE} 指派给发起人自行确认处理，{@code ASSISTANCE} 则按“产线配置优先、
+ * 全局配置其次、类型默认规则兜底”的顺序确定责任主体、响应时限、升级时限和通知渠道。
+ *
+ * <p>人工操作严格沿状态机推进，行级锁避免并发重复处理；普通处理动作只允许当前指派用户、
+ * 指派角色或管理角色执行，最终关闭仅允许管理角色执行。每次有效变更均写入处理日志，并按当前
+ * 最佳可用规则生成模拟通知记录。设备灯控同样为状态模拟，不调用外部硬件。
+ *
+ * <p>超时扫描先查询候选事件，再通过 {@link TransactionTemplate} 为每个事件开启
+ * {@code REQUIRES_NEW} 事务。单条事件的锁冲突、规则错误或通知写入失败不会回滚同轮其他事件；
+ * 失败记录也使用独立事务，连失败记录本身异常时仍保留下一轮重试能力。
+ */
 @Service
 public class AndonEventServiceImpl implements AndonEventService {
 
+    /** 启用值、全局范围哨兵值及无登录上下文时用于系统动作的默认操作者。 */
     private static final int ENABLED = 1;
     private static final long GLOBAL_SCOPE_LINE_ID = 0L;
     private static final Long DEFAULT_OPERATOR_ID = 1L;
@@ -82,8 +97,10 @@ public class AndonEventServiceImpl implements AndonEventService {
     private static final String LIGHT_OFF = "OFF";
     private static final String LIGHT_FAILED = "FAILED";
     private static final String NOTIFICATION_SIMULATED = "SIMULATED";
+    /** 可越过普通指派限制处理事件，且可执行最终关闭验收的管理角色。 */
     private static final Set<String> MANAGEMENT_ROLE_CODES = Set.of(
             "ADMIN", "WORKSHOP_MANAGER", "TEAM_LEADER");
+    /** 允许作为安灯事件可信业务来源的活动工单状态。 */
     private static final Set<Integer> ACTIVE_WORK_ORDER_STATUSES = Set.of(1, 2, 3);
     private static final DateTimeFormatter EVENT_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
@@ -101,8 +118,12 @@ public class AndonEventServiceImpl implements AndonEventService {
     private final UserService userService;
     private final RoleService roleService;
     private final AndonCache andonCache;
+    /** 为超时候选逐条创建新事务，避免外层只读事务或同批事件之间相互污染。 */
     private final TransactionTemplate timeoutTransactionTemplate;
 
+    /**
+     * 注入事件、规则、审计、通知及外部业务引用服务，并配置超时处理的独立事务模板。
+     */
     public AndonEventServiceImpl(
             AndonEventRepository eventRepository,
             AndonProcessLogRepository processLogRepository,
@@ -135,6 +156,12 @@ public class AndonEventServiceImpl implements AndonEventService {
         this.timeoutTransactionTemplate.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
     }
 
+    /**
+     * 创建事件前锁定类型和原因，校验并以质量记录、工单、设备等可信来源补齐业务引用。
+     *
+     * <p>三种模式共享事件编号、严重度、超时和灯控初始化；仅协助模式生成初始通知，
+     * 自处理模式直接指派发起人，无须处理模式在同一事务内自动走完确认、完成和关闭语义。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEvent(AndonEventCreateReqVO request) {
@@ -173,6 +200,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return event.getId();
     }
 
+    /** 确认待确认事件，校验实际原因归属与处理权限，并清除响应截止时间。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmEvent(Long id, AndonEventActionReqVO request) {
@@ -192,6 +220,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已确认");
     }
 
+    /** 由有权处理人将已确认事件推进到处理中，并同步记录日志和状态通知。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void startProcessing(Long id, AndonEventActionReqVO request) {
@@ -201,6 +230,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         transitionSimple(event, request, STATUS_PROCESSING, "START_PROCESS", "异常开始处理");
     }
 
+    /**
+     * 在已确认或处理中阶段变更责任主体；转派说明必填，状态保持不变以保留处理阶段语义。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void transferEvent(Long id, AndonEventActionReqVO request) {
@@ -219,6 +251,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已转派");
     }
 
+    /**
+     * 验证实际原因和处理结果完整后进入待关闭，记录影响数据并终止响应、升级计时。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void completeEvent(Long id, AndonEventActionReqVO request) {
@@ -243,6 +278,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常处理已完成，等待关闭");
     }
 
+    /** 仅允许管理人员关闭待关闭事件，并将已开启的模拟设备灯切换为关闭。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void closeEvent(Long id, AndonEventActionReqVO request) {
@@ -265,6 +301,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已关闭");
     }
 
+    /**
+     * 手工升级事件；请求指定的对象优先于规则默认升级对象，升级不改变业务处理状态。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void escalateEvent(Long id, AndonEventActionReqVO request) {
@@ -300,6 +339,12 @@ public class AndonEventServiceImpl implements AndonEventService {
                 "安灯异常已升级：" + event.getEventNo()));
     }
 
+    /**
+     * 扫描当前时刻的超时候选，并在独立新事务中逐条重读和加锁后处理。
+     *
+     * <p>候选快照仅提供主键，最终是否到期以新事务中的最新状态为准。单条运行时异常被捕获后
+     * 单独记录失败，不中断循环；返回值只统计真正完成响应超时标记或自动升级的事件。
+     */
     @Override
     @Transactional(readOnly = true)
     public int processTimeoutEvents() {
@@ -319,6 +364,10 @@ public class AndonEventServiceImpl implements AndonEventService {
         return processedEventCount;
     }
 
+    /**
+     * 在新的事务中记录单事件超时处理失败，并清除截止时间以避免持续形成失败热点。
+     * 失败记录事务再次异常时吞掉异常，使批次继续执行并保留事件原状态供后续扫描重试。
+     */
     private void recordTimeoutProcessingFailure(Long eventId, RuntimeException exception) {
         try {
             timeoutTransactionTemplate.executeWithoutResult(status -> {
@@ -344,11 +393,15 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 提取可审计的失败信息；无异常消息时退化为异常类型名称。 */
     private String getFailureMessage(RuntimeException exception) {
         String failureMessage = exception.getMessage();
         return StringUtils.hasText(failureMessage) ? failureMessage : exception.getClass().getSimpleName();
     }
 
+    /**
+     * 在单事件新事务内重新加锁判断：升级到期优先于响应超时，关闭或尚未到期则不处理。
+     */
     private boolean processSingleTimeoutEvent(Long eventId, LocalDateTime now) {
         AndonEventEntity event = getEventForUpdate(eventId);
         if (STATUS_CLOSED.equals(event.getEventStatus())) {
@@ -376,6 +429,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         return true;
     }
 
+    /**
+     * 查询事件聚合详情；缓存未命中时一次装配类型、处理日志和模拟通知记录。
+     */
     @Override
     @Transactional(readOnly = true)
     public AndonEventRespVO getEvent(Long id) {
@@ -391,6 +447,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         });
     }
 
+    /**
+     * 分页返回事件摘要，批量预取类型以避免逐条查询；日志和通知集合刻意留空以控制列表开销。
+     */
     @Override
     @Transactional(readOnly = true)
     public PageResult<AndonEventRespVO> getEventPage(AndonEventPageReqVO request) {
@@ -414,6 +473,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 查询事件处理日志，并先验证事件仍然存在且未被逻辑删除。 */
     @Override
     @Transactional(readOnly = true)
     public List<AndonProcessLogRespVO> getProcessLogs(Long id) {
@@ -423,6 +483,7 @@ public class AndonEventServiceImpl implements AndonEventService {
                 .toList();
     }
 
+    /** 统一执行不含附加字段的状态迁移，保证主表、处理日志和状态通知在同一事务内落库。 */
     private void transitionSimple(
             AndonEventEntity event,
             AndonEventActionReqVO request,
@@ -437,6 +498,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, notificationMessage);
     }
 
+    /**
+     * 按事件产线解析协助规则，初始化处理责任和从发起时刻计算的响应、升级截止时间。
+     */
     private AssistanceRule prepareAssistanceEvent(
             AndonEventEntity event,
             AndonTypeEntity andonType,
@@ -454,6 +518,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         return assistanceRule;
     }
 
+    /**
+     * 将无须处理事件在创建事务中直接闭环，并用发起人和同一时间戳补齐完整审计字段。
+     */
     private void prepareNoActionEvent(AndonEventEntity event, LocalDateTime completedAt) {
         event.setActualReasonId(event.getReasonId());
         event.setEventStatus(STATUS_CLOSED);
@@ -470,6 +537,12 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /**
+     * 校验事件业务引用并从可信来源反向补齐上下文。
+     *
+     * <p>当前不接受生产任务和工序直接引用；产线必须由已提交质量记录或有效设备证明，工单、设备、
+     * 质量记录之间的车间、产线和批次必须一致，防止调用方拼接出不存在的生产现场关系。
+     */
     private void validateAndEnrichReferences(AndonEventEntity event) {
         if (event.getProductionTaskId() != null || event.getProcessId() != null) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_REFERENCE_UNSUPPORTED);
@@ -513,6 +586,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 对齐请求标识与可信来源标识；两者同时存在但不一致时拒绝创建事件。 */
     private Long reconcileId(Long requestedId, Long trustedId) {
         if (requestedId != null && trustedId != null && !requestedId.equals(trustedId)) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_REFERENCE_INVALID);
@@ -520,6 +594,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return trustedId == null ? requestedId : trustedId;
     }
 
+    /** 对齐批次等文本引用，优先采用可信来源中的非空值。 */
     private String reconcileText(String requestedText, String trustedText) {
         if (StringUtils.hasText(requestedText) && StringUtils.hasText(trustedText)
                 && !requestedText.equals(trustedText)) {
@@ -528,6 +603,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         return StringUtils.hasText(trustedText) ? trustedText : requestedText;
     }
 
+    /**
+     * 为新事件解析协助规则并锁定配置：具体产线优先，其次使用全局范围，最后回退到类型默认规则。
+     */
     private AssistanceRule resolveAssistanceRuleForCreate(
             AndonTypeEntity andonType,
             Long productionLineId) {
@@ -548,6 +626,12 @@ public class AndonEventServiceImpl implements AndonEventService {
         return toTypeDefaultAssistanceRule(andonType);
     }
 
+    /**
+     * 为存量事件尽力恢复通知和升级规则。
+     *
+     * <p>先查最新启用的产线或全局配置；若维护期间配置状态已变化，再从未删除历史配置中选择
+     * 最新匹配项，最后尝试类型默认协助规则。该回退链保证事件发起后配置变化不至于切断审计通知。
+     */
     private Optional<AssistanceRule> findBestEffortAssistanceRule(
             Long typeId,
             Long productionLineId) {
@@ -581,6 +665,7 @@ public class AndonEventServiceImpl implements AndonEventService {
                 .map(this::toTypeDefaultAssistanceRule);
     }
 
+    /** 将持久化配置投影为事件处理所需的不可变规则快照。 */
     private AssistanceRule toAssistanceRule(AndonConfigurationEntity configuration) {
         return new AssistanceRule(
                 configuration.getHandlerUserId(),
@@ -592,6 +677,9 @@ public class AndonEventServiceImpl implements AndonEventService {
                 configuration.getNotificationChannels());
     }
 
+    /**
+     * 使用类型上的默认角色、响应时限和通知渠道构造兜底规则；缺少任一必需项即视为未匹配配置。
+     */
     private AssistanceRule toTypeDefaultAssistanceRule(AndonTypeEntity andonType) {
         if (andonType.getResponseMinutes() == null
                 || !StringUtils.hasText(andonType.getResponsibleRoleCode())
@@ -608,12 +696,14 @@ public class AndonEventServiceImpl implements AndonEventService {
                 andonType.getNotificationChannels());
     }
 
+    /** 判断事件是否存在已到期且尚未执行过的升级截止时间。 */
     private boolean shouldEscalate(AndonEventEntity event, LocalDateTime now) {
         return !TIMEOUT_ESCALATED.equals(event.getTimeoutStatus())
                 && event.getEscalationDeadline() != null
                 && !event.getEscalationDeadline().isAfter(now);
     }
 
+    /** 响应超时只适用于仍待确认、超时状态正常且响应截止时间已到的事件。 */
     private boolean shouldMarkResponseOverdue(AndonEventEntity event, LocalDateTime now) {
         return STATUS_PENDING_CONFIRMATION.equals(event.getEventStatus())
                 && TIMEOUT_NORMAL.equals(event.getTimeoutStatus())
@@ -621,6 +711,10 @@ public class AndonEventServiceImpl implements AndonEventService {
                 && !event.getResponseDeadline().isAfter(now);
     }
 
+    /**
+     * 自动升级到规则中的升级责任主体并记录系统日志、模拟通知。
+     * 若存量规则没有升级对象，则清除升级截止时间并返回未处理，避免每轮重复命中同一无效规则。
+     */
     private boolean escalateTimeoutEvent(AndonEventEntity event) {
         Optional<AssistanceRule> assistanceRule = findBestEffortAssistanceRule(
                 event.getAndonTypeId(), event.getProductionLineId());
@@ -661,10 +755,14 @@ public class AndonEventServiceImpl implements AndonEventService {
         return true;
     }
 
+    /** 校验实际原因存在、启用且归属于事件类型。 */
     private void validateReason(Long reasonId, Long typeId) {
         validateReasonForUpdate(reasonId, typeId);
     }
 
+    /**
+     * 以行锁读取可选原因，防止事件创建或确认期间原因被并发禁用、删除或调整归属。
+     */
     private void validateReasonForUpdate(Long reasonId, Long typeId) {
         if (reasonId == null) {
             return;
@@ -676,6 +774,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /**
+     * 验证责任主体至少包含有效用户或有效角色；两者同时提供时分别校验，支持联合指派。
+     */
     private void validateAssignment(Long userId, String roleCode) {
         if (userId == null && !StringUtils.hasText(roleCode)) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_ASSIGNEE_INVALID);
@@ -696,6 +797,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 要求处理结果和实际原因完整；请求未重复提供原因时沿用确认阶段已归属的原因。 */
     private void validateCompletionRequest(AndonEventEntity event, AndonEventActionReqVO request) {
         Long actualReasonId = request.getActualReasonId() == null
                 ? event.getActualReasonId() : request.getActualReasonId();
@@ -705,6 +807,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         validateReason(actualReasonId, event.getAndonTypeId());
     }
 
+    /**
+     * 初始化模拟灯控状态：类型未启用灯控则无须操作，缺少设备则标记失败，否则模拟开灯成功。
+     */
     private void applyInitialLightStatus(AndonEventEntity event, AndonTypeEntity andonType) {
         if (!Boolean.TRUE.equals(andonType.getLightControlEnabled())) {
             event.setLightStatus(LIGHT_NOT_REQUIRED);
@@ -718,6 +823,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 按存量事件的最佳可用规则，为当前责任主体生成状态类模拟通知。 */
     private void saveStatusNotifications(AndonEventEntity event, String message) {
         findBestEffortAssistanceRule(event.getAndonTypeId(), event.getProductionLineId())
                 .ifPresent(rule -> saveNotifications(
@@ -729,6 +835,7 @@ public class AndonEventServiceImpl implements AndonEventService {
                         message + "：" + event.getEventNo()));
     }
 
+    /** 事件处理期间使用的责任、时限与通知渠道规则快照。 */
     private record AssistanceRule(
             Long handlerUserId,
             String handlerRoleCode,
@@ -739,6 +846,9 @@ public class AndonEventServiceImpl implements AndonEventService {
             String notificationChannels) {
     }
 
+    /**
+     * 将逗号分隔渠道逐项落为模拟发送记录；当前只保留发送审计，不接入真实消息网关。
+     */
     private void saveNotifications(AndonEventEntity event, String channels, String notificationType,
                                    Long receiverUserId, String receiverRoleCode, String message) {
         if (!StringUtils.hasText(channels)) {
@@ -752,6 +862,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         notificationRepository.saveAll(notifications);
     }
 
+    /** 构造一条已模拟发送的通知记录，保留接收用户、角色、渠道和发送时刻。 */
     private AndonNotificationRecordEntity createNotification(
             Long eventId, String notificationType, String channel, Long receiverUserId,
             String receiverRoleCode, String message, LocalDateTime sentAt) {
@@ -767,6 +878,9 @@ public class AndonEventServiceImpl implements AndonEventService {
         return notification;
     }
 
+    /**
+     * 记录事件动作、状态前后值、操作者和目标责任主体，形成独立于主表当前值的审计轨迹。
+     */
     private void saveProcessLog(AndonEventEntity event, String actionType, String fromStatus,
                                 String toStatus, Long operatorId, Long targetUserId,
                                 String targetRoleCode, String actionContent) {
@@ -782,23 +896,29 @@ public class AndonEventServiceImpl implements AndonEventService {
         processLogRepository.save(processLog);
     }
 
+    /** 组合毫秒时间戳与随机片段生成事件业务编号，数据库唯一约束负责最终并发兜底。 */
     private String generateEventNo(LocalDateTime now) {
         return "AND" + EVENT_TIME_FORMATTER.format(now)
                 + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 
+    /** 强制事件处于唯一允许的状态，阻止跳步或重复状态迁移。 */
     private void requireStatus(AndonEventEntity event, String requiredStatus) {
         if (!requiredStatus.equals(event.getEventStatus())) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_STATUS_INVALID);
         }
     }
 
+    /** 强制事件处于给定状态集合之一。 */
     private void requireAnyStatus(AndonEventEntity event, String... allowedStatuses) {
         if (!Set.of(allowedStatuses).contains(event.getEventStatus())) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_STATUS_INVALID);
         }
     }
 
+    /**
+     * 校验普通处理权限：无登录上下文视为系统调用；管理角色、指派用户或拥有指派角色者可操作。
+     */
     private void requireCanHandle(AndonEventEntity event) {
         LoginUser loginUser = SecurityContextHolder.getLoginUser();
         if (loginUser == null || hasManagementRole(loginUser)) {
@@ -814,6 +934,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 最终关闭要求系统调用或管理角色，普通责任人只能将事件处理到待关闭。 */
     private void requireManagementOperator() {
         LoginUser loginUser = SecurityContextHolder.getLoginUser();
         if (loginUser == null || hasManagementRole(loginUser)) {
@@ -822,11 +943,13 @@ public class AndonEventServiceImpl implements AndonEventService {
         throw new ServiceException(AndonErrorCodeConstants.EVENT_OPERATION_FORBIDDEN);
     }
 
+    /** 判断登录用户是否拥有任一安灯管理角色。 */
     private boolean hasManagementRole(LoginUser loginUser) {
         return loginUser.getRoleCodes() != null
                 && loginUser.getRoleCodes().stream().anyMatch(MANAGEMENT_ROLE_CODES::contains);
     }
 
+    /** 读取未删除且启用的安灯类型。 */
     private AndonTypeEntity getEnabledType(Long typeId) {
         AndonTypeEntity andonType = getType(typeId);
         if (!Integer.valueOf(ENABLED).equals(andonType.getEnabledStatus())) {
@@ -835,6 +958,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return andonType;
     }
 
+    /** 加锁读取未删除且启用的类型，稳定事件创建期间的处理模式和默认规则。 */
     private AndonTypeEntity getEnabledTypeForUpdate(Long typeId) {
         AndonTypeEntity andonType = typeRepository.findByIdAndDeletedFalseForUpdate(typeId)
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
@@ -849,6 +973,7 @@ public class AndonEventServiceImpl implements AndonEventService {
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
     }
 
+    /** 从分页预取结果中取得有效类型，缺失关联数据时拒绝返回不完整响应。 */
     private AndonTypeEntity requireType(Map<Long, AndonTypeEntity> typesById, Long typeId) {
         AndonTypeEntity andonType = typesById.get(typeId);
         if (andonType == null || Boolean.TRUE.equals(andonType.getDeleted())) {
@@ -862,11 +987,15 @@ public class AndonEventServiceImpl implements AndonEventService {
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.EVENT_NOT_EXISTS));
     }
 
+    /** 以行锁读取事件，串行化同一事件的状态迁移和责任变更。 */
     private AndonEventEntity getEventForUpdate(Long id) {
         return eventRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.EVENT_NOT_EXISTS));
     }
 
+    /**
+     * 立即刷新事件以尽早暴露编号唯一约束，并在事务提交后失效事件详情缓存，避免读到未提交状态。
+     */
     private void saveEvent(AndonEventEntity event) {
         try {
             eventRepository.saveAndFlush(event);
@@ -878,6 +1007,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         }
     }
 
+    /** 返回当前登录用户；调度和其他无登录上下文调用使用系统默认操作者。 */
     private Long getCurrentOperatorId() {
         if (SecurityContextHolder.getLoginUser() == null) {
             return DEFAULT_OPERATOR_ID;

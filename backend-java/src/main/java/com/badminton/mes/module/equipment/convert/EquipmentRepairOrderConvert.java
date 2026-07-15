@@ -9,6 +9,10 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentRepairOrderEntity;
 /**
  * 设备报修任务 VO 与实体的转换器。
  *
+ * <p>显式映射报修任务的设备、故障原理、人员、时间、结果和状态字段，形成清晰的任务快照边界。
+ * 转换器不推进状态机、不补默认时间，也不校验故障原理与设备类别是否匹配；这些需要锁和事务的
+ * 规则统一留在 Service 中执行。
+ *
  * @author 角色C
  * @date 2026/07/10
  */
@@ -16,6 +20,9 @@ public final class EquipmentRepairOrderConvert {
 
     /**
      * 保存请求 VO 转实体。
+     *
+     * <p>请求中的状态和时间在此原样搬运，便于创建流程统一接收字段；Service 随后负责生成缺省
+     * 单号和上报信息，并按状态补齐关键时间。该新实体不用于绕过状态校验覆盖既有任务。
      *
      * @param reqVO 保存请求 VO
      * @return 设备报修任务实体
@@ -39,6 +46,9 @@ public final class EquipmentRepairOrderConvert {
 
     /**
      * 实体转响应 VO。
+     *
+     * <p>输出已持久化的任务生命周期快照，包括关联主键、人员、关键时间和维修结果；不加载设备
+     * 或故障原理详情，也不暴露逻辑删除与审计操作者等内部字段。
      *
      * @param repairOrder 设备报修任务实体
      * @return 响应 VO
@@ -73,6 +83,7 @@ public final class EquipmentRepairOrderConvert {
         return list.stream().map(EquipmentRepairOrderConvert::toRespVO).toList();
     }
 
+    /** 工具类仅提供无状态字段转换，禁止实例化。 */
     private EquipmentRepairOrderConvert() {
     }
 }
