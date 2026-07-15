@@ -9,6 +9,7 @@ import com.badminton.mes.module.quality.constants.QualityErrorCodeConstants;
 import com.badminton.mes.module.quality.controller.vo.QualityInspectionRecordSubmitReqVO;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionRecordEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionResultEntity;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanRepository;
@@ -36,7 +37,7 @@ class QualityInspectionRecordServiceImplTest {
     private final QualityInspectionRecordServiceImpl service = new QualityInspectionRecordServiceImpl(
             recordRepository, resultRepository, mock(QualityInspectionPlanRepository.class),
             mock(QualityInspectionPlanItemRepository.class), mock(QualityInspectionItemRepository.class),
-            mock(WorkOrderService.class));
+            mock(WorkOrderService.class), mock(QualityCache.class));
 
     @Test
     void failedInspectionPersistsDefectQuantityAndGroupNumber() {

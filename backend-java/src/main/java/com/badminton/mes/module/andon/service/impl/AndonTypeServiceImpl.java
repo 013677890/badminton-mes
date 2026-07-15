@@ -11,6 +11,11 @@ import com.badminton.mes.module.andon.controller.vo.AndonTypeRespVO;
 import com.badminton.mes.module.andon.controller.vo.AndonTypeSaveReqVO;
 import com.badminton.mes.module.andon.convert.AndonTypeConvert;
 import com.badminton.mes.module.andon.dal.entity.AndonTypeEntity;
+import com.badminton.mes.module.andon.dal.redis.AndonCache;
+import com.badminton.mes.module.andon.dal.redis.AndonRedisKeyConstants;
+import com.badminton.mes.module.andon.dal.repository.AndonConfigurationRepository;
+import com.badminton.mes.module.andon.dal.repository.AndonEventRepository;
+import com.badminton.mes.module.andon.dal.repository.AndonReasonRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonTypeRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonTypeSpecifications;
 import com.badminton.mes.module.andon.service.AndonTypeService;
@@ -34,9 +39,21 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     private static final String DELETED_CODE_PREFIX = "__DELETED_";
 
     private final AndonTypeRepository typeRepository;
+    private final AndonReasonRepository reasonRepository;
+    private final AndonConfigurationRepository configurationRepository;
+    private final AndonEventRepository eventRepository;
+    private final AndonCache andonCache;
 
-    public AndonTypeServiceImpl(AndonTypeRepository typeRepository) {
+    public AndonTypeServiceImpl(AndonTypeRepository typeRepository,
+                                AndonReasonRepository reasonRepository,
+                                AndonConfigurationRepository configurationRepository,
+                                AndonEventRepository eventRepository,
+                                AndonCache andonCache) {
         this.typeRepository = typeRepository;
+        this.reasonRepository = reasonRepository;
+        this.configurationRepository = configurationRepository;
+        this.eventRepository = eventRepository;
+        this.andonCache = andonCache;
     }
 
     @Override
@@ -69,6 +86,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
             type.setLightControlEnabled(previousLightControlEnabled);
         }
         saveType(type);
+        evictTypeAggregateCacheAfterCommit(id);
     }
 
     @Override
@@ -89,12 +107,17 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         type.setEnabledStatus(DISABLED);
         type.setDeleted(true);
         saveType(type);
+        evictTypeCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public AndonTypeRespVO getType(Long id) {
-        return AndonTypeConvert.toRespVO(getTypeEntity(id));
+        return andonCache.getOrLoadDetail(AndonRedisKeyConstants.TYPE_RESOURCE,
+                id, AndonTypeRespVO.class, () -> {
+            AndonTypeRespVO response = AndonTypeConvert.toRespVO(getTypeEntity(id));
+            return response;
+        });
     }
 
     @Override
@@ -148,6 +171,20 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.TYPE_CODE_DUPLICATE);
         }
+    }
+
+    private void evictTypeCacheAfterCommit(Long id) {
+        andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.TYPE_RESOURCE, id);
+    }
+
+    private void evictTypeAggregateCacheAfterCommit(Long typeId) {
+        evictTypeCacheAfterCommit(typeId);
+        andonCache.evictDetailsAfterCommit(AndonRedisKeyConstants.REASON_RESOURCE,
+                reasonRepository.findIdsByAndonTypeIdAndDeletedFalse(typeId));
+        andonCache.evictDetailsAfterCommit(AndonRedisKeyConstants.CONFIGURATION_RESOURCE,
+                configurationRepository.findIdsByAndonTypeIdAndDeletedFalse(typeId));
+        andonCache.evictDetailsAfterCommit(AndonRedisKeyConstants.EVENT_RESOURCE,
+                eventRepository.findIdsByAndonTypeIdAndDeletedFalse(typeId));
     }
 
     private Long getCurrentOperatorId() {

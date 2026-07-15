@@ -10,6 +10,8 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentManufacturerRes
 import com.badminton.mes.module.equipment.controller.vo.EquipmentManufacturerSaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentManufacturerConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentManufacturerEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentRedisKeyConstants;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentManufacturerSpecifications;
@@ -45,16 +47,21 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
 
     private final EquipmentLedgerRepository ledgerRepository;
 
+    private final EquipmentCache equipmentCache;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
      * @param manufacturerRepository 设备制造商 Repository
      * @param ledgerRepository       设备台账 Repository
+     * @param equipmentCache         设备缓存组件
      */
     public EquipmentManufacturerServiceImpl(EquipmentManufacturerRepository manufacturerRepository,
-                                            EquipmentLedgerRepository ledgerRepository) {
+                                            EquipmentLedgerRepository ledgerRepository,
+                                            EquipmentCache equipmentCache) {
         this.manufacturerRepository = manufacturerRepository;
         this.ledgerRepository = ledgerRepository;
+        this.equipmentCache = equipmentCache;
     }
 
     @Override
@@ -106,6 +113,7 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
         }
 
         manufacturerRepository.save(existing);
+        evictManufacturerCacheAfterCommit(id);
         logger.info("[修改设备制造商] id: {}, manufacturerCode: {}", id, reqVO.getManufacturerCode());
     }
 
@@ -125,6 +133,7 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
         manufacturer.setManufacturerCode(deletedCode);
         manufacturer.setDeleted(true);
         manufacturerRepository.save(manufacturer);
+        evictManufacturerCacheAfterCommit(id);
 
         logger.info("[删除设备制造商] id: {}", id);
     }
@@ -132,8 +141,12 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
     @Override
     @Transactional(readOnly = true)
     public EquipmentManufacturerRespVO getEquipmentManufacturer(Long id) {
-        EquipmentManufacturerEntity manufacturer = validateManufacturerExists(id);
-        return EquipmentManufacturerConvert.toRespVO(manufacturer);
+        return equipmentCache.getOrLoadDetail(EquipmentRedisKeyConstants.MANUFACTURER_RESOURCE,
+                id, EquipmentManufacturerRespVO.class, () -> {
+            EquipmentManufacturerRespVO response = EquipmentManufacturerConvert.toRespVO(
+                    validateManufacturerExists(id));
+            return response;
+        });
     }
 
     @Override
@@ -184,5 +197,9 @@ public class EquipmentManufacturerServiceImpl implements EquipmentManufacturerSe
         if (exists) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_MANUFACTURER_CODE_DUPLICATE);
         }
+    }
+
+    private void evictManufacturerCacheAfterCommit(Long id) {
+        equipmentCache.evictDetailAfterCommit(EquipmentRedisKeyConstants.MANUFACTURER_RESOURCE, id);
     }
 }

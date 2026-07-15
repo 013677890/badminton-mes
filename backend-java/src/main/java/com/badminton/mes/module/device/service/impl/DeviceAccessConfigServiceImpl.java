@@ -11,6 +11,8 @@ import com.badminton.mes.module.device.controller.vo.DeviceAccessConfigRespVO;
 import com.badminton.mes.module.device.controller.vo.DeviceAccessConfigSaveReqVO;
 import com.badminton.mes.module.device.convert.DeviceAccessConfigConvert;
 import com.badminton.mes.module.device.dal.entity.DeviceAccessConfigEntity;
+import com.badminton.mes.module.device.dal.redis.DeviceCache;
+import com.badminton.mes.module.device.dal.redis.DeviceRedisKeyConstants;
 import com.badminton.mes.module.device.dal.repository.DeviceAccessConfigRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceAccessConfigSpecifications;
 import com.badminton.mes.module.device.dal.repository.DeviceCommissioningRecordRepository;
@@ -45,15 +47,18 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
     private final DeviceCommissioningRecordRepository commissioningRepository;
     private final DeviceCountRecordRepository countRecordRepository;
     private final EquipmentLedgerService equipmentLedgerService;
+    private final DeviceCache deviceCache;
 
     public DeviceAccessConfigServiceImpl(DeviceAccessConfigRepository configRepository,
                                          DeviceCommissioningRecordRepository commissioningRepository,
                                          DeviceCountRecordRepository countRecordRepository,
-                                         EquipmentLedgerService equipmentLedgerService) {
+                                         EquipmentLedgerService equipmentLedgerService,
+                                         DeviceCache deviceCache) {
         this.configRepository = configRepository;
         this.commissioningRepository = commissioningRepository;
         this.countRecordRepository = countRecordRepository;
         this.equipmentLedgerService = equipmentLedgerService;
+        this.deviceCache = deviceCache;
     }
 
     @Override
@@ -97,6 +102,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
             config.setEnabledStatus(DISABLED);
         }
         saveConfig(config);
+        evictAccessConfigCacheAfterCommit(id);
     }
 
     @Override
@@ -117,12 +123,17 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         config.setEnabledStatus(DISABLED);
         config.setDeleted(true);
         saveConfig(config);
+        evictAccessConfigCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DeviceAccessConfigRespVO getAccessConfig(Long id) {
-        return DeviceAccessConfigConvert.toRespVO(getConfig(id));
+        return deviceCache.getOrLoadDetail(DeviceRedisKeyConstants.ACCESS_CONFIG_RESOURCE,
+                id, DeviceAccessConfigRespVO.class, () -> {
+            DeviceAccessConfigRespVO response = DeviceAccessConfigConvert.toRespVO(getConfig(id));
+            return response;
+        });
     }
 
     @Override
@@ -190,5 +201,9 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(DeviceErrorCodeConstants.ACCESS_CONFIG_CODE_DUPLICATE);
         }
+    }
+
+    private void evictAccessConfigCacheAfterCommit(Long id) {
+        deviceCache.evictDetailAfterCommit(DeviceRedisKeyConstants.ACCESS_CONFIG_RESOURCE, id);
     }
 }

@@ -27,6 +27,8 @@ import com.badminton.mes.module.andon.dal.entity.AndonNotificationRecordEntity;
 import com.badminton.mes.module.andon.dal.entity.AndonProcessLogEntity;
 import com.badminton.mes.module.andon.dal.entity.AndonReasonEntity;
 import com.badminton.mes.module.andon.dal.entity.AndonTypeEntity;
+import com.badminton.mes.module.andon.dal.redis.AndonCache;
+import com.badminton.mes.module.andon.dal.redis.AndonRedisKeyConstants;
 import com.badminton.mes.module.andon.dal.repository.AndonConfigurationRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonEventRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonEventSpecifications;
@@ -98,6 +100,7 @@ public class AndonEventServiceImpl implements AndonEventService {
     private final QualityInspectionRecordService qualityRecordService;
     private final UserService userService;
     private final RoleService roleService;
+    private final AndonCache andonCache;
     private final TransactionTemplate timeoutTransactionTemplate;
 
     public AndonEventServiceImpl(
@@ -113,6 +116,7 @@ public class AndonEventServiceImpl implements AndonEventService {
             QualityInspectionRecordService qualityRecordService,
             UserService userService,
             RoleService roleService,
+            AndonCache andonCache,
             PlatformTransactionManager transactionManager) {
         this.eventRepository = eventRepository;
         this.processLogRepository = processLogRepository;
@@ -126,6 +130,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         this.qualityRecordService = qualityRecordService;
         this.userService = userService;
         this.roleService = roleService;
+        this.andonCache = andonCache;
         this.timeoutTransactionTemplate = new TransactionTemplate(transactionManager);
         this.timeoutTransactionTemplate.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
     }
@@ -374,12 +379,16 @@ public class AndonEventServiceImpl implements AndonEventService {
     @Override
     @Transactional(readOnly = true)
     public AndonEventRespVO getEvent(Long id) {
-        AndonEventEntity event = getEventEntity(id);
-        return AndonEventConvert.toRespVO(
-                event,
-                getType(event.getAndonTypeId()),
-                processLogRepository.findByEventIdOrderByIdAsc(id),
-                notificationRepository.findByEventIdOrderByIdAsc(id));
+        return andonCache.getOrLoadDetail(AndonRedisKeyConstants.EVENT_RESOURCE,
+                id, AndonEventRespVO.class, () -> {
+            AndonEventEntity event = getEventEntity(id);
+            AndonEventRespVO response = AndonEventConvert.toRespVO(
+                    event,
+                    getType(event.getAndonTypeId()),
+                    processLogRepository.findByEventIdOrderByIdAsc(id),
+                    notificationRepository.findByEventIdOrderByIdAsc(id));
+            return response;
+        });
     }
 
     @Override
@@ -861,6 +870,9 @@ public class AndonEventServiceImpl implements AndonEventService {
     private void saveEvent(AndonEventEntity event) {
         try {
             eventRepository.saveAndFlush(event);
+            if (event.getId() != null) {
+                andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.EVENT_RESOURCE, event.getId());
+            }
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.EVENT_NO_DUPLICATE);
         }

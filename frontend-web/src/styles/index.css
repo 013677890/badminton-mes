@@ -1,0 +1,76 @@
+/* 全局样式：布局变量、页面容器、触摸端适配 */
+
+:root {
+  --mes-sidebar-width: 220px;
+  --mes-sidebar-collapsed-width: 64px;
+  --mes-header-height: 56px;
+  --mes-tags-height: 40px;
+  --mes-page-bg: #f0f2f5;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', Arial, sans-serif;
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  background-color: var(--mes-page-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* 页面统一容器 */
+.page-container {
+  padding: 16px;
+}
+
+.page-container > * + * {
+  margin-top: 16px;
+}
+
+/* 卡片间距紧凑化 */
+.el-card + .el-card {
+  margin-top: 16px;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 平板触摸端：放大基准字号与点击热区 */
+.tablet-mode {
+  font-size: 16px;
+}
+
+.tablet-mode .el-button--large {
+  height: 52px;
+  font-size: 18px;
+}
+
+.tablet-mode .el-input--large .el-input__inner {
+  height: 52px;
+  font-size: 18px;
+}

@@ -15,6 +15,8 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentCategoryConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentRedisKeyConstants;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategorySpecifications;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
@@ -57,6 +59,8 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
 
     private final CraftRouteDetailRepository routeDetailRepository;
 
+    private final EquipmentCache equipmentCache;
+
     /**
      * 构造器注入：依赖不可变、便于单测中直接 new 出被测对象。
      *
@@ -65,18 +69,21 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
      * @param faultPrincipleRepository 设备故障原理 Repository
      * @param processRepository 工序 Repository
      * @param routeDetailRepository 路线明细 Repository
+     * @param equipmentCache 设备缓存组件
      */
     public EquipmentCategoryServiceImpl(
             EquipmentCategoryRepository categoryRepository,
             EquipmentLedgerRepository ledgerRepository,
             EquipmentFaultPrincipleRepository faultPrincipleRepository,
             CraftProcessRepository processRepository,
-            CraftRouteDetailRepository routeDetailRepository) {
+            CraftRouteDetailRepository routeDetailRepository,
+            EquipmentCache equipmentCache) {
         this.categoryRepository = categoryRepository;
         this.ledgerRepository = ledgerRepository;
         this.faultPrincipleRepository = faultPrincipleRepository;
         this.processRepository = processRepository;
         this.routeDetailRepository = routeDetailRepository;
+        this.equipmentCache = equipmentCache;
     }
 
     @Override
@@ -135,6 +142,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         }
 
         categoryRepository.save(existing);
+        evictCategoryCacheAfterCommit(id);
         logger.info("[修改设备类别] id: {}, categoryCode: {}", id, reqVO.getCategoryCode());
     }
 
@@ -167,6 +175,7 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         category.setCategoryCode(deletedCode);
         category.setDeleted(true);
         categoryRepository.save(category);
+        evictCategoryCacheAfterCommit(id);
 
         logger.info("[删除设备类别] id: {}", id);
     }
@@ -174,8 +183,11 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
     @Override
     @Transactional(readOnly = true)
     public EquipmentCategoryRespVO getEquipmentCategory(Long id) {
-        EquipmentCategoryEntity category = validateCategoryExists(id);
-        return EquipmentCategoryConvert.toRespVO(category);
+        return equipmentCache.getOrLoadDetail(EquipmentRedisKeyConstants.CATEGORY_RESOURCE,
+                id, EquipmentCategoryRespVO.class, () -> {
+            EquipmentCategoryRespVO response = EquipmentCategoryConvert.toRespVO(validateCategoryExists(id));
+            return response;
+        });
     }
 
     @Override
@@ -302,5 +314,9 @@ public class EquipmentCategoryServiceImpl implements EquipmentCategoryService {
         if (routeReferenced) {
             throw new ServiceException(EquipmentErrorCodeConstants.EQUIPMENT_CATEGORY_REFERENCED_BY_ROUTE);
         }
+    }
+
+    private void evictCategoryCacheAfterCommit(Long id) {
+        equipmentCache.evictDetailAfterCommit(EquipmentRedisKeyConstants.CATEGORY_RESOURCE, id);
     }
 }

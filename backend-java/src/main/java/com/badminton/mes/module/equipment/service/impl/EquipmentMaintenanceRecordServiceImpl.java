@@ -16,6 +16,8 @@ import com.badminton.mes.module.equipment.convert.EquipmentMaintenanceRecordConv
 import com.badminton.mes.module.equipment.dal.entity.EquipmentLedgerEntity;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentMaintenancePlanEntity;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentMaintenanceRecordEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentRedisKeyConstants;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentMaintenancePlanRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentMaintenanceRecordRepository;
@@ -56,15 +58,18 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
     private final EquipmentMaintenancePlanRepository maintenancePlanRepository;
     private final EquipmentLedgerRepository ledgerRepository;
     private final UserRepository userRepository;
+    private final EquipmentCache equipmentCache;
 
     public EquipmentMaintenanceRecordServiceImpl(EquipmentMaintenanceRecordRepository maintenanceRecordRepository,
                                                  EquipmentMaintenancePlanRepository maintenancePlanRepository,
                                                  EquipmentLedgerRepository ledgerRepository,
-                                                 UserRepository userRepository) {
+                                                 UserRepository userRepository,
+                                                 EquipmentCache equipmentCache) {
         this.maintenanceRecordRepository = maintenanceRecordRepository;
         this.maintenancePlanRepository = maintenancePlanRepository;
         this.ledgerRepository = ledgerRepository;
         this.userRepository = userRepository;
+        this.equipmentCache = equipmentCache;
     }
 
     @Override
@@ -368,6 +373,7 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
             record.setPreviousEquipmentStatus(equipment.getEquipmentStatus());
             equipment.setEquipmentStatus(MAINTAINING_EQUIPMENT_STATUS);
             ledgerRepository.save(equipment);
+            evictEquipmentLedgerCacheAfterCommit(equipment.getId());
             return;
         }
 
@@ -385,7 +391,12 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
                     : IDLE_EQUIPMENT_STATUS;
             equipment.setEquipmentStatus(restoredStatus);
             ledgerRepository.save(equipment);
+            evictEquipmentLedgerCacheAfterCommit(equipment.getId());
         }
+    }
+
+    private void evictEquipmentLedgerCacheAfterCommit(Long equipmentId) {
+        equipmentCache.evictDetailAfterCommit(EquipmentRedisKeyConstants.LEDGER_RESOURCE, equipmentId);
     }
 
     private void clearCancelledResult(EquipmentMaintenanceRecordEntity record) {
