@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Lock, User } from '@element-plus/icons-vue'
-import { useUserStore } from '@/stores/user'
+import { MOCK_ACCOUNT, useUserStore } from '@/stores/user'
 
 defineOptions({ name: 'LoginView' })
 
@@ -42,6 +42,11 @@ async function handleLogin() {
   } finally {
     loading.value = false
   }
+}
+
+function fillDemo() {
+  form.userNo = MOCK_ACCOUNT.userNo
+  form.password = MOCK_ACCOUNT.password
 }
 </script>
 
@@ -81,7 +86,16 @@ async function handleLogin() {
           登 录
         </el-button>
       </el-form>
-      <div class="login-page__tip">内置管理员：admin / admin123（首次登录后请修改密码）</div>
+      <div class="login-page__tip">
+        <div>内置管理员：admin / admin123（首次登录后请修改密码）</div>
+        <div>
+          演示账号：demo / demo（不连后端预览页面，
+          <el-link type="primary" :underline="false" class="login-page__demo" @click="fillDemo">
+            一键填入
+          </el-link>
+          ）
+        </div>
+      </div>
     </el-card>
   </div>
 </template>
@@ -120,7 +134,13 @@ async function handleLogin() {
 .login-page__tip {
   margin-top: 16px;
   font-size: 12px;
+  line-height: 20px;
   color: var(--el-text-color-placeholder);
   text-align: center;
+}
+
+.login-page__demo {
+  font-size: 12px;
+  vertical-align: baseline;
 }
 </style>

@@ -2,10 +2,13 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import * as authApi from '@/api/auth'
 import type { ChangePasswordParams, LoginParams } from '@/api/auth'
-import { TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from '@/utils/request'
+import { MOCK_TOKEN, TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from '@/utils/request'
 
 /** 超级管理员角色码：拥有全部权限 */
 export const ADMIN_ROLE = 'ADMIN'
+
+/** 演示账号：不请求后端，本地直接建会话（request.ts 切换离线适配器） */
+export const MOCK_ACCOUNT = { userNo: 'demo', password: 'demo' } as const
 
 interface StoredUser {
   userId: number | null
@@ -59,6 +62,15 @@ export const useUserStore = defineStore('user', () => {
 
   /** 工号密码登录（POST /api/system/auth/login），token 与角色由后端下发 */
   async function login(params: LoginParams) {
+    if (params.userNo === MOCK_ACCOUNT.userNo && params.password === MOCK_ACCOUNT.password) {
+      token.value = MOCK_TOKEN
+      userId.value = 0
+      userNo.value = MOCK_ACCOUNT.userNo
+      userName.value = '演示用户'
+      roleCodes.value = [ADMIN_ROLE]
+      persist()
+      return
+    }
     const result = await authApi.login(params)
     token.value = result.token
     userId.value = result.userId
@@ -70,6 +82,10 @@ export const useUserStore = defineStore('user', () => {
 
   /** 服务端删会话失败也照常清本地（登出必须总能完成） */
   async function logout() {
+    if (token.value === MOCK_TOKEN) {
+      clear()
+      return
+    }
     try {
       await authApi.logout()
     } catch {
@@ -85,8 +101,9 @@ export const useUserStore = defineStore('user', () => {
     clear()
   }
 
-  /** 会话有效时拉取最新档案（角色变更后刷新用） */
+  /** 会话有效时拉取最新档案（角色变更后刷新用）；演示会话直接跳过 */
   async function fetchProfile() {
+    if (token.value === MOCK_TOKEN) return null
     const profile = await authApi.getProfile()
     userId.value = profile.userId
     userNo.value = profile.userNo

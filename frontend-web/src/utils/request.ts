@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios'
-import type { AxiosRequestConfig } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 /**
@@ -31,6 +31,45 @@ export const SUCCESS_CODE = '00000'
 export const TOKEN_STORAGE_KEY = 'mes_token'
 export const USER_STORAGE_KEY = 'mes_user'
 
+// ---------- 演示模式（不连后端浏览页面） ----------
+
+/** 演示会话的本地 token 标记，由 stores/user.ts 用演示账号登录时写入 */
+export const MOCK_TOKEN = 'mock-demo-session'
+
+export function isMockSession(): boolean {
+  return localStorage.getItem(TOKEN_STORAGE_KEY) === MOCK_TOKEN
+}
+
+/**
+ * 演示会话离线适配器：请求不出网。
+ * GET 返回空数据（分页给空 PageResult，其余给空数组——数组方法可用、
+ * 字段访问得 undefined，列表/详情页均可安全渲染）；写操作返回统一业务错误。
+ */
+function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
+  const method = (config.method ?? 'get').toLowerCase()
+  let body: ApiResult
+  if (method === 'get') {
+    const params = (config.params ?? {}) as Record<string, unknown>
+    const isPage = (config.url ?? '').includes('/page') || params.pageNo !== undefined
+    body = {
+      code: SUCCESS_CODE,
+      message: 'ok',
+      userTip: null,
+      data: isPage
+        ? { list: [], total: 0, pageNo: params.pageNo ?? 1, pageSize: params.pageSize ?? 10 }
+        : [],
+    }
+  } else {
+    body = {
+      code: 'B0001',
+      message: 'demo mode',
+      userTip: '演示模式：未连接后端，仅支持浏览页面',
+      data: null,
+    }
+  }
+  return Promise.resolve({ data: body, status: 200, statusText: 'OK', headers: {}, config })
+}
+
 /** 登录失效（A0230，HTTP 401）；权限不足（A0301，HTTP 403） */
 export const UNAUTHORIZED_CODE = 'A0230'
 export const FORBIDDEN_CODE = 'A0301'
@@ -54,6 +93,10 @@ const service = axios.create({
 })
 
 service.interceptors.request.use((config) => {
+  if (isMockSession()) {
+    config.adapter = mockAdapter
+    return config
+  }
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
