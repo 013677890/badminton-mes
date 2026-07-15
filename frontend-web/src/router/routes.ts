@@ -1,5 +1,6 @@
 import type { RouteRecordRaw } from 'vue-router'
-import { BASE_DATA_VIEW_ROLES } from '@/constants/production'
+import { BASE_DATA_VIEW_ROLES, ROLES } from '@/constants/production'
+import { WAGE_RECORD_VIEW_ROLES, WAGE_VIEW_ROLES } from '@/constants/wage'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -45,6 +46,51 @@ export const menuRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/craft',
+    redirect: '/craft/processes',
+    // 工艺查询后端不限角色（生产模块要引用），写操作页面内按 CRAFT_WRITE_ROLES 控制
+    meta: { title: '工艺管理', icon: 'SetUp' },
+    children: [
+      {
+        path: '/craft/processes',
+        name: 'CraftProcessList',
+        component: () => import('@/views/craft/CraftProcessList.vue'),
+        meta: { title: '工序管理' },
+      },
+      {
+        path: '/craft/routes',
+        name: 'CraftRouteList',
+        component: () => import('@/views/craft/CraftRouteList.vue'),
+        meta: { title: '工艺路线' },
+      },
+    ],
+  },
+  {
+    path: '/wage',
+    redirect: '/wage/rules',
+    meta: { title: '计件工资', icon: 'Money', roles: WAGE_VIEW_ROLES },
+    children: [
+      {
+        path: '/wage/rules',
+        name: 'PieceRateRuleList',
+        component: () => import('@/views/wage/PieceRateRuleList.vue'),
+        meta: { title: '计件规则', roles: WAGE_VIEW_ROLES },
+      },
+      {
+        path: '/wage/work-records',
+        name: 'WageWorkRecordList',
+        component: () => import('@/views/wage/WageWorkRecordList.vue'),
+        meta: { title: '计件作业记录', roles: WAGE_RECORD_VIEW_ROLES },
+      },
+      {
+        path: '/wage/settlements',
+        name: 'WageSettlementList',
+        component: () => import('@/views/wage/WageSettlementList.vue'),
+        meta: { title: '工资结算', roles: WAGE_VIEW_ROLES },
+      },
+    ],
+  },
+  {
     path: '/basedata',
     redirect: '/basedata/products',
     meta: { title: '基础资料', icon: 'Files', roles: BASE_DATA_VIEW_ROLES },
@@ -78,6 +124,25 @@ export const menuRoutes: RouteRecordRaw[] = [
         name: 'LineList',
         component: () => import('@/views/basedata/LineList.vue'),
         meta: { title: '产线管理', roles: BASE_DATA_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/system',
+    redirect: '/system/users',
+    meta: { title: '系统管理', icon: 'Setting', roles: [ROLES.ADMIN] },
+    children: [
+      {
+        path: '/system/users',
+        name: 'UserList',
+        component: () => import('@/views/system/UserList.vue'),
+        meta: { title: '用户管理', roles: [ROLES.ADMIN] },
+      },
+      {
+        path: '/system/roles',
+        name: 'RoleList',
+        component: () => import('@/views/system/RoleList.vue'),
+        meta: { title: '角色管理', roles: [ROLES.ADMIN] },
       },
     ],
   },

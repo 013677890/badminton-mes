@@ -87,9 +87,24 @@ const businessEntries: DemoEntry[] = [
     path: '/production/shortage-board',
   },
   {
+    title: '工艺管理',
+    description: '工序主档与 SOP / 不良原因维护，工艺路线主从编辑与审核生效',
+    path: '/craft/processes',
+  },
+  {
+    title: '计件工资',
+    description: '单价规则 → 作业记录 → 结算计算 → 审核，明细可调整并全程留痕',
+    path: '/wage/settlements',
+  },
+  {
     title: '基础资料',
     description: '产品 / 物料 / BOM / 车间 / 产线主档维护，乐观锁与引用校验',
     path: '/basedata/products',
+  },
+  {
+    title: '系统管理',
+    description: '用户账号、角色分配与密码重置（仅管理员），停用即强制下线',
+    path: '/system/users',
   },
 ]
 
