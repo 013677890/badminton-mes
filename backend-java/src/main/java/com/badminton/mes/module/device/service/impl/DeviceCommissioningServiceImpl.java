@@ -13,6 +13,8 @@ import com.badminton.mes.module.device.controller.vo.DeviceCommissioningSaveReqV
 import com.badminton.mes.module.device.convert.DeviceCommissioningConvert;
 import com.badminton.mes.module.device.dal.entity.DeviceAccessConfigEntity;
 import com.badminton.mes.module.device.dal.entity.DeviceCommissioningRecordEntity;
+import com.badminton.mes.module.device.dal.redis.DeviceCache;
+import com.badminton.mes.module.device.dal.redis.DeviceRedisKeyConstants;
 import com.badminton.mes.module.device.dal.repository.DeviceAccessConfigRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCommissioningRecordRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCommissioningSpecifications;
@@ -34,11 +36,14 @@ public class DeviceCommissioningServiceImpl implements DeviceCommissioningServic
 
     private final DeviceAccessConfigRepository configRepository;
     private final DeviceCommissioningRecordRepository commissioningRepository;
+    private final DeviceCache deviceCache;
 
     public DeviceCommissioningServiceImpl(DeviceAccessConfigRepository configRepository,
-                                           DeviceCommissioningRecordRepository commissioningRepository) {
+                                           DeviceCommissioningRecordRepository commissioningRepository,
+                                           DeviceCache deviceCache) {
         this.configRepository = configRepository;
         this.commissioningRepository = commissioningRepository;
+        this.deviceCache = deviceCache;
     }
 
     @Override
@@ -62,15 +67,20 @@ public class DeviceCommissioningServiceImpl implements DeviceCommissioningServic
             config.setEnabledStatus(DISABLED);
         }
         configRepository.save(config);
+        deviceCache.evictDetailAfterCommit(DeviceRedisKeyConstants.ACCESS_CONFIG_RESOURCE, config.getId());
         return record.getId();
     }
 
     @Override
     @Transactional(readOnly = true)
     public DeviceCommissioningRespVO getCommissioningRecord(Long id) {
-        DeviceCommissioningRecordEntity record = commissioningRepository.findById(id)
-                .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COMMISSIONING_RECORD_NOT_EXISTS));
-        return DeviceCommissioningConvert.toRespVO(record);
+        return deviceCache.getOrLoadDetail(DeviceRedisKeyConstants.COMMISSIONING_RECORD_RESOURCE,
+                id, DeviceCommissioningRespVO.class, () -> {
+            DeviceCommissioningRecordEntity record = commissioningRepository.findById(id)
+                    .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COMMISSIONING_RECORD_NOT_EXISTS));
+            DeviceCommissioningRespVO response = DeviceCommissioningConvert.toRespVO(record);
+            return response;
+        });
     }
 
     @Override

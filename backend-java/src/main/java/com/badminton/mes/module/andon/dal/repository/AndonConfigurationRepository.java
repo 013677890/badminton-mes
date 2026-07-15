@@ -61,6 +61,10 @@ public interface AndonConfigurationRepository extends JpaRepository<AndonConfigu
 
     List<AndonConfigurationEntity> findByAndonTypeIdAndDeletedFalse(Long andonTypeId);
 
+    @Query("select configuration.id from AndonConfigurationEntity configuration "
+            + "where configuration.andonTypeId = :andonTypeId and configuration.deleted = false")
+    List<Long> findIdsByAndonTypeIdAndDeletedFalse(@Param("andonTypeId") Long andonTypeId);
+
     @Query(value = "select count(*) from andon_event "
             + "where andon_type_id = :andonTypeId "
             + "and event_status <> 'CLOSED' and is_deleted = false", nativeQuery = true)

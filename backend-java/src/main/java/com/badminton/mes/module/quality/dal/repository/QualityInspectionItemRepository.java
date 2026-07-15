@@ -1,5 +1,6 @@
 package com.badminton.mes.module.quality.dal.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionItemEntity;
@@ -30,4 +31,8 @@ public interface QualityInspectionItemRepository extends JpaRepository<QualityIn
     boolean existsByItemCode(String itemCode);
 
     long countByCategoryIdAndDeletedFalse(Long categoryId);
+
+    @Query("select item.id from QualityInspectionItemEntity item "
+            + "where item.categoryId = :categoryId and item.deleted = false")
+    List<Long> findIdsByCategoryIdAndDeletedFalse(@Param("categoryId") Long categoryId);
 }

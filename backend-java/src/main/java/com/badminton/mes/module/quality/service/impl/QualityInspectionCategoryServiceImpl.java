@@ -11,6 +11,8 @@ import com.badminton.mes.module.quality.controller.vo.QualityInspectionCategoryR
 import com.badminton.mes.module.quality.controller.vo.QualityInspectionCategorySaveReqVO;
 import com.badminton.mes.module.quality.convert.QualityInspectionCategoryConvert;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionCategoryEntity;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
+import com.badminton.mes.module.quality.dal.redis.QualityRedisKeyConstants;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionCategoryRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionCategorySpecifications;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
@@ -34,11 +36,14 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
 
     private final QualityInspectionCategoryRepository categoryRepository;
     private final QualityInspectionItemRepository itemRepository;
+    private final QualityCache qualityCache;
 
     public QualityInspectionCategoryServiceImpl(QualityInspectionCategoryRepository categoryRepository,
-                                                QualityInspectionItemRepository itemRepository) {
+                                                QualityInspectionItemRepository itemRepository,
+                                                QualityCache qualityCache) {
         this.categoryRepository = categoryRepository;
         this.itemRepository = itemRepository;
+        this.qualityCache = qualityCache;
     }
 
     @Override
@@ -64,6 +69,9 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
             category.setEnabledStatus(previousEnabledStatus);
         }
         saveCategory(category);
+        evictCategoryCacheAfterCommit(id);
+        qualityCache.evictDetailsAfterCommit(QualityRedisKeyConstants.INSPECTION_ITEM_RESOURCE,
+                itemRepository.findIdsByCategoryIdAndDeletedFalse(id));
     }
 
     @Override
@@ -81,12 +89,17 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         category.setEnabledStatus(DISABLED);
         category.setDeleted(true);
         saveCategory(category);
+        evictCategoryCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionCategoryRespVO getCategory(Long id) {
-        return QualityInspectionCategoryConvert.toRespVO(getCategoryEntity(id));
+        return qualityCache.getOrLoadDetail(QualityRedisKeyConstants.INSPECTION_CATEGORY_RESOURCE,
+                id, QualityInspectionCategoryRespVO.class, () -> {
+            QualityInspectionCategoryRespVO response = QualityInspectionCategoryConvert.toRespVO(getCategoryEntity(id));
+            return response;
+        });
     }
 
     @Override
@@ -133,6 +146,10 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(QualityErrorCodeConstants.CATEGORY_CODE_DUPLICATE);
         }
+    }
+
+    private void evictCategoryCacheAfterCommit(Long id) {
+        qualityCache.evictDetailAfterCommit(QualityRedisKeyConstants.INSPECTION_CATEGORY_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {

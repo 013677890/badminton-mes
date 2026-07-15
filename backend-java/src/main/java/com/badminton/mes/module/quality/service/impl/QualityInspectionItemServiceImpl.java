@@ -16,6 +16,8 @@ import com.badminton.mes.module.quality.controller.vo.QualityInspectionItemSaveR
 import com.badminton.mes.module.quality.convert.QualityInspectionItemConvert;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionCategoryEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionItemEntity;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
+import com.badminton.mes.module.quality.dal.redis.QualityRedisKeyConstants;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionCategoryRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemSpecifications;
@@ -45,13 +47,16 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
     private final QualityInspectionItemRepository itemRepository;
     private final QualityInspectionCategoryRepository categoryRepository;
     private final QualityInspectionPlanItemRepository planItemRepository;
+    private final QualityCache qualityCache;
 
     public QualityInspectionItemServiceImpl(QualityInspectionItemRepository itemRepository,
                                             QualityInspectionCategoryRepository categoryRepository,
-                                            QualityInspectionPlanItemRepository planItemRepository) {
+                                            QualityInspectionPlanItemRepository planItemRepository,
+                                            QualityCache qualityCache) {
         this.itemRepository = itemRepository;
         this.categoryRepository = categoryRepository;
         this.planItemRepository = planItemRepository;
+        this.qualityCache = qualityCache;
     }
 
     @Override
@@ -86,6 +91,9 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
             item.setRequiredFlag(previousRequiredFlag);
         }
         saveItem(item);
+        evictItemCacheAfterCommit(id);
+        qualityCache.evictDetailsAfterCommit(QualityRedisKeyConstants.INSPECTION_PLAN_RESOURCE,
+                planItemRepository.findDistinctPlanIdsByInspectionItemId(id));
     }
 
     @Override
@@ -103,14 +111,19 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         item.setEnabledStatus(DISABLED);
         item.setDeleted(true);
         saveItem(item);
+        evictItemCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionItemRespVO getItem(Long id) {
-        QualityInspectionItemEntity item = getItemEntity(id);
-        QualityInspectionCategoryEntity category = getCategoryEntity(item.getCategoryId());
-        return QualityInspectionItemConvert.toRespVO(item, category);
+        return qualityCache.getOrLoadDetail(QualityRedisKeyConstants.INSPECTION_ITEM_RESOURCE,
+                id, QualityInspectionItemRespVO.class, () -> {
+            QualityInspectionItemEntity item = getItemEntity(id);
+            QualityInspectionCategoryEntity category = getCategoryEntity(item.getCategoryId());
+            QualityInspectionItemRespVO response = QualityInspectionItemConvert.toRespVO(item, category);
+            return response;
+        });
     }
 
     @Override
@@ -203,6 +216,10 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(QualityErrorCodeConstants.ITEM_CODE_DUPLICATE);
         }
+    }
+
+    private void evictItemCacheAfterCommit(Long id) {
+        qualityCache.evictDetailAfterCommit(QualityRedisKeyConstants.INSPECTION_ITEM_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {

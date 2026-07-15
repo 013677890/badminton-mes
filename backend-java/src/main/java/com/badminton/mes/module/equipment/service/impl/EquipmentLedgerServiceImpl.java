@@ -11,6 +11,8 @@ import com.badminton.mes.module.equipment.controller.vo.EquipmentLedgerRespVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentLedgerSaveReqVO;
 import com.badminton.mes.module.equipment.convert.EquipmentLedgerConvert;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentLedgerEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentRedisKeyConstants;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerSpecifications;
@@ -73,6 +75,8 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
 
     private final EquipmentMaintenanceRecordRepository maintenanceRecordRepository;
 
+    private final EquipmentCache equipmentCache;
+
     /**
      * 构造器注入，保证依赖不可变。
      *
@@ -80,19 +84,24 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
      * @param categoryRepository    设备类别 Repository
      * @param manufacturerRepository 设备制造商 Repository
      * @param repairOrderRepository 设备报修任务 Repository
+     * @param maintenancePlanRepository 设备保养计划 Repository
+     * @param maintenanceRecordRepository 设备保养记录 Repository
+     * @param equipmentCache 设备缓存组件
      */
     public EquipmentLedgerServiceImpl(EquipmentLedgerRepository ledgerRepository,
                                       EquipmentCategoryRepository categoryRepository,
                                       EquipmentManufacturerRepository manufacturerRepository,
                                       EquipmentRepairOrderRepository repairOrderRepository,
                                       EquipmentMaintenancePlanRepository maintenancePlanRepository,
-                                      EquipmentMaintenanceRecordRepository maintenanceRecordRepository) {
+                                      EquipmentMaintenanceRecordRepository maintenanceRecordRepository,
+                                      EquipmentCache equipmentCache) {
         this.ledgerRepository = ledgerRepository;
         this.categoryRepository = categoryRepository;
         this.manufacturerRepository = manufacturerRepository;
         this.repairOrderRepository = repairOrderRepository;
         this.maintenancePlanRepository = maintenancePlanRepository;
         this.maintenanceRecordRepository = maintenanceRecordRepository;
+        this.equipmentCache = equipmentCache;
     }
 
     @Override
@@ -167,6 +176,7 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
         }
 
         ledgerRepository.save(existing);
+        evictLedgerCacheAfterCommit(id);
         logger.info("[修改设备台账] id: {}, equipmentCode: {}", id, reqVO.getEquipmentCode());
     }
 
@@ -198,6 +208,7 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
         equipmentLedger.setEquipmentCode(deletedCode);
         equipmentLedger.setDeleted(true);
         ledgerRepository.save(equipmentLedger);
+        evictLedgerCacheAfterCommit(id);
 
         logger.info("[删除设备台账] id: {}", id);
     }
@@ -205,8 +216,11 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
     @Override
     @Transactional(readOnly = true)
     public EquipmentLedgerRespVO getEquipmentLedger(Long id) {
-        EquipmentLedgerEntity equipmentLedger = validateLedgerExists(id);
-        return EquipmentLedgerConvert.toRespVO(equipmentLedger);
+        return equipmentCache.getOrLoadDetail(EquipmentRedisKeyConstants.LEDGER_RESOURCE,
+                id, EquipmentLedgerRespVO.class, () -> {
+            EquipmentLedgerRespVO response = EquipmentLedgerConvert.toRespVO(validateLedgerExists(id));
+            return response;
+        });
     }
 
     @Override
@@ -295,5 +309,9 @@ public class EquipmentLedgerServiceImpl implements EquipmentLedgerService {
      */
     private String buildDeletedEquipmentCode(Long equipmentId) {
         return DELETED_EQUIPMENT_CODE_PREFIX + Long.toString(equipmentId, 36).toUpperCase();
+    }
+
+    private void evictLedgerCacheAfterCommit(Long id) {
+        equipmentCache.evictDetailAfterCommit(EquipmentRedisKeyConstants.LEDGER_RESOURCE, id);
     }
 }

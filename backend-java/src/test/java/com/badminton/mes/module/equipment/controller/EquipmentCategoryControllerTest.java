@@ -1,351 +1,169 @@
 package com.badminton.mes.module.equipment.controller;
 
-import com.badminton.mes.framework.common.pojo.CommonResult;
-import com.badminton.mes.framework.common.pojo.PageResult;
+import com.badminton.mes.common.security.AuthInterceptor;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryPageReqVO;
+import com.badminton.mes.module.equipment.controller.vo.EquipmentCategoryRespVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
-import com.badminton.mes.module.equipment.dal.dataobject.EquipmentCategoryDO;
 import com.badminton.mes.module.equipment.service.EquipmentCategoryService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
-import static org.hamcrest.Matchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.util.List;
+
+import com.badminton.mes.common.core.PageResult;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 设备类别 Controller 集成测试
+ * {@link EquipmentCategoryController} Web 切片测试。
+ *
+ * <p>参照生产模块 Controller 测试风格，仅验证 Web 层契约：参数校验、统一响应结构、
+ * 路径转发和非法请求不进入 Service。
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Transactional
+@WebMvcTest(EquipmentCategoryController.class)
 class EquipmentCategoryControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @MockitoBean
+    private EquipmentCategoryService categoryService;
 
-    @Autowired
-    private EquipmentCategoryService equipmentCategoryService;
-
-    private EquipmentCategorySaveReqVO testCategoryVO;
+    @MockitoBean
+    private AuthInterceptor authInterceptor;
 
     @BeforeEach
-    void setUp() {
-        testCategoryVO = new EquipmentCategorySaveReqVO();
-        testCategoryVO.setCategoryCode("TEST_API_001");
-        testCategoryVO.setCategoryName("API测试类别");
-        testCategoryVO.setParentId(null);
-        testCategoryVO.setSortOrder(100);
-        testCategoryVO.setRemark("这是API测试类别");
-        testCategoryVO.setStatus(1);
+    void permitAllRequests() throws Exception {
+        when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);
     }
 
     @Test
-    void testCreateCategory() throws Exception {
-        mockMvc.perform(post("/api/equipment/categories")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(testCategoryVO)))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.msg").value("操作成功"))
-                .andExpect(jsonPath("$.data").isNumber())
-                .andExpect(jsonPath("$.data").value(greaterThan(0)));
-    }
-
-    @Test
-    void testCreateCategoryWithInvalidData() throws Exception {
-        EquipmentCategorySaveReqVO invalidVO = new EquipmentCategorySaveReqVO();
-        invalidVO.setCategoryCode("");
-        invalidVO.setCategoryName("");
-        invalidVO.setStatus(1);
+    @DisplayName("创建设备类别：合法请求返回 00000 与新类别 id")
+    void createEquipmentCategoryReturnsId() throws Exception {
+        when(categoryService.createEquipmentCategory(any(EquipmentCategorySaveReqVO.class))).thenReturn(100L);
 
         mockMvc.perform(post("/api/equipment/categories")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidVO)))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
+                        .content("""
+                                {
+                                  "categoryCode": "MACHINE",
+                                  "categoryName": "生产设备",
+                                  "sortOrder": 10,
+                                  "status": 1
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data").value(100));
     }
 
     @Test
-    void testGetCategory() throws Exception {
-        Long categoryId = equipmentCategoryService.createCategory(testCategoryVO);
-
-        mockMvc.perform(get("/api/equipment/categories/{id}", categoryId))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.id").value(categoryId))
-                .andExpect(jsonPath("$.data.categoryCode").value(testCategoryVO.getCategoryCode()))
-                .andExpect(jsonPath("$.data.categoryName").value(testCategoryVO.getCategoryName()))
-                .andExpect(jsonPath("$.data.status").value(testCategoryVO.getStatus()));
-    }
-
-    @Test
-    void testGetCategoryNotFound() throws Exception {
-        mockMvc.perform(get("/api/equipment/categories/{id}", 99999L))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(not(0)));
-    }
-
-    @Test
-    void testGetCategoryPage() throws Exception {
-        for (int i = 1; i <= 3; i++) {
-            EquipmentCategorySaveReqVO vo = new EquipmentCategorySaveReqVO();
-            vo.setCategoryCode("PAGE_TEST_00" + i);
-            vo.setCategoryName("分页测试类别" + i);
-            vo.setStatus(1);
-            equipmentCategoryService.createCategory(vo);
-        }
-
-        mockMvc.perform(get("/api/equipment/categories/page")
-                        .param("pageNo", "1")
-                        .param("pageSize", "10"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.list").isArray())
-                .andExpect(jsonPath("$.data.total").value(greaterThanOrEqualTo(3)));
-    }
-
-    @Test
-    void testGetCategoryPageWithKeyword() throws Exception {
-        EquipmentCategorySaveReqVO vo = new EquipmentCategorySaveReqVO();
-        vo.setCategoryCode("KEYWORD_001");
-        vo.setCategoryName("关键词搜索测试");
-        vo.setStatus(1);
-        equipmentCategoryService.createCategory(vo);
-
-        mockMvc.perform(get("/api/equipment/categories/page")
-                        .param("pageNo", "1")
-                        .param("pageSize", "10")
-                        .param("keyword", "关键词"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.list").isArray())
-                .andExpect(jsonPath("$.data.total").value(greaterThanOrEqualTo(1)));
-    }
-
-    @Test
-    void testGetCategoryPageWithStatus() throws Exception {
-        EquipmentCategorySaveReqVO activeVO = new EquipmentCategorySaveReqVO();
-        activeVO.setCategoryCode("STATUS_ACTIVE");
-        activeVO.setCategoryName("启用状态测试");
-        activeVO.setStatus(1);
-        equipmentCategoryService.createCategory(activeVO);
-
-        mockMvc.perform(get("/api/equipment/categories/page")
-                        .param("pageNo", "1")
-                        .param("pageSize", "10")
-                        .param("status", "1"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.list[*].status").value(everyItem(equalTo(1))));
-    }
-
-    @Test
-    void testUpdateCategory() throws Exception {
-        Long categoryId = equipmentCategoryService.createCategory(testCategoryVO);
-
-        EquipmentCategorySaveReqVO updateVO = new EquipmentCategorySaveReqVO();
-        updateVO.setCategoryCode("TEST_API_001");
-        updateVO.setCategoryName("修改后的API测试类别");
-        updateVO.setSortOrder(200);
-        updateVO.setRemark("修改后的备注");
-        updateVO.setStatus(1);
-
-        mockMvc.perform(put("/api/equipment/categories/{id}", categoryId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateVO)))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.msg").value("操作成功"));
-
-        mockMvc.perform(get("/api/equipment/categories/{id}", categoryId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.categoryName").value("修改后的API测试类别"))
-                .andExpect(jsonPath("$.data.sortOrder").value(200));
-    }
-
-    @Test
-    void testUpdateCategoryNotFound() throws Exception {
-        mockMvc.perform(put("/api/equipment/categories/{id}", 99999L)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(testCategoryVO)))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(not(0)));
-    }
-
-    @Test
-    void testDeleteCategory() throws Exception {
-        Long categoryId = equipmentCategoryService.createCategory(testCategoryVO);
-
-        mockMvc.perform(delete("/api/equipment/categories/{id}", categoryId))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.msg").value("操作成功"));
-
-        mockMvc.perform(get("/api/equipment/categories/{id}", categoryId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(not(0)));
-    }
-
-    @Test
-    void testDeleteCategoryNotFound() throws Exception {
-        mockMvc.perform(delete("/api/equipment/categories/{id}", 99999L))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(not(0)));
-    }
-
-    @Test
-    void testGetAllCategories() throws Exception {
-        for (int i = 1; i <= 2; i++) {
-            EquipmentCategorySaveReqVO vo = new EquipmentCategorySaveReqVO();
-            vo.setCategoryCode("ALL_TEST_00" + i);
-            vo.setCategoryName("全部查询测试" + i);
-            vo.setStatus(1);
-            equipmentCategoryService.createCategory(vo);
-        }
-
-        mockMvc.perform(get("/api/equipment/categories"))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(greaterThanOrEqualTo(2)));
-    }
-
-    @Test
-    void testCreateCategoryWithParent() throws Exception {
-        Long parentId = equipmentCategoryService.createCategory(testCategoryVO);
-
-        EquipmentCategorySaveReqVO childVO = new EquipmentCategorySaveReqVO();
-        childVO.setCategoryCode("CHILD_API_001");
-        childVO.setCategoryName("子类别API测试");
-        childVO.setParentId(parentId);
-        childVO.setStatus(1);
-
+    @DisplayName("创建设备类别：缺少编码返回 A0400 且不调用 Service")
+    void createEquipmentCategoryRejectsBlankCode() throws Exception {
         mockMvc.perform(post("/api/equipment/categories")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(childVO)))
-                .andDo(print())
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                        .content("""
+                                {
+                                  "categoryCode": " ",
+                                  "categoryName": "生产设备",
+                                  "status": 1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+
+        verify(categoryService, never()).createEquipmentCategory(any(EquipmentCategorySaveReqVO.class));
     }
 
     @Test
-    void testGetCategoryPageWithParentId() throws Exception {
-        Long parentId = equipmentCategoryService.createCategory(testCategoryVO);
+    @DisplayName("修改设备类别：合法请求转发路径主键并返回 00000")
+    void updateEquipmentCategoryForwardsPathId() throws Exception {
+        mockMvc.perform(put("/api/equipment/categories/100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "categoryCode": "MACHINE",
+                                  "categoryName": "生产设备",
+                                  "sortOrder": 20,
+                                  "status": 1
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"));
 
-        for (int i = 1; i <= 2; i++) {
-            EquipmentCategorySaveReqVO childVO = new EquipmentCategorySaveReqVO();
-            childVO.setCategoryCode("PARENT_CHILD_00" + i);
-            childVO.setCategoryName("父级过滤测试" + i);
-            childVO.setParentId(parentId);
-            childVO.setStatus(1);
-            equipmentCategoryService.createCategory(childVO);
-        }
+        verify(categoryService).updateEquipmentCategory(any(), any(EquipmentCategorySaveReqVO.class));
+    }
+
+    @Test
+    @DisplayName("删除设备类别：非正数路径参数返回 A0400")
+    void deleteEquipmentCategoryRejectsNonPositiveId() throws Exception {
+        mockMvc.perform(delete("/api/equipment/categories/0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+
+        verify(categoryService, never()).deleteEquipmentCategory(any());
+    }
+
+    @Test
+    @DisplayName("查询设备类别详情：返回 Service 响应数据")
+    void getEquipmentCategoryReturnsServiceResult() throws Exception {
+        EquipmentCategoryRespVO response = new EquipmentCategoryRespVO();
+        response.setId(100L);
+        response.setCategoryCode("MACHINE");
+        response.setCategoryName("生产设备");
+        response.setStatus(1);
+        when(categoryService.getEquipmentCategory(100L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/equipment/categories/100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.categoryCode").value("MACHINE"));
+    }
+
+    @Test
+    @DisplayName("设备类别分页：pageSize 超过上限返回 A0400")
+    void getEquipmentCategoryPageRejectsOversizedPageSize() throws Exception {
+        mockMvc.perform(get("/api/equipment/categories/page")
+                        .param("pageNo", "1")
+                        .param("pageSize", "1000"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("A0400"));
+
+        verify(categoryService, never()).getEquipmentCategoryPage(any(EquipmentCategoryPageReqVO.class));
+    }
+
+    @Test
+    @DisplayName("设备类别分页：合法查询返回分页结构")
+    void getEquipmentCategoryPageReturnsPageResult() throws Exception {
+        EquipmentCategoryRespVO response = new EquipmentCategoryRespVO();
+        response.setId(100L);
+        response.setCategoryCode("MACHINE");
+        response.setCategoryName("生产设备");
+        when(categoryService.getEquipmentCategoryPage(any(EquipmentCategoryPageReqVO.class)))
+                .thenReturn(PageResult.of(List.of(response), 1L, 1, 20));
 
         mockMvc.perform(get("/api/equipment/categories/page")
                         .param("pageNo", "1")
-                        .param("pageSize", "10")
-                        .param("parentId", parentId.toString()))
-                .andDo(print())
+                        .param("pageSize", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.list").isArray())
-                .andExpect(jsonPath("$.data.total").value(2))
-                .andExpect(jsonPath("$.data.list[*].parentId").value(everyItem(equalTo(parentId.intValue()))));
-    }
-
-    @Test
-    void testContentTypeValidation() throws Exception {
-        mockMvc.perform(post("/api/equipment/categories")
-                        .contentType(MediaType.TEXT_PLAIN)
-                        .content(objectMapper.writeValueAsString(testCategoryVO)))
-                .andDo(print())
-                .andExpect(status().isUnsupportedMediaType());
-    }
-
-    @Test
-    void testInvalidJsonFormat() throws Exception {
-        mockMvc.perform(post("/api/equipment/categories")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{invalid json}"))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testPaginationParameters() throws Exception {
-        mockMvc.perform(get("/api/equipment/categories/page")
-                        .param("pageNo", "0")
-                        .param("pageSize", "10"))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
-
-        mockMvc.perform(get("/api/equipment/categories/page")
-                        .param("pageNo", "1")
-                        .param("pageSize", "0"))
-                .andDo(print())
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
-    void testCompleteWorkflow() throws Exception {
-        String createResponse = mockMvc.perform(post("/api/equipment/categories")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(testCategoryVO)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andReturn().getResponse().getContentAsString();
-
-        CommonResult<Long> createResult = objectMapper.readValue(createResponse, 
-                objectMapper.getTypeFactory().constructParametricType(CommonResult.class, Long.class));
-        Long categoryId = createResult.getData();
-
-        mockMvc.perform(get("/api/equipment/categories/{id}", categoryId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0))
-                .andExpect(jsonPath("$.data.categoryName").value(testCategoryVO.getCategoryName()));
-
-        EquipmentCategorySaveReqVO updateVO = new EquipmentCategorySaveReqVO();
-        updateVO.setCategoryCode("TEST_API_001");
-        updateVO.setCategoryName("完整流程测试-已修改");
-        updateVO.setStatus(1);
-
-        mockMvc.perform(put("/api/equipment/categories/{id}", categoryId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updateVO)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
-
-        mockMvc.perform(get("/api/equipment/categories/{id}", categoryId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.categoryName").value("完整流程测试-已修改"));
-
-        mockMvc.perform(delete("/api/equipment/categories/{id}", categoryId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(0));
+                .andExpect(jsonPath("$.code").value("00000"))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.list[0].categoryCode").value("MACHINE"));
     }
 }

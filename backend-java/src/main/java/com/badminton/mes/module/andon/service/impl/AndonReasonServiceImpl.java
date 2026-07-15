@@ -15,6 +15,8 @@ import com.badminton.mes.module.andon.controller.vo.AndonReasonSaveReqVO;
 import com.badminton.mes.module.andon.convert.AndonReasonConvert;
 import com.badminton.mes.module.andon.dal.entity.AndonReasonEntity;
 import com.badminton.mes.module.andon.dal.entity.AndonTypeEntity;
+import com.badminton.mes.module.andon.dal.redis.AndonCache;
+import com.badminton.mes.module.andon.dal.redis.AndonRedisKeyConstants;
 import com.badminton.mes.module.andon.dal.repository.AndonReasonRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonReasonSpecifications;
 import com.badminton.mes.module.andon.dal.repository.AndonTypeRepository;
@@ -38,12 +40,15 @@ public class AndonReasonServiceImpl implements AndonReasonService {
 
     private final AndonReasonRepository reasonRepository;
     private final AndonTypeRepository typeRepository;
+    private final AndonCache andonCache;
 
     public AndonReasonServiceImpl(
             AndonReasonRepository reasonRepository,
-            AndonTypeRepository typeRepository) {
+            AndonTypeRepository typeRepository,
+            AndonCache andonCache) {
         this.reasonRepository = reasonRepository;
         this.typeRepository = typeRepository;
+        this.andonCache = andonCache;
     }
 
     @Override
@@ -79,6 +84,7 @@ public class AndonReasonServiceImpl implements AndonReasonService {
             reason.setEnabledStatus(previousEnabledStatus);
         }
         saveReason(reason);
+        evictReasonCacheAfterCommit(id);
     }
 
     @Override
@@ -99,14 +105,19 @@ public class AndonReasonServiceImpl implements AndonReasonService {
         reason.setEnabledStatus(DISABLED);
         reason.setDeleted(true);
         saveReason(reason);
+        evictReasonCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public AndonReasonRespVO getReason(Long id) {
-        AndonReasonEntity reason = getReasonEntity(id);
-        AndonTypeEntity andonType = getTypeEntity(reason.getAndonTypeId());
-        return AndonReasonConvert.toRespVO(reason, andonType);
+        return andonCache.getOrLoadDetail(AndonRedisKeyConstants.REASON_RESOURCE,
+                id, AndonReasonRespVO.class, () -> {
+            AndonReasonEntity reason = getReasonEntity(id);
+            AndonTypeEntity andonType = getTypeEntity(reason.getAndonTypeId());
+            AndonReasonRespVO response = AndonReasonConvert.toRespVO(reason, andonType);
+            return response;
+        });
     }
 
     @Override
@@ -199,6 +210,10 @@ public class AndonReasonServiceImpl implements AndonReasonService {
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.REASON_CODE_DUPLICATE);
         }
+    }
+
+    private void evictReasonCacheAfterCommit(Long id) {
+        andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.REASON_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {

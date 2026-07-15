@@ -21,6 +21,8 @@ import com.badminton.mes.module.quality.convert.QualityInspectionPlanConvert;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionItemEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionPlanEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionPlanItemEntity;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
+import com.badminton.mes.module.quality.dal.redis.QualityRedisKeyConstants;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanRepository;
@@ -53,13 +55,16 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
     private final QualityInspectionPlanRepository planRepository;
     private final QualityInspectionPlanItemRepository planItemRepository;
     private final QualityInspectionItemRepository inspectionItemRepository;
+    private final QualityCache qualityCache;
 
     public QualityInspectionPlanServiceImpl(QualityInspectionPlanRepository planRepository,
                                             QualityInspectionPlanItemRepository planItemRepository,
-                                            QualityInspectionItemRepository inspectionItemRepository) {
+                                            QualityInspectionItemRepository inspectionItemRepository,
+                                            QualityCache qualityCache) {
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
         this.inspectionItemRepository = inspectionItemRepository;
+        this.qualityCache = qualityCache;
     }
 
     @Override
@@ -96,6 +101,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         planItemRepository.deleteByPlanId(id);
         planItemRepository.flush();
         savePlanItems(id, request.getItems(), inspectionItemsById);
+        evictPlanCacheAfterCommit(id);
     }
 
     @Override
@@ -109,6 +115,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         plan.setDefaultFlag(false);
         plan.setDeleted(true);
         savePlan(plan);
+        evictPlanCacheAfterCommit(id);
     }
 
     @Override
@@ -133,6 +140,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         plan.setAuditBy(getCurrentOperatorId());
         plan.setAuditTime(LocalDateTime.now());
         savePlan(plan);
+        evictPlanCacheAfterCommit(id);
     }
 
     @Override
@@ -145,6 +153,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         plan.setPlanStatus(PLAN_STATUS_DISABLED);
         plan.setDefaultFlag(false);
         savePlan(plan);
+        evictPlanCacheAfterCommit(id);
     }
 
     @Override
@@ -183,10 +192,15 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionPlanRespVO getPlan(Long id) {
-        QualityInspectionPlanEntity plan = getPlanEntity(id);
-        List<QualityInspectionPlanItemEntity> planItems =
-                planItemRepository.findByPlanIdOrderBySortOrderAscIdAsc(id);
-        return QualityInspectionPlanConvert.toRespVO(plan, planItems, loadInspectionItems(planItems));
+        return qualityCache.getOrLoadDetail(QualityRedisKeyConstants.INSPECTION_PLAN_RESOURCE,
+                id, QualityInspectionPlanRespVO.class, () -> {
+            QualityInspectionPlanEntity plan = getPlanEntity(id);
+            List<QualityInspectionPlanItemEntity> planItems =
+                    planItemRepository.findByPlanIdOrderBySortOrderAscIdAsc(id);
+            QualityInspectionPlanRespVO response =
+                    QualityInspectionPlanConvert.toRespVO(plan, planItems, loadInspectionItems(planItems));
+            return response;
+        });
     }
 
     @Override
@@ -359,6 +373,10 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(QualityErrorCodeConstants.PLAN_ITEMS_DUPLICATE);
         }
+    }
+
+    private void evictPlanCacheAfterCommit(Long id) {
+        qualityCache.evictDetailAfterCommit(QualityRedisKeyConstants.INSPECTION_PLAN_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {

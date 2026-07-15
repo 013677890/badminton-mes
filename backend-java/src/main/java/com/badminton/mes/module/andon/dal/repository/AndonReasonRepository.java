@@ -1,5 +1,6 @@
 package com.badminton.mes.module.andon.dal.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.badminton.mes.module.andon.dal.entity.AndonReasonEntity;
@@ -27,6 +28,10 @@ public interface AndonReasonRepository extends JpaRepository<AndonReasonEntity, 
     boolean existsByReasonCodeAndIdNotAndDeletedFalse(String reasonCode, Long id);
 
     boolean existsByReasonCode(String reasonCode);
+
+    @Query("select reason.id from AndonReasonEntity reason "
+            + "where reason.andonTypeId = :andonTypeId and reason.deleted = false")
+    List<Long> findIdsByAndonTypeIdAndDeletedFalse(@Param("andonTypeId") Long andonTypeId);
 
     @Query(value = "select count(*) from andon_event where is_deleted = false "
             + "and (reason_id = :reasonId or actual_reason_id = :reasonId)", nativeQuery = true)

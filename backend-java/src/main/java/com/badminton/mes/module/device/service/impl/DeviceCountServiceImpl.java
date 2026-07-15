@@ -24,6 +24,8 @@ import com.badminton.mes.module.device.convert.DeviceCountRecordConvert;
 import com.badminton.mes.module.device.dal.entity.DeviceAccessConfigEntity;
 import com.badminton.mes.module.device.dal.entity.DeviceCountExceptionEntity;
 import com.badminton.mes.module.device.dal.entity.DeviceCountRecordEntity;
+import com.badminton.mes.module.device.dal.redis.DeviceCache;
+import com.badminton.mes.module.device.dal.redis.DeviceRedisKeyConstants;
 import com.badminton.mes.module.device.dal.repository.DeviceAccessConfigRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCountExceptionRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCountExceptionSpecifications;
@@ -65,15 +67,18 @@ public class DeviceCountServiceImpl implements DeviceCountService {
     private final DeviceCountRecordRepository countRecordRepository;
     private final DeviceCountExceptionRepository countExceptionRepository;
     private final EquipmentLedgerService equipmentLedgerService;
+    private final DeviceCache deviceCache;
 
     public DeviceCountServiceImpl(DeviceAccessConfigRepository configRepository,
                                   DeviceCountRecordRepository countRecordRepository,
                                   DeviceCountExceptionRepository countExceptionRepository,
-                                  EquipmentLedgerService equipmentLedgerService) {
+                                  EquipmentLedgerService equipmentLedgerService,
+                                  DeviceCache deviceCache) {
         this.configRepository = configRepository;
         this.countRecordRepository = countRecordRepository;
         this.countExceptionRepository = countExceptionRepository;
         this.equipmentLedgerService = equipmentLedgerService;
+        this.deviceCache = deviceCache;
     }
 
     @Override
@@ -114,9 +119,13 @@ public class DeviceCountServiceImpl implements DeviceCountService {
     @Override
     @Transactional(readOnly = true)
     public DeviceCountRecordRespVO getCountRecord(Long id) {
-        DeviceCountRecordEntity record = countRecordRepository.findById(id)
-                .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COUNT_RECORD_NOT_EXISTS));
-        return DeviceCountRecordConvert.toRespVO(record);
+        return deviceCache.getOrLoadDetail(DeviceRedisKeyConstants.COUNT_RECORD_RESOURCE,
+                id, DeviceCountRecordRespVO.class, () -> {
+            DeviceCountRecordEntity record = countRecordRepository.findById(id)
+                    .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COUNT_RECORD_NOT_EXISTS));
+            DeviceCountRecordRespVO response = DeviceCountRecordConvert.toRespVO(record);
+            return response;
+        });
     }
 
     @Override
@@ -140,9 +149,13 @@ public class DeviceCountServiceImpl implements DeviceCountService {
     @Override
     @Transactional(readOnly = true)
     public DeviceCountExceptionRespVO getCountException(Long id) {
-        DeviceCountExceptionEntity exception = countExceptionRepository.findById(id)
-                .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COUNT_EXCEPTION_NOT_EXISTS));
-        return DeviceCountExceptionConvert.toRespVO(exception);
+        return deviceCache.getOrLoadDetail(DeviceRedisKeyConstants.COUNT_EXCEPTION_RESOURCE,
+                id, DeviceCountExceptionRespVO.class, () -> {
+            DeviceCountExceptionEntity exception = countExceptionRepository.findById(id)
+                    .orElseThrow(() -> new ServiceException(DeviceErrorCodeConstants.COUNT_EXCEPTION_NOT_EXISTS));
+            DeviceCountExceptionRespVO response = DeviceCountExceptionConvert.toRespVO(exception);
+            return response;
+        });
     }
 
     @Override
@@ -176,6 +189,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         exception.setProcessedBy(getCurrentOperatorId());
         exception.setProcessedAt(LocalDateTime.now());
         countExceptionRepository.save(exception);
+        deviceCache.evictDetailAfterCommit(DeviceRedisKeyConstants.COUNT_EXCEPTION_RESOURCE, id);
     }
 
     private CountEvaluation evaluateCount(DeviceAccessConfigEntity config,
@@ -269,6 +283,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         if (lastCommunicationTime == null || collectedAt.isAfter(lastCommunicationTime)) {
             config.setLastCommunicationTime(collectedAt);
             configRepository.save(config);
+            deviceCache.evictDetailAfterCommit(DeviceRedisKeyConstants.ACCESS_CONFIG_RESOURCE, config.getId());
         }
     }
 

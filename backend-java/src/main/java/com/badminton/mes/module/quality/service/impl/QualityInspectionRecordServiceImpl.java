@@ -28,6 +28,8 @@ import com.badminton.mes.module.quality.dal.entity.QualityInspectionPlanEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionPlanItemEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionRecordEntity;
 import com.badminton.mes.module.quality.dal.entity.QualityInspectionResultEntity;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
+import com.badminton.mes.module.quality.dal.redis.QualityRedisKeyConstants;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanRepository;
@@ -69,19 +71,22 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
     private final QualityInspectionPlanItemRepository planItemRepository;
     private final QualityInspectionItemRepository inspectionItemRepository;
     private final WorkOrderService workOrderService;
+    private final QualityCache qualityCache;
 
     public QualityInspectionRecordServiceImpl(QualityInspectionRecordRepository recordRepository,
                                               QualityInspectionResultRepository resultRepository,
                                               QualityInspectionPlanRepository planRepository,
                                               QualityInspectionPlanItemRepository planItemRepository,
                                               QualityInspectionItemRepository inspectionItemRepository,
-                                              WorkOrderService workOrderService) {
+                                              WorkOrderService workOrderService,
+                                              QualityCache qualityCache) {
         this.recordRepository = recordRepository;
         this.resultRepository = resultRepository;
         this.planRepository = planRepository;
         this.planItemRepository = planItemRepository;
         this.inspectionItemRepository = inspectionItemRepository;
         this.workOrderService = workOrderService;
+        this.qualityCache = qualityCache;
     }
 
     @Override
@@ -131,6 +136,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
             result.setDefectDescription(resultRequest.getDefectDescription());
         }
         resultRepository.saveAll(storedResultsById.values());
+        evictRecordCacheAfterCommit(id);
     }
 
     @Override
@@ -166,15 +172,20 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         record.setInspectorId(getCurrentOperatorId());
         record.setInspectedAt(LocalDateTime.now());
         saveRecord(record);
+        evictRecordCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionRecordRespVO getRecord(Long id) {
-        QualityInspectionRecordEntity record = getRecordEntity(id);
-        List<QualityInspectionResultEntity> results =
-                resultRepository.findByInspectionRecordIdOrderBySortOrderAscIdAsc(id);
-        return QualityInspectionRecordConvert.toRespVO(record, results);
+        return qualityCache.getOrLoadDetail(QualityRedisKeyConstants.INSPECTION_RECORD_RESOURCE,
+                id, QualityInspectionRecordRespVO.class, () -> {
+            QualityInspectionRecordEntity record = getRecordEntity(id);
+            List<QualityInspectionResultEntity> results =
+                    resultRepository.findByInspectionRecordIdOrderBySortOrderAscIdAsc(id);
+            QualityInspectionRecordRespVO response = QualityInspectionRecordConvert.toRespVO(record, results);
+            return response;
+        });
     }
 
     @Override
@@ -372,6 +383,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(QualityErrorCodeConstants.RECORD_NO_DUPLICATE);
         }
+    }
+
+    private void evictRecordCacheAfterCommit(Long id) {
+        qualityCache.evictDetailAfterCommit(QualityRedisKeyConstants.INSPECTION_RECORD_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {

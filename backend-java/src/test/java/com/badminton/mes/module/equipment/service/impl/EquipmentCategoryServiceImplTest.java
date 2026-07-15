@@ -8,6 +8,7 @@ import com.badminton.mes.module.craft.dal.repository.CraftRouteDetailRepository;
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentCategorySaveReqVO;
 import com.badminton.mes.module.equipment.dal.entity.EquipmentCategoryEntity;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
@@ -52,6 +53,9 @@ class EquipmentCategoryServiceImplTest {
     @Mock
     private CraftRouteDetailRepository routeDetailRepository;
 
+    @Mock
+    private EquipmentCache equipmentCache;
+
     private EquipmentCategoryServiceImpl categoryService;
 
     @BeforeEach
@@ -61,7 +65,8 @@ class EquipmentCategoryServiceImplTest {
                 ledgerRepository,
                 faultPrincipleRepository,
                 processRepository,
-                routeDetailRepository);
+                routeDetailRepository,
+                equipmentCache);
     }
 
     @Test

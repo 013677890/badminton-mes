@@ -24,6 +24,10 @@ public interface AndonEventRepository extends JpaRepository<AndonEventEntity, Lo
 
     boolean existsByEventNo(String eventNo);
 
+    @Query("select event.id from AndonEventEntity event "
+            + "where event.andonTypeId = :andonTypeId and event.deleted = false")
+    List<Long> findIdsByAndonTypeIdAndDeletedFalse(@Param("andonTypeId") Long andonTypeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select event from AndonEventEntity event "
             + "where event.id = :id and event.deleted = false")

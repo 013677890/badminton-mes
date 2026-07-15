@@ -15,6 +15,8 @@ import com.badminton.mes.module.andon.controller.vo.AndonConfigurationSaveReqVO;
 import com.badminton.mes.module.andon.convert.AndonConfigurationConvert;
 import com.badminton.mes.module.andon.dal.entity.AndonConfigurationEntity;
 import com.badminton.mes.module.andon.dal.entity.AndonTypeEntity;
+import com.badminton.mes.module.andon.dal.redis.AndonCache;
+import com.badminton.mes.module.andon.dal.redis.AndonRedisKeyConstants;
 import com.badminton.mes.module.andon.dal.repository.AndonConfigurationRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonConfigurationSpecifications;
 import com.badminton.mes.module.andon.dal.repository.AndonTypeRepository;
@@ -45,16 +47,19 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     private final AndonTypeRepository typeRepository;
     private final UserService userService;
     private final RoleService roleService;
+    private final AndonCache andonCache;
 
     public AndonConfigurationServiceImpl(
             AndonConfigurationRepository configurationRepository,
             AndonTypeRepository typeRepository,
             UserService userService,
-            RoleService roleService) {
+            RoleService roleService,
+            AndonCache andonCache) {
         this.configurationRepository = configurationRepository;
         this.typeRepository = typeRepository;
         this.userService = userService;
         this.roleService = roleService;
+        this.andonCache = andonCache;
     }
 
     @Override
@@ -93,6 +98,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
             configuration.setEnabledStatus(previousEnabledStatus);
         }
         saveConfiguration(configuration);
+        evictConfigurationCacheAfterCommit(id);
     }
 
     @Override
@@ -108,14 +114,19 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         configuration.setEnabledStatus(DISABLED);
         configuration.setDeleted(true);
         saveConfiguration(configuration);
+        evictConfigurationCacheAfterCommit(id);
     }
 
     @Override
     @Transactional(readOnly = true)
     public AndonConfigurationRespVO getConfiguration(Long id) {
-        AndonConfigurationEntity configuration = getConfigurationEntity(id);
-        AndonTypeEntity andonType = getTypeEntity(configuration.getAndonTypeId());
-        return AndonConfigurationConvert.toRespVO(configuration, andonType);
+        return andonCache.getOrLoadDetail(AndonRedisKeyConstants.CONFIGURATION_RESOURCE,
+                id, AndonConfigurationRespVO.class, () -> {
+            AndonConfigurationEntity configuration = getConfigurationEntity(id);
+            AndonTypeEntity andonType = getTypeEntity(configuration.getAndonTypeId());
+            AndonConfigurationRespVO response = AndonConfigurationConvert.toRespVO(configuration, andonType);
+            return response;
+        });
     }
 
     @Override
@@ -248,6 +259,10 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.CONFIGURATION_SCOPE_DUPLICATE);
         }
+    }
+
+    private void evictConfigurationCacheAfterCommit(Long id) {
+        andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.CONFIGURATION_RESOURCE, id);
     }
 
     private Long getCurrentOperatorId() {
