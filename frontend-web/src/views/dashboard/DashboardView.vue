@@ -70,6 +70,29 @@ interface DemoEntry {
   path: string
 }
 
+const businessEntries: DemoEntry[] = [
+  {
+    title: '生产工单',
+    description: '工单全生命周期：创建 → 下达 → 生产 → 完工 → 关闭，进度与齐套一目了然',
+    path: '/production/work-orders',
+  },
+  {
+    title: '派工管理',
+    description: '排产建议采纳、审核下发、超派校验与产线排程甘特',
+    path: '/production/dispatch-orders',
+  },
+  {
+    title: '欠料看板',
+    description: '按物料聚合欠料汇总，下钻影响工单并登记处理',
+    path: '/production/shortage-board',
+  },
+  {
+    title: '基础资料',
+    description: '产品 / 物料 / BOM / 车间 / 产线主档维护，乐观锁与引用校验',
+    path: '/basedata/products',
+  },
+]
+
 const demoEntries: DemoEntry[] = [
   {
     title: '筛选列表页',
@@ -133,6 +156,21 @@ function openEntry(entry: DemoEntry) {
         />
       </el-col>
     </el-row>
+
+    <el-card shadow="never">
+      <template #header>业务功能入口</template>
+      <div class="dashboard__entries">
+        <div
+          v-for="entry in businessEntries"
+          :key="entry.path"
+          class="dashboard__entry"
+          @click="openEntry(entry)"
+        >
+          <div class="dashboard__entry-title">{{ entry.title }}</div>
+          <div class="dashboard__entry-desc">{{ entry.description }}</div>
+        </div>
+      </div>
+    </el-card>
 
     <el-card shadow="never">
       <template #header>组件示例导航</template>

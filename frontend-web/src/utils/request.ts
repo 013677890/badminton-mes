@@ -29,6 +29,11 @@ export interface PageParam {
 
 export const SUCCESS_CODE = '00000'
 export const TOKEN_STORAGE_KEY = 'mes_token'
+export const USER_STORAGE_KEY = 'mes_user'
+
+/** 登录失效（A0230，HTTP 401）；权限不足（A0301，HTTP 403） */
+export const UNAUTHORIZED_CODE = 'A0230'
+export const FORBIDDEN_CODE = 'A0301'
 
 /** 业务错误：携带后端错误码，便于调用方按码分支处理 */
 export class ApiError extends Error {
@@ -56,6 +61,28 @@ service.interceptors.request.use((config) => {
   return config
 })
 
+/** 并发请求同时 401 时只跳一次登录 */
+let redirectingToLogin = false
+
+/**
+ * 会话失效处理：清本地凭证后整页跳登录。
+ * 用 location 而非 router，避免 request → router → store → request 循环依赖，
+ * 且整页刷新可一并重置 Pinia 内存态。
+ */
+function redirectToLogin() {
+  if (redirectingToLogin) return
+  redirectingToLogin = true
+  localStorage.removeItem(TOKEN_STORAGE_KEY)
+  localStorage.removeItem(USER_STORAGE_KEY)
+  const { pathname, search } = window.location
+  const redirect = pathname === '/login' ? '' : `?redirect=${encodeURIComponent(pathname + search)}`
+  window.location.href = `/login${redirect}`
+}
+
+function isApiResult(data: unknown): data is ApiResult {
+  return typeof data === 'object' && data !== null && 'code' in data && 'message' in data
+}
+
 service.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResult
@@ -68,13 +95,31 @@ service.interceptors.response.use(
   },
   (error: AxiosError) => {
     const status = error.response?.status
-    const tip = status ? `请求失败（HTTP ${status}）` : '网络异常，请检查连接'
-    ElMessage.error(tip)
+    const body = error.response?.data
+
+    // 后端 GlobalExceptionHandler 对 4xx/5xx 也返回 CommonResult 四要素
+    if (isApiResult(body)) {
+      if (status === 401 || body.code === UNAUTHORIZED_CODE) {
+        ElMessage.error(body.userTip || '登录状态已失效，请重新登录')
+        redirectToLogin()
+      } else {
+        ElMessage.error(body.userTip || body.message || `请求失败（HTTP ${status}）`)
+      }
+      return Promise.reject(new ApiError(body))
+    }
+
+    if (status === 401) {
+      ElMessage.error('登录状态已失效，请重新登录')
+      redirectToLogin()
+    } else {
+      ElMessage.error(status ? `请求失败（HTTP ${status}）` : '网络异常，请检查连接')
+    }
     return Promise.reject(error)
   },
 )
 
-export function get<T>(url: string, params?: Record<string, unknown>, config?: AxiosRequestConfig): Promise<T> {
+/** params 接受任意对象（接口层的具名参数类型无索引签名，交给 axios 序列化） */
+export function get<T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> {
   return service.get(url, { params, ...config }) as Promise<T>
 }
 
@@ -86,7 +131,7 @@ export function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig)
   return service.put(url, data, config) as Promise<T>
 }
 
-export function del<T>(url: string, params?: Record<string, unknown>): Promise<T> {
+export function del<T>(url: string, params?: object): Promise<T> {
   return service.delete(url, { params }) as Promise<T>
 }
 

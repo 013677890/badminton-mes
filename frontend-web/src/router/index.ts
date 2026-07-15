@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { useUserStore } from '@/stores/user'
+import { ElMessage } from 'element-plus'
+import { ADMIN_ROLE, useUserStore } from '@/stores/user'
 import { flattenMenuRoutes, menuRoutes } from './routes'
 
 const routes: RouteRecordRaw[] = [
@@ -45,6 +46,16 @@ router.beforeEach((to) => {
   }
   if (to.path === '/login' && userStore.isLoggedIn) {
     return { path: '/' }
+  }
+  // meta.roles 页面级权限：与 usePermission 同口径（ADMIN 全通过，命中任一即可）
+  const required = to.meta.roles
+  if (required && required.length > 0) {
+    const owned = userStore.roleCodes
+    const allowed = owned.includes(ADMIN_ROLE) || required.some((role) => owned.includes(role))
+    if (!allowed) {
+      ElMessage.warning('当前账号没有访问该页面的权限')
+      return { path: '/dashboard' }
+    }
   }
   return true
 })
