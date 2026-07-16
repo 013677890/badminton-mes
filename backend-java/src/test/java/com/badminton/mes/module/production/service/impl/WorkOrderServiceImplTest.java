@@ -485,9 +485,14 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：BOM 不属于工单产品，抛 BOM 不可用异常")
     void releaseWorkOrderRejectsBomOfAnotherProduct() {
-        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
         BomEntity anotherProductBom = buildBom(BomStatusEnum.EFFECTIVE.getStatus());
         anotherProductBom.setProductId(PRODUCT_ID + 1);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID)).thenReturn(Optional.of(anotherProductBom));
@@ -502,9 +507,14 @@ class WorkOrderServiceImplTest {
     @Test
     @DisplayName("下达工单：BOM 明细引用停用物料，抛物料不可用异常")
     void releaseWorkOrderRejectsDisabledMaterial() {
-        stubReleasableWorkOrder();
         when(workOrderRepository.updateToReleased(WORK_ORDER_ID, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus())).thenReturn(1);
+        when(workOrderRepository.findByIdForUpdate(WORK_ORDER_ID))
+                .thenReturn(Optional.of(buildWorkOrder(WorkOrderStatusEnum.CREATED.getStatus())));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTE_ID))
+                .thenReturn(Optional.of(buildRoute(CraftRouteStatusEnum.EFFECTIVE)));
+        when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTE_ID, PRODUCT_ID))
+                .thenReturn(true);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID))
                 .thenReturn(Optional.of(buildBom(BomStatusEnum.EFFECTIVE.getStatus())));
         when(bomDetailRepository.findByBomIdAndDeletedFalse(BOM_ID)).thenReturn(List.of(buildBomDetail()));

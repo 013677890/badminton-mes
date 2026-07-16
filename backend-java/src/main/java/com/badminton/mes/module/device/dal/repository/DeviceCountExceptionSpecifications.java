@@ -11,9 +11,22 @@ import org.springframework.util.StringUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/** 设备计数异常动态查询条件。 */
+/**
+ * 设备计数异常动态查询条件。
+ *
+ * <p>请求中有效的筛选项按 AND 组合；不默认排除已处理异常，以便分页接口完整展示异常审计历史。
+ */
 public final class DeviceCountExceptionSpecifications {
 
+    /**
+     * 构建设备计数异常分页条件。
+     *
+     * <p>接入配置、设备和处理状态采用精确匹配；创建开始时间使用大于等于，结束时间使用小于等于，
+     * 时间区间包含两端。空条件不会生成谓词，排序和分页由调用方负责。
+     *
+     * @param request 分页筛选请求，未提供的标识、状态或时间边界会被忽略
+     * @return 可组合到异常记录分页查询的动态 Specification
+     */
     public static Specification<DeviceCountExceptionEntity> page(DeviceCountExceptionPageReqVO request) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -38,6 +51,7 @@ public final class DeviceCountExceptionSpecifications {
         };
     }
 
+    /** 动态条件工具类不允许实例化。 */
     private DeviceCountExceptionSpecifications() {
     }
 }

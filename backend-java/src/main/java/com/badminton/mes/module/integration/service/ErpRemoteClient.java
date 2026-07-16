@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClientException;
 /**
  * ERP HTTP 客户端，协议约定为 JSON 数组读取接口。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Component

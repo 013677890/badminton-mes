@@ -3,10 +3,10 @@ spring:
     name: badminton-mes-test
 
   datasource:
-    driver-class-name: org.mariadb.jdbc.Driver
-    url: ${MES_DB_URL:jdbc:mariadb://localhost:3306/badminton_mes_test?allowPublicKeyRetrieval=true&useSSL=false}
-    username: ${MES_DB_USERNAME:mes}
-    password: ${MES_DB_PASSWORD:mes123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${MES_TEST_DB_URL:jdbc:mysql://localhost:3306/badminton_mes_test?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${MES_TEST_DB_USERNAME:mes_test}
+    password: ${MES_TEST_DB_PASSWORD}
     hikari:
       maximum-pool-size: 5
       minimum-idle: 2
@@ -18,7 +18,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.MariaDBDialect
+        dialect: org.hibernate.dialect.MySQLDialect
 
   flyway:
     enabled: true
@@ -27,8 +27,8 @@ spring:
 
   data:
     redis:
-      host: ${MES_REDIS_HOST:localhost}
-      port: ${MES_REDIS_PORT:6379}
+      host: ${MES_TEST_REDIS_HOST:localhost}
+      port: ${MES_TEST_REDIS_PORT:6379}
       database: 1
 
 logging:

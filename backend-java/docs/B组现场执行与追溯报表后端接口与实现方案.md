@@ -805,7 +805,7 @@ ProductionOutputReportController
 | `GET` | `/api/report/production_outputs/summary` | 查询产量汇总 |
 | `GET` | `/api/report/production_outputs/trend` | 查询产量趋势 |
 | `GET` | `/api/report/production_outputs/details` | 查询产量明细 |
-| `GET` | `/api/report/production_outputs/export` | 导出产量报表，是否做异步待确认 |
+| `GET` | `/api/report/production_outputs/export` | 同步导出产量报表，UTF-8 CSV，最多 31 天和 10000 行 |
 
 统计维度：
 

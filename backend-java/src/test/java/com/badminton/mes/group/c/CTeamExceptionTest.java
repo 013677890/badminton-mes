@@ -3,6 +3,10 @@ package com.badminton.mes.group.c;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.module.andon.constants.AndonErrorCodeConstants;
 import com.badminton.mes.module.andon.controller.vo.AndonTypeSaveReqVO;
+import com.badminton.mes.module.andon.dal.redis.AndonCache;
+import com.badminton.mes.module.andon.dal.repository.AndonConfigurationRepository;
+import com.badminton.mes.module.andon.dal.repository.AndonEventRepository;
+import com.badminton.mes.module.andon.dal.repository.AndonReasonRepository;
 import com.badminton.mes.module.andon.dal.repository.AndonTypeRepository;
 import com.badminton.mes.module.andon.service.impl.AndonTypeServiceImpl;
 import com.badminton.mes.module.quality.constants.QualityErrorCodeConstants;
@@ -10,12 +14,14 @@ import com.badminton.mes.module.quality.controller.vo.QualityInspectionPlanSaveR
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanRepository;
+import com.badminton.mes.module.quality.dal.redis.QualityCache;
 import com.badminton.mes.module.quality.service.impl.QualityInspectionPlanServiceImpl;
 import com.badminton.mes.module.quality.controller.vo.QualityInspectionItemSaveReqVO;
 import com.badminton.mes.module.quality.dal.repository.QualityInspectionItemRepository;
 import com.badminton.mes.module.quality.service.impl.QualityInspectionItemServiceImpl;
 import com.badminton.mes.module.device.constants.DeviceErrorCodeConstants;
 import com.badminton.mes.module.device.controller.vo.DeviceAccessConfigSaveReqVO;
+import com.badminton.mes.module.device.dal.redis.DeviceCache;
 import com.badminton.mes.module.device.dal.repository.DeviceAccessConfigRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCommissioningRecordRepository;
 import com.badminton.mes.module.device.dal.repository.DeviceCountRecordRepository;
@@ -23,6 +29,7 @@ import com.badminton.mes.module.device.service.impl.DeviceAccessConfigServiceImp
 import com.badminton.mes.module.equipment.constants.EquipmentErrorCodeConstants;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentFaultPrincipleSaveReqVO;
 import com.badminton.mes.module.equipment.controller.vo.EquipmentLedgerSaveReqVO;
+import com.badminton.mes.module.equipment.dal.redis.EquipmentCache;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentCategoryRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentFaultPrincipleRepository;
 import com.badminton.mes.module.equipment.dal.repository.EquipmentLedgerRepository;
@@ -53,7 +60,9 @@ class CTeamExceptionTest {
         request.setTypeName("停机");
         request.setHandlingMode("ASSISTANCE");
 
-        assertThatThrownBy(() -> new AndonTypeServiceImpl(repository).createType(request))
+        assertThatThrownBy(() -> new AndonTypeServiceImpl(repository,
+                mock(AndonReasonRepository.class), mock(AndonConfigurationRepository.class),
+                mock(AndonEventRepository.class), mock(AndonCache.class)).createType(request))
                 .isInstanceOfSatisfying(ServiceException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isSameAs(AndonErrorCodeConstants.TYPE_RULE_INVALID));
@@ -71,7 +80,7 @@ class CTeamExceptionTest {
         request.setItems(java.util.List.of());
 
         assertThatThrownBy(() -> new QualityInspectionPlanServiceImpl(
-                planRepository, itemRepository, inspectionRepository).createPlan(request))
+                planRepository, itemRepository, inspectionRepository, mock(QualityCache.class)).createPlan(request))
                 .isInstanceOfSatisfying(ServiceException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isSameAs(QualityErrorCodeConstants.PLAN_CODE_DUPLICATE));
@@ -87,7 +96,8 @@ class CTeamExceptionTest {
 
         assertThatThrownBy(() -> new QualityInspectionItemServiceImpl(repository, mock(
                 com.badminton.mes.module.quality.dal.repository.QualityInspectionCategoryRepository.class), mock(
-                com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository.class))
+                com.badminton.mes.module.quality.dal.repository.QualityInspectionPlanItemRepository.class),
+                mock(QualityCache.class))
                 .createItem(request))
                 .isInstanceOfSatisfying(ServiceException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
@@ -104,7 +114,8 @@ class CTeamExceptionTest {
 
         assertThatThrownBy(() -> new DeviceAccessConfigServiceImpl(repository,
                 mock(DeviceCommissioningRecordRepository.class), mock(DeviceCountRecordRepository.class),
-                mock(com.badminton.mes.module.equipment.service.EquipmentLedgerService.class))
+                mock(com.badminton.mes.module.equipment.service.EquipmentLedgerService.class),
+                mock(DeviceCache.class))
                 .createAccessConfig(request))
                 .isInstanceOfSatisfying(ServiceException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
@@ -138,7 +149,8 @@ class CTeamExceptionTest {
         assertThatThrownBy(() -> new EquipmentLedgerServiceImpl(repository,
                 mock(EquipmentCategoryRepository.class), mock(EquipmentManufacturerRepository.class),
                 mock(EquipmentRepairOrderRepository.class), mock(EquipmentMaintenancePlanRepository.class),
-                mock(EquipmentMaintenanceRecordRepository.class)).createEquipmentLedger(request))
+                mock(EquipmentMaintenanceRecordRepository.class), mock(EquipmentCache.class))
+                .createEquipmentLedger(request))
                 .isInstanceOfSatisfying(ServiceException.class,
                         exception -> org.assertj.core.api.Assertions.assertThat(exception.getErrorCode())
                                 .isSameAs(EquipmentErrorCodeConstants.EQUIPMENT_LEDGER_CODE_DUPLICATE));

@@ -53,7 +53,7 @@ public interface CraftRouteProductRepository extends JpaRepository<CraftRoutePro
             FROM CraftRouteProductEntity relation, CraftRouteEntity route
             WHERE route.id = relation.routeId
               AND relation.productId = :productId
-              AND route.routeStatus = :routeStatus
+              AND route.routingStatus = :routeStatus
               AND route.deleted = false
               AND relation.deleted = false
             """)

@@ -105,8 +105,8 @@ class WorkOrderRoutingValidationTest {
     @BeforeEach
     void setUp() {
         workOrderService = new WorkOrderServiceImpl(workOrderRepository, productRepository,
-                routeRepository, routeProductRepository, workshopRepository,
-                bomRepository, bomDetailRepository, materialRepository, craftRoutingRelationRepository,
+                routeRepository, routeProductRepository, workshopRepository, bomRepository,
+                bomDetailRepository, materialRepository, craftRoutingRelationRepository,
                 workOrderMaterialRepository, workOrderStatusLogRepository, workOrderCache,
                 workOrderNoSequence, bomDetailManager);
 
@@ -117,7 +117,8 @@ class WorkOrderRoutingValidationTest {
         CraftRouteEntity route = new CraftRouteEntity();
         route.setId(ROUTING_ID);
         route.setRoutingStatus(CraftRouteStatusEnum.EFFECTIVE.getStatus());
-        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTING_ID)).thenReturn(Optional.of(route));
+        when(routeRepository.findByIdAndDeletedFalseForUpdate(ROUTING_ID))
+                .thenReturn(Optional.of(route));
         when(routeProductRepository.existsByRouteIdAndProductIdAndDeletedFalse(ROUTING_ID, PRODUCT_ID))
                 .thenReturn(true);
         when(bomRepository.findByIdAndDeletedFalse(BOM_ID)).thenReturn(Optional.of(buildEffectiveBom()));

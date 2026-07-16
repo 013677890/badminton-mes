@@ -10,24 +10,42 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * API 安全与跨域配置。
+ * 安全拦截配置：/api/** 默认全部要求登录，白名单仅登录接口。
  *
- * <p>认证默认启用，仅登录接口免认证；受控开发环境可通过配置显式关闭认证。
+ * <p>新增免登录接口须在此显式登记，保持"默认拒绝"的安全基线(SEC-001)。
+ *
+ * @author 张竹灏
+ * @date 2026/07/09
  */
 @Configuration
 public class SecurityWebConfig implements WebMvcConfigurer {
 
-    /** 登录接口路径，唯一免登录白名单。 */
+    /** 登录接口路径，唯一免登录白名单 */
     public static final String LOGIN_PATH = "/api/system/auth/login";
 
+    /** 微信小程序免登录路径，仅用于换取身份和首次绑定 */
+    public static final String[] MINI_APP_PUBLIC_PATHS = {
+            "/api/system/mini_app/auth/login",
+            "/api/system/mini_app/auth/bind"
+    };
+
     private final AuthInterceptor authInterceptor;
+
     private final List<String> allowedOrigins;
+
     private final boolean authDisabled;
 
-    public SecurityWebConfig(
-            AuthInterceptor authInterceptor,
-            @Value("${mes.web.cors.allowed-origins:http://localhost:5173}") List<String> allowedOrigins,
-            @Value("${mes.security.auth-disabled:false}") boolean authDisabled) {
+    /**
+     * 构造器注入，依赖不可变。
+     *
+     * @param authInterceptor 登录鉴权拦截器
+     * @param allowedOrigins  前端允许来源列表
+     * @param authDisabled    是否关闭认证，仅允许本地联调环境启用
+     */
+    public SecurityWebConfig(AuthInterceptor authInterceptor,
+                             @Value("${mes.web.cors.allowed-origins:http://localhost:5173}")
+                             List<String> allowedOrigins,
+                             @Value("${mes.security.auth-disabled:false}") boolean authDisabled) {
         this.authInterceptor = authInterceptor;
         this.allowedOrigins = List.copyOf(allowedOrigins);
         this.authDisabled = authDisabled;
@@ -48,8 +66,10 @@ public class SecurityWebConfig implements WebMvcConfigurer {
         if (authDisabled) {
             return;
         }
+
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns(LOGIN_PATH);
+                .excludePathPatterns(LOGIN_PATH)
+                .excludePathPatterns(MINI_APP_PUBLIC_PATHS);
     }
 }

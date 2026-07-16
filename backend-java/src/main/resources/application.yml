@@ -8,6 +8,10 @@ spring:
   flyway:
     # 数据库结构统一由 Flyway 迁移脚本管理，禁止手工改库
     locations: ${MES_FLYWAY_LOCATIONS:classpath:db/migration}
+    # 迁移版本号同时存在整数版(V1~V18)与日期版(V2026071201+)两种方案：
+    # 已应用日期版的库再合入新增的整数版脚本时版本号低于已应用最大值，
+    # 必须允许乱序应用，否则 validate 阶段直接启动失败
+    out-of-order: true
   jpa:
     # Flyway 是唯一建表入口；Hibernate 只负责 ORM，不自动创建或变更表结构
     hibernate:
@@ -21,6 +25,14 @@ mes:
   security:
     # 默认启用认证；仅允许受控的本地开发环境通过环境变量显式关闭
     auth-disabled: ${MES_SECURITY_AUTH_DISABLED:false}
+  wechat:
+    mini-app:
+      app-id: ${MES_WECHAT_MINI_APP_ID:}
+      app-secret: ${MES_WECHAT_MINI_APP_SECRET:}
+      code-session-url: ${MES_WECHAT_CODE_SESSION_URL:https://api.weixin.qq.com/sns/jscode2session}
+      connect-timeout: ${MES_WECHAT_CONNECT_TIMEOUT:3s}
+      read-timeout: ${MES_WECHAT_READ_TIMEOUT:5s}
+      bind-ticket-ttl: ${MES_WECHAT_BIND_TICKET_TTL:5m}
   erp:
     # mock: 使用内置演示数据；remote: 通过 HTTP 读取真实 ERP 数据
     mode: ${MES_ERP_MODE:mock}
@@ -29,3 +41,11 @@ mes:
     craft-path: ${MES_ERP_CRAFT_PATH:/api/mes/crafts}
     connect-timeout: ${MES_ERP_CONNECT_TIMEOUT:3s}
     read-timeout: ${MES_ERP_READ_TIMEOUT:10s}
+  report:
+    kanban:
+      refresh-interval: ${MES_KANBAN_REFRESH_INTERVAL:60000}
+  scene:
+    completion-sync:
+      # 未配置 URL 时使用显式失败客户端，绝不伪造同步成功
+      connect-timeout: ${MES_COMPLETION_SYNC_CONNECT_TIMEOUT:15s}
+      read-timeout: ${MES_COMPLETION_SYNC_READ_TIMEOUT:30s}

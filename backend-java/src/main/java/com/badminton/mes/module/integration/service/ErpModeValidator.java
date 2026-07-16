@@ -13,7 +13,7 @@ import jakarta.annotation.PostConstruct;
 /**
  * ERP 数据源模式启动校验，防止生产环境静默使用演示数据。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Component

@@ -2,9 +2,8 @@ package com.badminton.mes.module.scene.constants;
 
 import com.badminton.mes.common.core.ErrorCode;
 
-/** 现场执行模块错误码。 */
+/** M2 现场执行模块错误码。 @author 刘涵 */
 public final class SceneErrorCodeConstants {
-
     public static final ErrorCode PARAM_NOT_EXISTS = error("A0402", "生产参数不存在");
     public static final ErrorCode PARAM_DUPLICATE = error("A0506", "同一作用域已存在该生产参数");
     public static final ErrorCode PARAM_VALUE_INVALID = error("A0402", "生产参数值与类型不匹配");
@@ -24,33 +23,20 @@ public final class SceneErrorCodeConstants {
     public static final ErrorCode BARCODE_NOT_MATCH = error("A0402", "扫码批次与任务、产品或工序不匹配");
     public static final ErrorCode DATA_SCOPE_DENIED = error("A0301", "无权访问该车间、产线或工序任务");
     public static final ErrorCode NUMBER_GENERATE_FAILED = error("B0001", "现场单号生成失败");
-
-    public static final ErrorCode PRODUCTION_TASK_NOT_EXISTS =
-            new ErrorCode("A0402", "现场生产任务不存在", "请先下发对应派工单");
-    public static final ErrorCode WORK_REPORT_NOT_EXISTS =
-            new ErrorCode("A0402", "生产报工不存在", "报工不存在或已删除");
-    public static final ErrorCode WORK_REPORT_STATUS_INVALID =
-            new ErrorCode("A0440", "生产报工状态不允许审核", "只有待确认报工可以审核");
-    public static final ErrorCode WORK_REPORT_EMPLOYEE_REQUIRED =
-            new ErrorCode("A0402", "生产报工缺少员工", "请指定实际操作员工");
-    public static final ErrorCode WORK_REPORT_PROCESS_INVALID =
-            new ErrorCode("A0402", "生产报工工序不可用", "工序不存在、已停用或已删除");
-    public static final ErrorCode PROCESS_TASK_NOT_EXISTS =
-            new ErrorCode("A0402", "现场工序任务不存在", "报工工序不属于当前生产任务");
-    public static final ErrorCode PRODUCTION_TASK_STATUS_INVALID =
-            new ErrorCode("A0440", "现场生产任务状态不允许操作", "已取消任务不能报工或完工");
-    public static final ErrorCode COMPLETION_QUANTITY_INVALID =
-            new ErrorCode("A0420", "完工数量不一致", "良品数量与不良数量之和必须等于完工数量");
-    public static final ErrorCode COMPLETION_ORDER_NOT_EXISTS =
-            new ErrorCode("A0402", "生产完工单不存在", "完工单不存在或已删除");
-    public static final ErrorCode COMPLETION_STATUS_INVALID =
-            new ErrorCode("A0440", "生产完工单状态不允许操作", "只有待审核完工单可以审核或作废");
-    public static final ErrorCode COMPLETION_PROCESS_NOT_FINISHED =
-            new ErrorCode("A0440", "必经工序尚未完成", "全部工序及必要质检完成后才能提交完工");
-    public static final ErrorCode COMPLETION_REPORT_QUANTITY_NOT_ENOUGH =
-            new ErrorCode("A0420", "可完工报工数量不足", "完工数量不能超过末工序已审核报工余额");
-    public static final ErrorCode COMPLETION_TASK_WORK_ORDER_MISMATCH =
-            new ErrorCode("A0420", "生产任务与工单不一致", "请使用生产任务所属的生产工单");
+    public static final ErrorCode REPORT_NOT_EXISTS = error("A0402", "报工记录不存在");
+    public static final ErrorCode REPORT_STATUS_INVALID = error("A0440", "当前任务或工序不允许报工");
+    public static final ErrorCode REPORT_QUANTITY_INVALID = error("A0420", "报工数量关系不合法");
+    public static final ErrorCode REPORT_BARCODE_REQUIRED = error("A0440", "当前生产参数要求报工前扫描合法条码");
+    public static final ErrorCode REPORT_ALREADY_REVERSED = error("A0506", "该报工已经完成冲销");
+    public static final ErrorCode COMPLETION_NOT_EXISTS = error("A0402", "完工单不存在");
+    public static final ErrorCode COMPLETION_STATUS_INVALID = error("A0440", "完工单当前状态不允许执行该操作");
+    public static final ErrorCode COMPLETION_QUANTITY_INVALID = error("A0420", "完工数量超过可完工数量");
+    public static final ErrorCode COMPLETION_SYNC_RETRY_EXCEEDED = error("A0440", "完工同步重试次数已达到上限");
+    public static final ErrorCode COMPLETION_SYNC_FAILED = error("C0001", "完工单同步外部系统失败");
+    public static final ErrorCode REPAIR_NOT_EXISTS = error("A0402", "返修工单不存在或不在授权范围内");
+    public static final ErrorCode REPAIR_STATUS_INVALID = error("A0440", "返修工单当前状态不允许执行该操作");
+    public static final ErrorCode REPAIR_QUANTITY_INVALID = error("A0420", "返修数量超过来源不良可返修数量");
+    public static final ErrorCode REPAIR_RECHECK_INVALID = error("A0440", "返修复检结果或数量不合法");
 
     private static ErrorCode error(String code, String message) {
         return new ErrorCode(code, message, message + "，请检查数据后重试");

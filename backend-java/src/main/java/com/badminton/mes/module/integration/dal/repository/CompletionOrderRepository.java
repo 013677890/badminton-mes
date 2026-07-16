@@ -19,6 +19,9 @@ import jakarta.persistence.LockModeType;
 public interface CompletionOrderRepository extends JpaRepository<CompletionOrderEntity, Long>,
         JpaSpecificationExecutor<CompletionOrderEntity> {
 
+    /** 按完工单号查询未删除的已发布完工单。 */
+    java.util.Optional<CompletionOrderEntity> findByCompletionNoAndDeletedFalse(String completionNo);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT completion FROM CompletionOrderEntity completion

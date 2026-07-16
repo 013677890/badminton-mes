@@ -1,0 +1,10 @@
+package com.badminton.mes.module.scene.controller;
+import com.badminton.mes.common.core.CommonResult;import com.badminton.mes.common.security.*;import com.badminton.mes.module.scene.controller.vo.*;import com.badminton.mes.module.scene.service.SceneCompletionOrderService;import jakarta.validation.Valid;import jakarta.validation.constraints.Positive;import org.springframework.web.bind.annotation.*;
+/** 生产完工 Controller。 @author 刘涵 */
+@RestController @RequestMapping("/api/scene/completion_orders") @org.springframework.validation.annotation.Validated
+public class SceneCompletionOrderController{private final SceneCompletionOrderService service;public SceneCompletionOrderController(SceneCompletionOrderService s){service=s;}
+ @PostMapping("/create_from_task") @RequiresRoles({RoleCodeConstants.ADMIN,RoleCodeConstants.WORKSHOP_MANAGER,RoleCodeConstants.TEAM_LEADER}) public CommonResult<Long> create(@Valid @RequestBody SceneCompletionCreateReqVO r){return CommonResult.success(service.create(r));}
+ @PutMapping("/{id}") @RequiresRoles({RoleCodeConstants.ADMIN,RoleCodeConstants.WORKSHOP_MANAGER,RoleCodeConstants.TEAM_LEADER}) public CommonResult<Void> update(@PathVariable @Positive Long id,@Valid @RequestBody SceneCompletionSaveReqVO r){service.update(id,r);return CommonResult.success(null);}
+ @PutMapping("/{id}/submit") @RequiresRoles({RoleCodeConstants.ADMIN,RoleCodeConstants.WORKSHOP_MANAGER,RoleCodeConstants.TEAM_LEADER}) public CommonResult<Void> submit(@PathVariable @Positive Long id){service.submit(id);return CommonResult.success(null);}
+ @PutMapping("/{id}/audit") @RequiresRoles({RoleCodeConstants.ADMIN,RoleCodeConstants.WORKSHOP_MANAGER}) public CommonResult<Void> audit(@PathVariable @Positive Long id,@Valid @RequestBody SceneCompletionAuditReqVO r){service.audit(id,r);return CommonResult.success(null);}
+ @PostMapping("/{id}/sync") @RequiresRoles({RoleCodeConstants.ADMIN,RoleCodeConstants.WORKSHOP_MANAGER}) public CommonResult<Void> sync(@PathVariable @Positive Long id){service.sync(id);return CommonResult.success(null);}}

@@ -1,0 +1,3 @@
+import { getDashboard } from '../../services/report'
+import { Overview, Task } from '../../types/api'
+Page({ data: { overview: {} as Overview, tasks: [] as Task[], lastRefreshTime: '', dataStatus: '' }, onShow() { this.load(); this.timer = setInterval(() => this.load(), 60000) }, onHide() { clearInterval(this.timer) }, load() { getDashboard().then(result => this.setData({ overview: result.overview, tasks: result.tasks, lastRefreshTime: result.overview.lastRefreshTime, dataStatus: result.overview.dataStatus })).catch(error => wx.showToast({ title: error.message, icon: 'none' })) }, timer: 0 as unknown as number })

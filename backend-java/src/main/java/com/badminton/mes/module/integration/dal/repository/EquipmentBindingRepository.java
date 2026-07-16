@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /**
  * 设备报工绑定配置 Repository。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 public interface EquipmentBindingRepository extends JpaRepository<EquipmentBindingEntity, Long> {
