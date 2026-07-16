@@ -35,7 +35,9 @@ import org.springframework.util.StringUtils;
 /**
  * 设备报修任务 Service 实现。
  *
- * <p>报修任务围绕设备台账建立维修闭环，课设阶段用人工录入方式模拟报修、派工、维修中和完成状态。
+ * <p>围绕设备台账编排上报、派工、维修中、完成或取消的单向状态机。创建和更新会悲观锁定设备及
+ * 可选故障原理，使设备可用性和类别适配校验在事务提交前保持稳定；报修单号采用应用层预查加
+ * 数据库唯一索引兜底。逻辑删除改写单号以保留任务审计快照并释放原业务值。
  *
  * @author 角色C
  * @date 2026/07/10
@@ -43,39 +45,43 @@ import org.springframework.util.StringUtils;
 @Service
 public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderService {
 
+    /** 记录报修任务关键写操作。 */
     private static final Logger logger = LoggerFactory.getLogger(EquipmentRepairOrderServiceImpl.class);
 
     /** TODO(角色C, 2026/07/10): 认证模块建设后，改为从登录上下文获取当前用户 id */
     private static final Long DEFAULT_OPERATOR_ID = 1L;
 
-    /** 新建报修单默认状态 */
+    /** 新建报修单默认从已上报状态进入状态机。 */
     private static final String DEFAULT_REPAIR_STATUS = "REPORTED";
 
-    /** 维修中状态 */
+    /** 维修中状态，进入时自动补齐开始时间。 */
     private static final String REPAIRING_STATUS = "REPAIRING";
 
-    /** 已完成状态 */
+    /** 已完成终态，进入时补齐缺失的开始和结束时间。 */
     private static final String FINISHED_STATUS = "FINISHED";
 
-    /** 已取消状态 */
+    /** 已取消终态，进入时清除结束时间。 */
     private static final String CANCELLED_STATUS = "CANCELLED";
 
-    /** 报修单号数据库字段最大长度 */
+    /** 报修单号数据库字段最大长度，自动和删除态单号均需遵守。 */
     private static final int REPAIR_NO_MAX_LENGTH = 32;
 
-    /** 逻辑删除单号后缀前缀，用于释放原报修单号唯一约束 */
+    /** 逻辑删除单号后缀前缀，用于释放原报修单号唯一约束。 */
     private static final String DELETED_REPAIR_NO_SUFFIX_PREFIX = "_D";
 
-    /** 报修单号前缀 */
+    /** 自动报修单号业务前缀。 */
     private static final String REPAIR_NO_PREFIX = "REP";
 
-    /** 报修单号日期格式 */
+    /** 自动报修单号中的秒级日期格式。 */
     private static final DateTimeFormatter REPAIR_NO_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
+    /** 报修仓储，提供有效任务查询和单号唯一约束落库。 */
     private final EquipmentRepairOrderRepository repairOrderRepository;
 
+    /** 台账仓储，用于锁定并校验报修设备。 */
     private final EquipmentLedgerRepository ledgerRepository;
 
+    /** 故障原理仓储，用于锁定并校验可选故障知识及适用类别。 */
     private final EquipmentFaultPrincipleRepository faultPrincipleRepository;
 
     /**
@@ -93,6 +99,15 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         this.faultPrincipleRepository = faultPrincipleRepository;
     }
 
+    /**
+     * 创建报修任务并补齐单号、上报信息、初始状态及对应时间。
+     *
+     * <p>设备与故障原理在事务内加写锁，避免校验后被并发删除或换类；自动单号仍需经过应用层查重
+     * 和数据库唯一索引双重保护。
+     *
+     * @param reqVO 报修任务创建数据
+     * @return 新报修任务主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEquipmentRepairOrder(EquipmentRepairOrderSaveReqVO reqVO) {
@@ -129,6 +144,15 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         return repairOrder.getId();
     }
 
+    /**
+     * 更新报修任务并执行单向状态迁移。
+     *
+     * <p>先校验目标设备与故障原理适配关系，再验证状态机；只有状态发生变化时才自动补齐关键时间，
+     * 避免重复保存覆盖人工录入或既有审计时间。
+     *
+     * @param id 报修任务主键
+     * @param reqVO 报修任务更新数据
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentRepairOrder(Long id, EquipmentRepairOrderSaveReqVO reqVO) {
@@ -179,6 +203,14 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         logger.info("[修改设备报修任务] id: {}, repairNo: {}", id, existing.getRepairNo());
     }
 
+    /**
+     * 逻辑删除非维修中的报修任务。
+     *
+     * <p>正在维修的任务必须先完成或取消，避免删除活跃流程；删除态单号在长度限制内附加主键后缀，
+     * 释放原唯一键并保留历史任务。
+     *
+     * @param id 报修任务主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentRepairOrder(Long id) {
@@ -194,6 +226,12 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         logger.info("[删除设备报修任务] id: {}", id);
     }
 
+    /**
+     * 查询一条未删除报修任务并生成响应快照。
+     *
+     * @param id 报修任务主键
+     * @return 报修任务详情快照
+     */
     @Override
     @Transactional(readOnly = true)
     public EquipmentRepairOrderRespVO getEquipmentRepairOrder(Long id) {
@@ -201,6 +239,12 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
         return EquipmentRepairOrderConvert.toRespVO(repairOrder);
     }
 
+    /**
+     * 分页查询报修任务；空结果跳过列表查询，越界页码收敛到最后一页。
+     *
+     * @param reqVO 分页及筛选条件
+     * @return 按上报时间倒序排列的分页快照
+     */
     @Override
     @Transactional(readOnly = true)
     public PageResult<EquipmentRepairOrderRespVO> getEquipmentRepairOrderPage(EquipmentRepairOrderPageReqVO reqVO) {
@@ -234,7 +278,9 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     }
 
     /**
-     * 校验报修单号唯一性。
+     * 校验有效报修单号唯一性，更新场景排除当前任务。
+     *
+     * <p>应用层预查负责快速失败，并发事务的最终冲突由数据库唯一索引兜底。
      *
      * @param repairNo  报修单号
      * @param excludeId 排除的报修任务 id，创建时传 null
@@ -251,6 +297,8 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     /**
      * 校验设备存在且未删除，并对设备记录加写锁。
      *
+     * <p>锁定设备可避免报修事务执行期间设备被并发删除或报废。
+     *
      * @param equipmentId 设备台账 id
      * @return 设备台账实体
      */
@@ -265,6 +313,9 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
 
     /**
      * 校验故障原理存在、未删除且适用于当前设备类别。
+     *
+     * <p>故障原理未限定类别时可用于任意设备；限定类别时必须与已锁定设备的类别完全一致。对故障
+     * 原理加写锁可防止适用范围在当前事务提交前被并发修改。
      *
      * @param faultPrincipleId 故障原理 id，可空
      * @param equipmentLedger  设备台账实体
@@ -284,6 +335,9 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
 
     /**
      * 校验报修状态流转是否合法。
+     *
+     * <p>允许保持原状态；已完成和已取消为不可逆终态。其余状态仅可沿上报、派工、维修中方向前进，
+     * 并可在允许节点结束或取消，禁止任何回退。
      *
      * @param previousRepairStatus 当前状态
      * @param nextRepairStatus     目标状态
@@ -319,6 +373,9 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     /**
      * 根据报修状态变化补充关键时间字段。
      *
+     * <p>首次进入维修中补开始时间；直接完成时同时补齐开始和结束时间；取消时清除结束时间，避免
+     * 取消记录被统计为已完成维修。调用方提供的非空时间优先保留。
+     *
      * @param repairOrder          报修任务实体
      * @param previousRepairStatus 当前状态，创建时传 null
      */
@@ -344,6 +401,8 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
     /**
      * 判断是否为报修单号唯一约束冲突。
      *
+     * <p>只识别目标索引，其他数据库完整性异常继续上抛，避免掩盖真实约束问题。
+     *
      * @param exception 数据库约束异常
      * @return true 是报修单号重复，false 不是
      */
@@ -353,6 +412,9 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
 
     /**
      * 生成报修单号。
+     *
+     * <p>时间部分便于人工识别，纳秒计数片段降低同秒碰撞；超过字段长度时截断，最终唯一性仍由
+     * 数据库索引保证。
      *
      * @return 报修单号
      */
@@ -368,6 +430,8 @@ public class EquipmentRepairOrderServiceImpl implements EquipmentRepairOrderServ
 
     /**
      * 构造逻辑删除后的报修单号。
+     *
+     * <p>优先保留原单号前缀，并附加由主键生成的稳定后缀；必要时截断原值以遵守字段长度上限。
      *
      * @param originalRepairNo 原报修单号
      * @param repairOrderId    报修任务主键

@@ -30,12 +30,17 @@ import static org.mockito.Mockito.when;
 /**
  * {@link EquipmentCategoryServiceImpl} 工序反向引用校验测试。
  *
+ * <p>使用 Mockito 隔离设备、故障原理、工序、工艺路线和缓存依赖，直接调用被测 Service。覆盖设备
+ * 类别停用或删除时的跨模块引用保护，尤其验证启用工序和生效路线会阻止写入，避免类别失效后留下
+ * 无法执行的工艺配置。
+ *
  * @author 张竹灏
  * @date 2026/07/10
  */
 @ExtendWith(MockitoExtension.class)
 class EquipmentCategoryServiceImplTest {
 
+    /** 测试类别主键。 */
     private static final Long CATEGORY_ID = 20L;
 
     @Mock
@@ -58,6 +63,7 @@ class EquipmentCategoryServiceImplTest {
 
     private EquipmentCategoryServiceImpl categoryService;
 
+    /** 每个用例使用全新的 Service，保持 Mock 调用和实体状态独立。 */
     @BeforeEach
     void setUp() {
         categoryService = new EquipmentCategoryServiceImpl(
@@ -116,6 +122,7 @@ class EquipmentCategoryServiceImplTest {
         verify(categoryRepository, never()).save(any());
     }
 
+    /** 构造处于启用状态、可参与停用校验的类别实体。 */
     private EquipmentCategoryEntity buildEnabledCategory() {
         EquipmentCategoryEntity category = new EquipmentCategoryEntity();
         category.setId(CATEGORY_ID);
@@ -124,6 +131,7 @@ class EquipmentCategoryServiceImplTest {
         return category;
     }
 
+    /** 构造类别更新请求，状态参数用于驱动启用或停用分支。 */
     private EquipmentCategorySaveReqVO buildSaveReqVO(Integer status) {
         EquipmentCategorySaveReqVO reqVO = new EquipmentCategorySaveReqVO();
         reqVO.setCategoryCode("MACHINE");

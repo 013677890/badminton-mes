@@ -33,21 +33,26 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * {@link EquipmentCategoryController} Web 切片测试。
  *
- * <p>参照生产模块 Controller 测试风格，仅验证 Web 层契约：参数校验、统一响应结构、
- * 路径转发和非法请求不进入 Service。
+ * <p>通过 {@link WebMvcTest} 只加载 MVC 基础设施和被测控制器，类别 Service 与认证拦截器均使用
+ * Mockito Bean 隔离，不访问数据库或执行业务规则。覆盖请求体和路径参数校验、统一响应结构、
+ * 主键转发、分页参数边界，并确认非法请求在进入 Service 前即被拒绝。
  */
 @WebMvcTest(EquipmentCategoryController.class)
 class EquipmentCategoryControllerTest {
 
+    /** 驱动真实 Spring MVC 参数绑定、校验和响应序列化。 */
     @Autowired
     private MockMvc mockMvc;
 
+    /** 隔离业务层，使断言只反映控制器契约。 */
     @MockitoBean
     private EquipmentCategoryService categoryService;
 
+    /** 以桩替代认证拦截器，避免鉴权上下文干扰 Web 契约测试。 */
     @MockitoBean
     private AuthInterceptor authInterceptor;
 
+    /** 统一放行请求，让每个用例聚焦自身的参数与响应行为。 */
     @BeforeEach
     void permitAllRequests() throws Exception {
         when(authInterceptor.preHandle(any(), any(), any())).thenReturn(true);

@@ -18,14 +18,20 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 安灯模块 Redis 旁路缓存。
  *
- * <p>Redis 是弱依赖：读取、写入或删除失败只记录日志，不阻断主业务。
- * 删除操作优先注册到事务提交后执行，避免提交前并发读旧值并回填缓存。
+ * <p>采用 Cache-Aside 模式：详情未命中时由调用方提供的加载器读取数据库，再尝试写回 Redis。
+ * Redis 是弱依赖，读取、序列化、写入或删除失败只记录日志，不阻断数据库主业务。
+ * 删除操作优先注册到事务提交后执行，避免数据库尚未提交时并发请求读到旧值并再次回填缓存。
+ *
+ * <p>版本 Key 用于关闭“读库与回填之间”的竞态窗口：读取详情前先观察版本，写回时由 Lua 脚本确认版本未变化；
+ * 事务提交后的失效脚本先递增版本再删除详情。即使慢查询在失效后才完成，也无法把事务前的旧快照重新写入缓存。
  */
 @Component
 public class AndonCache {
 
+    /** 缓存故障审计日志；故障不会升级为业务异常。 */
     private static final Logger logger = LoggerFactory.getLogger(AndonCache.class);
 
+    /** 仅当查询开始时观察到的版本仍然有效时写入详情，保证版本校验和写入在 Redis 内原子执行。 */
     private static final DefaultRedisScript<Long> WRITE_IF_VERSION_UNCHANGED_SCRIPT =
             new DefaultRedisScript<>("""
                     local currentVersion = redis.call('GET', KEYS[2]) or '0'
@@ -36,20 +42,42 @@ public class AndonCache {
                     return 1
                     """, Long.class);
 
+    /** 先递增版本再删除详情的原子失效脚本，用于拒绝仍在执行中的旧快照回填。 */
     private static final DefaultRedisScript<Long> INVALIDATE_SCRIPT =
             new DefaultRedisScript<>("""
                     redis.call('INCR', KEYS[2])
                     return redis.call('DEL', KEYS[1])
                     """, Long.class);
 
+    /** 执行字符串缓存访问和 Lua 脚本的 Redis 客户端。 */
     private final StringRedisTemplate stringRedisTemplate;
+    /** 在响应 VO 与 JSON 之间转换的序列化器。 */
     private final ObjectMapper objectMapper;
 
+    /**
+     * 创建安灯旁路缓存组件。
+     *
+     * @param stringRedisTemplate Redis 字符串访问模板
+     * @param objectMapper 详情对象 JSON 序列化器
+     */
     public AndonCache(StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 读取详情缓存，并在未命中时回源加载。
+     *
+     * <p>加载器异常属于数据库主流程异常，会原样向上传播；只有 Redis 和序列化异常被降级处理。
+     * 若读取版本失败，则仍返回回源结果，但主动跳过回填，防止在无法判断并发失效时污染缓存。
+     *
+     * @param resourceName 资源类型，用于隔离不同业务表的相同主键
+     * @param id 详情业务主键
+     * @param valueType 反序列化目标类型
+     * @param loader 缓存未命中时执行的数据库加载器
+     * @param <T> 详情响应类型
+     * @return 缓存值或数据库加载结果
+     */
     public <T> T getOrLoadDetail(String resourceName, Long id, Class<T> valueType, Supplier<T> loader) {
         String detailKey = AndonRedisKeyConstants.detailKey(resourceName, id);
         String versionKey = AndonRedisKeyConstants.detailVersionKey(resourceName, id);
@@ -68,10 +96,25 @@ public class AndonCache {
         return loadedValue;
     }
 
+    /**
+     * 在当前事务成功提交后失效单个详情；无活动事务时立即失效。
+     *
+     * @param resourceName 资源类型
+     * @param id 业务主键
+     */
     public void evictDetailAfterCommit(String resourceName, Long id) {
         evictDetailsAfterCommit(resourceName, List.of(id));
     }
 
+    /**
+     * 批量安排事务后详情失效。
+     *
+     * <p>方法会过滤空主键并去重，适用于类型修改后对原因、配置和事件聚合详情进行级联失效。
+     * 不在提交前删除缓存，是为了避免事务最终回滚但缓存已经消失，或并发查询在未提交窗口重新写入旧数据。
+     *
+     * @param resourceName 资源类型
+     * @param ids 需要失效的业务主键集合
+     */
     public void evictDetailsAfterCommit(String resourceName, Collection<Long> ids) {
         List<CacheKeyPair> cacheKeys = ids.stream()
                 .filter(id -> id != null)
@@ -83,6 +126,7 @@ public class AndonCache {
         evictAfterCommit(cacheKeys);
     }
 
+    /** 读取并发控制版本；失败时返回 {@code null}，由调用方跳过不安全的缓存回填。 */
     private String readVersion(String versionKey, String resourceName, Long id) {
         try {
             String version = stringRedisTemplate.opsForValue().get(versionKey);
@@ -94,6 +138,11 @@ public class AndonCache {
         }
     }
 
+    /**
+     * 通过 Lua 原子比较版本并写入详情。
+     *
+     * <p>该方法不会影响调用方已经获得的数据库结果；Redis 写入失败仅降低后续命中率。
+     */
     private void writeIfVersionUnchanged(String detailKey, String versionKey, String observedVersion,
                                          Object value, String resourceName, Long id) {
         if (observedVersion == null) {
@@ -110,6 +159,9 @@ public class AndonCache {
         }
     }
 
+    /**
+     * 将失效动作绑定到事务提交回调；复制集合以避免调用方后续修改集合改变回调内容。
+     */
     private void evictAfterCommit(Collection<CacheKeyPair> keys) {
         List<CacheKeyPair> immutableKeys = List.copyOf(keys);
         if (immutableKeys.isEmpty()) {
@@ -127,6 +179,7 @@ public class AndonCache {
         });
     }
 
+    /** 执行版本递增与详情删除；任一 Redis 故障只记日志，不回滚已经提交的数据库事务。 */
     private void evict(Collection<CacheKeyPair> keys) {
         try {
             for (CacheKeyPair key : keys) {
@@ -138,6 +191,7 @@ public class AndonCache {
         }
     }
 
+    /** 同一业务详情的缓存 Key 与版本 Key，不允许拆分失效。 */
     private record CacheKeyPair(String detailKey, String versionKey) {
     }
 }

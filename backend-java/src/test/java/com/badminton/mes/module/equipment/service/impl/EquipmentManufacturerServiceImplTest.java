@@ -34,11 +34,14 @@ import static org.mockito.Mockito.when;
 /**
  * {@link EquipmentManufacturerServiceImpl} 单元测试。
  *
- * <p>覆盖制造商编码唯一性、删除引用保护、分页空结果和实体字段更新等核心业务规则。
+ * <p>通过 Mockito 隔离制造商、设备台账和详情缓存持久化协作者，直接构造被测 Service。覆盖制造商
+ * 编码唯一性、创建默认值、更新字段合并、设备引用删除保护、逻辑删除编码释放，以及空页短路和
+ * 越界页码归一化；拒绝分支额外验证不会执行保存。
  */
 @ExtendWith(MockitoExtension.class)
 class EquipmentManufacturerServiceImplTest {
 
+    /** 测试制造商主键。 */
     private static final Long MANUFACTURER_ID = 300L;
 
     @Mock
@@ -52,6 +55,7 @@ class EquipmentManufacturerServiceImplTest {
 
     private EquipmentManufacturerServiceImpl manufacturerService;
 
+    /** 每个用例重建 Service，确保 Mock 交互和实体修改互不影响。 */
     @BeforeEach
     void setUp() {
         manufacturerService = new EquipmentManufacturerServiceImpl(
@@ -177,6 +181,7 @@ class EquipmentManufacturerServiceImplTest {
         verify(manufacturerRepository).findAll(any(Specification.class), any(Pageable.class));
     }
 
+    /** 构造字段完整、默认启用的制造商保存请求。 */
     private EquipmentManufacturerSaveReqVO buildSaveRequest() {
         EquipmentManufacturerSaveReqVO request = new EquipmentManufacturerSaveReqVO();
         request.setManufacturerCode("SUPPLIER");
@@ -191,6 +196,7 @@ class EquipmentManufacturerServiceImplTest {
         return request;
     }
 
+    /** 构造当前有效的制造商实体，供更新和删除场景复用。 */
     private EquipmentManufacturerEntity buildManufacturerEntity() {
         EquipmentManufacturerEntity manufacturer = new EquipmentManufacturerEntity();
         manufacturer.setId(MANUFACTURER_ID);

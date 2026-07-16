@@ -26,13 +26,10 @@ import static com.badminton.mes.common.security.RoleCodeConstants.TEAM_LEADER;
 import static com.badminton.mes.common.security.RoleCodeConstants.WORKSHOP_MANAGER;
 
 /**
- * 设备计数记录 REST 接口。
+ * 设备计数报文接入与原始记录查询接口。
  *
- * <p>设备或接入网关调用 {@code /report} 上报计数，后台角色调用详情和分页查询；
- * 请求校验、角色限制和统一响应由 Web 层完成，计数幂等与异常判断由 Service 完成。
- *
- * @author MES 开发组
- * @date 2026/07/16
+ * <p>上报端点接收设备侧不可变计数事实，完成配置校验、幂等识别、增量解释和异常分流；
+ * 查询端点用于追溯已落库的原始报文、有效增量及后续任务匹配和报工状态。
  */
 @RestController
 @RequestMapping("/api/device/count-records")
@@ -44,7 +41,16 @@ public class DeviceCountRecordController {
         this.countService = countService;
     }
 
-    /** 接收一次设备计数上报。 */
+    /**
+     * 接收并处理一条设备计数报文。
+     *
+     * <p>请求体需通过配置编码、设备编码、采集时间、流水号、非负计数值和报文长度校验。
+     * 服务端以配置、采集时间和流水号识别重复上报，并依据累计或增量模式计算有效数量；
+     * 设备、工序或计数异常会保留原始记录并转入异常流程，不代表请求报文未落库。
+     *
+     * @param request 设备侧采集事实及原始报文快照
+     * @return 计数记录主键、有效增量、匹配状态、报工状态和异常提示
+     */
     @PostMapping("/report")
     @RequiresRoles({ADMIN, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<DeviceCountReportRespVO> report(
@@ -52,14 +58,27 @@ public class DeviceCountRecordController {
         return CommonResult.success(countService.reportCount(request));
     }
 
-    /** 查询单条计数记录。 */
+    /**
+     * 查询单条设备计数原始记录。
+     *
+     * @param id 计数记录主键，必须为正整数
+     * @return 原始计数、解释后增量、设备状态快照及任务处理状态
+     */
     @GetMapping("/{id}")
     @RequiresRoles({ADMIN, PMC, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<DeviceCountRecordRespVO> get(@PathVariable @Positive Long id) {
         return CommonResult.success(countService.getCountRecord(id));
     }
 
-    /** 分页查询计数记录。 */
+    /**
+     * 分页检索设备计数原始记录。
+     *
+     * <p>可按接入配置、设备、任务匹配状态及设备采集时间闭区间组合过滤；结果按采集业务时间、
+     * 主键依次倒序排列。采集时间来自设备报文，不等同于服务端记录入库时间。
+     *
+     * @param request 分页参数和计数记录筛选条件
+     * @return 设备计数记录分页结果
+     */
     @GetMapping("/page")
     @RequiresRoles({ADMIN, PMC, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<PageResult<DeviceCountRecordRespVO>> page(

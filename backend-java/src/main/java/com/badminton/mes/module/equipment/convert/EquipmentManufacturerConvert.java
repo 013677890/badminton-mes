@@ -10,7 +10,8 @@ import com.badminton.mes.module.equipment.dal.entity.EquipmentManufacturerEntity
  * 设备制造商 VO 与实体的转换器。
  *
  * <p>采用显式逐字段赋值：字段对应关系一目了然，编译期即可发现改名遗漏，
- * 也避免反射拷贝的性能损耗与浅拷贝陷阱。
+ * 也避免反射拷贝的性能损耗与浅拷贝陷阱。转换层只定义制造商业务字段与接口字段的边界，不负责
+ * 编码唯一性、设备引用保护、逻辑删除改名或缓存处理，这些规则必须由事务内的 Service 编排。
  *
  * @author 角色C
  * @date 2026/07/09
@@ -20,7 +21,8 @@ public final class EquipmentManufacturerConvert {
     /**
      * 保存请求 VO 转实体，创建与修改共用。
      *
-     * <p>只搬运业务字段。创建人、创建时间等由 Service 按业务规则另行设置。
+     * <p>只搬运编码、名称、联系方式、地址和启停状态等可维护字段。主键、创建人、时间戳及逻辑
+     * 删除标记不从请求产生，防止客户端伪造审计快照；创建默认值由 Service 另行设置。
      *
      * @param reqVO 保存请求 VO
      * @return 设备制造商实体
@@ -41,6 +43,9 @@ public final class EquipmentManufacturerConvert {
 
     /**
      * 实体转响应 VO。
+     *
+     * <p>输出制造商当前业务信息和创建、更新时间，形成可缓存的详情快照；逻辑删除标记及审计
+     * 操作者不属于对外模型，避免缓存内容携带持久层控制语义。
      *
      * @param manufacturer 设备制造商实体
      * @return 响应 VO
@@ -72,6 +77,7 @@ public final class EquipmentManufacturerConvert {
         return list.stream().map(EquipmentManufacturerConvert::toRespVO).toList();
     }
 
+    /** 工具类仅提供无状态字段转换，禁止实例化。 */
     private EquipmentManufacturerConvert() {
     }
 }

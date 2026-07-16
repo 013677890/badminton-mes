@@ -18,14 +18,20 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * 质量模块 Redis 旁路缓存。
  *
- * <p>Redis 是弱依赖：读取、写入或删除失败只记录日志，不阻断主业务。
- * 删除操作优先注册到事务提交后执行，避免提交前并发读旧值并回填缓存。
+ * <p>详情采用 Cache-Aside 模式并按 {@code resourceName + id} 隔离，值统一序列化为 JSON，TTL 由
+ * {@link QualityRedisKeyConstants#QUALITY_DETAIL_TTL} 控制。Redis 是弱依赖：读取、序列化、写入或删除
+ * 失败只记录日志，数据库加载与主业务事务仍可继续。
+ *
+ * <p>每个详情 Key 配套一个不设 TTL 的版本 Key。缓存未命中时先读取版本，再加载数据库，并通过 Lua
+ * 原子比较版本后回填；事务提交后的失效操作则以另一段 Lua 先递增版本再删除详情。即使并发读已拿到旧数据库
+ * 值，只要更新事务完成失效，其回填也会因版本变化被拒绝，避免旧值复活。
  */
 @Component
 public class QualityCache {
 
     private static final Logger logger = LoggerFactory.getLogger(QualityCache.class);
 
+    /** 仅在版本仍等于查询开始时观察值时写入带 TTL 的详情，原子封闭“比较后再写”的竞争窗口。 */
     private static final DefaultRedisScript<Long> WRITE_IF_VERSION_UNCHANGED_SCRIPT =
             new DefaultRedisScript<>("""
                     local currentVersion = redis.call('GET', KEYS[2]) or '0'
@@ -36,6 +42,7 @@ public class QualityCache {
                     return 1
                     """, Long.class);
 
+    /** 原子递增版本并删除详情；版本先推进，使并发中的旧值加载无法在删除后重新写回。 */
     private static final DefaultRedisScript<Long> INVALIDATE_SCRIPT =
             new DefaultRedisScript<>("""
                     redis.call('INCR', KEYS[2])
@@ -50,6 +57,12 @@ public class QualityCache {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * 读取详情缓存，未命中或 Redis 异常时回源，并尝试按观察到的版本安全回填。
+     *
+     * <p>{@code loader} 是权威数据来源；版本读取失败时仍返回其结果，但主动跳过回填，避免缺少并发校验
+     * 的旧值进入缓存。成功回填的详情将在统一 TTL 后自动过期。
+     */
     public <T> T getOrLoadDetail(String resourceName, Long id, Class<T> valueType, Supplier<T> loader) {
         String detailKey = QualityRedisKeyConstants.detailKey(resourceName, id);
         String versionKey = QualityRedisKeyConstants.detailVersionKey(resourceName, id);
@@ -68,10 +81,16 @@ public class QualityCache {
         return loadedValue;
     }
 
+    /** 在当前事务成功提交后失效一个详情；无活动事务时立即失效。 */
     public void evictDetailAfterCommit(String resourceName, Long id) {
         evictDetailsAfterCommit(resourceName, List.of(id));
     }
 
+    /**
+     * 在事务提交后批量失效同类详情，自动忽略空主键并去重。
+     *
+     * <p>该入口同时承载级联缓存失效：分类变更可清理其项目详情，项目变更可清理引用它的方案详情。
+     */
     public void evictDetailsAfterCommit(String resourceName, Collection<Long> ids) {
         List<CacheKeyPair> cacheKeys = ids.stream()
                 .filter(id -> id != null)
@@ -83,6 +102,7 @@ public class QualityCache {
         evictAfterCommit(cacheKeys);
     }
 
+    /** 读取详情版本；Key 尚不存在时以初始版本 0 参与比较，Redis 异常则返回 null 禁止回填。 */
     private String readVersion(String versionKey, String resourceName, Long id) {
         try {
             String version = stringRedisTemplate.opsForValue().get(versionKey);
@@ -94,6 +114,7 @@ public class QualityCache {
         }
     }
 
+    /** 序列化回源结果，并以 Lua 原子完成版本比较和带 TTL 写入。 */
     private void writeIfVersionUnchanged(String detailKey, String versionKey, String observedVersion,
                                          Object value, String resourceName, Long id) {
         if (observedVersion == null) {
@@ -110,6 +131,7 @@ public class QualityCache {
         }
     }
 
+    /** 将失效动作挂到事务提交回调，回滚时不删除仍与数据库一致的原缓存。 */
     private void evictAfterCommit(Collection<CacheKeyPair> keys) {
         List<CacheKeyPair> immutableKeys = List.copyOf(keys);
         if (immutableKeys.isEmpty()) {
@@ -127,6 +149,7 @@ public class QualityCache {
         });
     }
 
+    /** 执行版本推进和详情删除；Redis 故障仅降级为日志，不反向破坏已提交的数据库事务。 */
     private void evict(Collection<CacheKeyPair> keys) {
         try {
             for (CacheKeyPair key : keys) {
@@ -138,6 +161,7 @@ public class QualityCache {
         }
     }
 
+    /** 绑定同一资源实例的详情 Key 与版本 Key，确保失效脚本总是成对操作。 */
     private record CacheKeyPair(String detailKey, String versionKey) {
     }
 }

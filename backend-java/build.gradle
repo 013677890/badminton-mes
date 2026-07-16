@@ -45,7 +45,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform {
-        excludeTags 'integration'
+        excludeTags 'integration', 'stress'
     }
 }
 
@@ -57,6 +57,19 @@ tasks.register('integrationTest', Test) {
     useJUnitPlatform {
         includeTags 'integration'
     }
+    shouldRunAfter tasks.named('test')
+}
+
+tasks.register('stressTest', Test) {
+    description = 'Runs isolated concurrent stress tests for every business module.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'stress'
+    }
+    systemProperty 'mes.stress.operations',
+            System.getProperty('mes.stress.operations', '10000')
     shouldRunAfter tasks.named('test')
 }
 

@@ -47,17 +47,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 统一质量检验单 Service 实现。
+ * 统一质量检验单应用服务实现。
  *
- * <p>负责“创建草稿 → 保存结果 → 提交判定”的完整流程。创建时把方案项目复制成
- * 检验结果快照，避免方案后续变更影响历史检验事实；写方法使用事务保证检验单和结果一致。
+ * <p>检验单创建时校验生效方案、来源单据和产品/客户适用范围，并固化方案编号、版本及全部方案项规则。
+ * 生产过程类检验限定从工单取得产品和客户；其他检验要求显式来源单据，防止检验记录脱离业务来源。</p>
  *
- * @author MES 开发组
- * @date 2026/07/16
+ * <p>草稿结果允许分批保存，提交时执行最终完整性与结论一致性检查。提交后 PASS、CONCESSION 放行为
+ * RELEASED，其他结论转为 BLOCKED。更新和提交均悲观锁定检验单，且只在事务提交后失效详情缓存。</p>
  */
 @Service
 public class QualityInspectionRecordServiceImpl implements QualityInspectionRecordService {
 
+    /** 方案、检验单、判定结论和放行状态约定。 */
     private static final String PLAN_STATUS_EFFECTIVE = "EFFECTIVE";
     private static final String RECORD_STATUS_DRAFT = "DRAFT";
     private static final String RECORD_STATUS_SUBMITTED = "SUBMITTED";
@@ -81,6 +82,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
     private final WorkOrderService workOrderService;
     private final QualityCache qualityCache;
 
+    /** 注入检验单、结果快照、方案模板、项目主数据、工单来源及详情缓存依赖。 */
     public QualityInspectionRecordServiceImpl(QualityInspectionRecordRepository recordRepository,
                                               QualityInspectionResultRepository resultRepository,
                                               QualityInspectionPlanRepository planRepository,
@@ -97,7 +99,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         this.qualityCache = qualityCache;
     }
 
-    /** 创建检验单并固化当时的方案项目快照。 */
+    /**
+     * 创建草稿检验单时先验证方案可用性和非空方案项，再解析来源与适用范围；主表保存成功后，
+     * 按方案项生成结果快照，任一步失败都由事务整体回滚。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRecord(String inspectionType, QualityInspectionRecordCreateReqVO request) {
@@ -118,7 +123,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         return record.getId();
     }
 
-    /** 保存草稿结果；只更新属于当前检验单的结果行。 */
+    /**
+     * 草稿阶段允许分批保存，但请求内结果主键必须唯一且属于当前检验单。悲观锁防止保存结果与提交操作
+     * 并发交错；这里只校验已填写字段的局部一致性，必检项完整性留到提交阶段检查。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveResults(Long id, QualityInspectionResultsSaveReqVO request) {
@@ -149,7 +157,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         evictRecordCacheAfterCommit(id);
     }
 
-    /** 校验必检项和结论完整性后提交，并计算放行/阻断状态。 */
+    /**
+     * 提交是 DRAFT 到 SUBMITTED 的不可逆迁移。先验证全部结果，再约束逐项判定与单据结论一致：
+     * 有 FAIL 不得 PASS，无 FAIL 只能 PASS；不合格还必须有原因和处置意见。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submitRecord(Long id, QualityInspectionRecordSubmitReqVO request) {
@@ -177,6 +188,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
 
         record.setRecordStatus(RECORD_STATUS_SUBMITTED);
         record.setConclusion(request.getConclusion());
+        // 合格和让步接收均可放行，其余结论必须阻断后续流转。
         record.setReleaseStatus(resolveReleaseStatus(request.getConclusion()));
         applyDefectResult(record, request, hasFailedResult);
         record.setNonconformanceDescription(request.getNonconformanceDescription());
@@ -187,7 +199,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         evictRecordCacheAfterCommit(id);
     }
 
-    /** 从缓存读取检验单详情，未命中时聚合主表和结果明细。 */
+    /** 详情始终读取检验发生时落库的结果快照，不回查当前方案或项目规则。 */
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionRecordRespVO getRecord(Long id) {
@@ -201,7 +213,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         });
     }
 
-    /** 分页查询检验单，供质量列表页和报表筛选使用。 */
+    /** 分页仅返回检验单摘要，不加载结果快照；越界页码收敛到末页。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<QualityInspectionRecordRespVO> getRecordPage(QualityInspectionRecordPageReqVO request) {
@@ -222,6 +234,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /**
+     * 初始化检验单主表快照。方案编码和版本在创建时固化，状态固定为 DRAFT/PENDING，
+     * 来源字段先按请求暂存，随后由来源校验按权威单据覆盖或确认。
+     */
     private QualityInspectionRecordEntity buildRecord(
             String inspectionType,
             QualityInspectionRecordCreateReqVO request,
@@ -251,7 +267,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
     }
 
     /**
-     * 根据工单等可信来源补齐检验单范围字段，并拒绝前端提交值与来源档案冲突的请求。
+     * 校验检验单来源范围。
+     *
+     * <p>FIRST_ARTICLE、LAST_ARTICLE、PATROL 属于生产过程检验，必须关联工单，并以工单产品、客户为
+     * 权威值；请求若同时提供这些字段只能与工单一致。其他检验必须提供来源单据主键、单号和产品。</p>
      */
     private void enrichAndValidateSource(QualityInspectionRecordEntity record,
                                          QualityInspectionRecordCreateReqVO request) {
@@ -276,12 +295,14 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /** 请求可省略由来源单据决定的字段，但一旦提供就必须与权威来源一致。 */
     private void validateOptionalSourceField(Long requestedValue, Long sourceValue) {
         if (requestedValue != null && !requestedValue.equals(sourceValue)) {
             throw new ServiceException(QualityErrorCodeConstants.RECORD_SOURCE_INVALID);
         }
     }
 
+    /** 方案必须已审核生效、检验类型一致，并且生效日期不得晚于当前日期。 */
     private void validatePlanAvailable(QualityInspectionPlanEntity plan, String inspectionType) {
         if (!PLAN_STATUS_EFFECTIVE.equals(plan.getPlanStatus())
                 || !inspectionType.equals(plan.getInspectionType())
@@ -291,6 +312,9 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /**
+     * 校验方案适用范围：方案未限定的产品或客户视为通配；一旦限定则必须与检验来源一致。
+     */
     private void validatePlanScope(QualityInspectionPlanEntity plan,
                                    QualityInspectionRecordEntity record) {
         boolean productMismatch = plan.getProductId() != null
@@ -302,6 +326,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /**
+     * 为每个方案项创建一条检验结果快照。先批量加载全部项目并校验引用完整性，避免缺少项目主数据时
+     * 生成不可审计的半快照；所有结果与检验单在同一事务内一次刷盘。
+     */
     private void saveResultSnapshots(Long recordId, List<QualityInspectionPlanItemEntity> planItems) {
         Set<Long> inspectionItemIds = planItems.stream()
                 .map(QualityInspectionPlanItemEntity::getInspectionItemId)
@@ -319,6 +347,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         resultRepository.saveAllAndFlush(results);
     }
 
+    /**
+     * 合并两层来源形成历史快照：项目编码、名称、值类型、单位取项目主数据；必检、标准值、上下限、
+     * 判定方式和顺序取方案项版本快照，保证后续主数据变化不改变本次检验依据。
+     */
     private QualityInspectionResultEntity toResultSnapshot(
             Long recordId,
             QualityInspectionPlanItemEntity planItem,
@@ -339,6 +371,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         return result;
     }
 
+    /** 局部保存时只约束成对字段：有判定必须有实测值，FAIL 必须说明缺陷。 */
     private void validateResultInput(QualityInspectionResultSaveReqVO request) {
         if (StringUtils.hasText(request.getJudgmentResult())
                 && !StringUtils.hasText(request.getMeasuredValue())) {
@@ -350,7 +383,10 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
-    /** 提交前确认所有必检项目均已填写并完成判定，防止生成不完整质量结论。 */
+    /**
+     * 提交前校验最终完整性：结果集合不能为空；任何已判定项必须有实测值；必检项必须同时填写实测值
+     * 和判定；FAIL 项必须填写缺陷描述。非必检且完全未填写的项目允许保留为空。
+     */
     private void validateResultsComplete(List<QualityInspectionResultEntity> results) {
         if (results.isEmpty()) {
             throw new ServiceException(QualityErrorCodeConstants.RECORD_RESULTS_INCOMPLETE);
@@ -372,11 +408,18 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /** PASS 与 CONCESSION 映射为 RELEASED，其他结论统一映射为 BLOCKED。 */
     private String resolveReleaseStatus(String conclusion) {
         return CONCLUSION_PASS.equals(conclusion) || CONCLUSION_CONCESSION.equals(conclusion)
                 ? RELEASED : BLOCKED;
     }
 
+    /**
+     * 根据项目判定结果校验并固化不良数量和归并号。
+     *
+     * <p>无失败项目时不允许携带不良数量；存在失败项目时，不良数量必须介于 1 和抽样数量之间。
+     * 归并号在落库前去除首尾空白，空白字符串按未提供处理。</p>
+     */
     private void applyDefectResult(QualityInspectionRecordEntity record,
                                    QualityInspectionRecordSubmitReqVO request,
                                    boolean hasFailedResult) {
@@ -392,27 +435,32 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
                 ? request.getDefectGroupNo().trim() : null);
     }
 
+    /** 以毫秒时间和随机后缀生成检验单号，数据库唯一约束负责最终并发兜底。 */
     private String generateInspectionNo() {
         String randomSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         return "QI" + LocalDateTime.now().format(INSPECTION_NO_TIME_FORMAT) + randomSuffix;
     }
 
+    /** 统一守卫草稿专属写操作，提交后的检验单不可再次录入或重复提交。 */
     private void validateDraftRecord(QualityInspectionRecordEntity record) {
         if (!RECORD_STATUS_DRAFT.equals(record.getRecordStatus())) {
             throw new ServiceException(QualityErrorCodeConstants.RECORD_EDIT_NOT_ALLOWED);
         }
     }
 
+    /** 读取未删除检验单，不获取写锁。 */
     private QualityInspectionRecordEntity getRecordEntity(Long id) {
         return recordRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ServiceException(QualityErrorCodeConstants.RECORD_NOT_EXISTS));
     }
 
+    /** 悲观锁定检验单，使草稿状态检查、结果保存和提交迁移互斥。 */
     private QualityInspectionRecordEntity getRecordForUpdate(Long id) {
         return recordRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(QualityErrorCodeConstants.RECORD_NOT_EXISTS));
     }
 
+    /** 立即刷盘并将极低概率的检验单号唯一键冲突转换为业务异常。 */
     private void saveRecord(QualityInspectionRecordEntity record) {
         try {
             recordRepository.saveAndFlush(record);
@@ -421,10 +469,12 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /** 仅在事务成功提交后失效检验单详情，避免回滚数据被重新缓存。 */
     private void evictRecordCacheAfterCommit(Long id) {
         qualityCache.evictDetailAfterCommit(QualityRedisKeyConstants.INSPECTION_RECORD_RESOURCE, id);
     }
 
+    /** 无登录上下文的系统调用回退到默认操作人。 */
     private Long getCurrentOperatorId() {
         if (SecurityContextHolder.getLoginUser() == null) {
             return DEFAULT_OPERATOR_ID;

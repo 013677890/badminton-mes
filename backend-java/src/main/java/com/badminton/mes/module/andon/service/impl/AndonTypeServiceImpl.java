@@ -28,7 +28,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 安灯类型 Service 实现。 */
+/**
+ * 安灯类型维护实现。
+ *
+ * <p>类型决定事件采用无须处理、自处理或协助处理模式，并承载响应时限、责任角色、通知渠道及
+ * 模拟灯控开关。协助模式的默认规则必须完整，数据库唯一约束与应用层校验共同保证有效类型编码唯一。
+ *
+ * <p>类型被原因、配置或事件引用后禁止删除；更新成功后，不仅失效类型详情缓存，还失效所有嵌入
+ * 类型编码和名称的原因、配置、事件详情缓存。缓存删除延迟到事务提交后执行，避免回滚事务污染缓存。
+ */
 @Service
 public class AndonTypeServiceImpl implements AndonTypeService {
 
@@ -44,6 +52,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     private final AndonEventRepository eventRepository;
     private final AndonCache andonCache;
 
+    /** 注入类型仓储及用于引用保护、聚合缓存失效的关联仓储。 */
     public AndonTypeServiceImpl(AndonTypeRepository typeRepository,
                                 AndonReasonRepository reasonRepository,
                                 AndonConfigurationRepository configurationRepository,
@@ -56,6 +65,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         this.andonCache = andonCache;
     }
 
+    /** 创建类型，校验编码和处理规则，并为可空状态字段应用业务默认值。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createType(AndonTypeSaveReqVO request) {
@@ -70,6 +80,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         return type.getId();
     }
 
+    /** 加锁更新类型；请求未提供启用状态或灯控开关时保留持久化原值。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateType(Long id, AndonTypeSaveReqVO request) {
@@ -89,6 +100,9 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         evictTypeAggregateCacheAfterCommit(id);
     }
 
+    /**
+     * 仅删除无任何业务引用的类型；逻辑删除前改写编码，释放原编码并规避未过滤删除数据的唯一约束。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteType(Long id) {
@@ -110,6 +124,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         evictTypeCacheAfterCommit(id);
     }
 
+    /** 通过详情缓存读取类型，未命中时加载未删除实体并显式转换。 */
     @Override
     @Transactional(readOnly = true)
     public AndonTypeRespVO getType(Long id) {
@@ -120,6 +135,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         });
     }
 
+    /** 分页查询类型；请求页码超过末页时收敛到最后一页，并按主键倒序返回。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<AndonTypeRespVO> getTypePage(AndonTypePageReqVO request) {
@@ -137,6 +153,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 协助模式必须同时声明响应分钟数、默认责任角色和至少一个通知渠道。 */
     private void validateHandlingRule(AndonTypeSaveReqVO request) {
         if (HANDLING_MODE_ASSISTANCE.equals(request.getHandlingMode())
                 && (request.getResponseMinutes() == null
@@ -146,6 +163,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         }
     }
 
+    /** 校验未删除类型中的业务编码唯一性；更新时排除当前记录。 */
     private void validateTypeCodeUnique(String typeCode, Long excludedId) {
         boolean exists = excludedId == null
                 ? typeRepository.existsByTypeCodeAndDeletedFalse(typeCode)
@@ -160,11 +178,13 @@ public class AndonTypeServiceImpl implements AndonTypeService {
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
     }
 
+    /** 以行锁读取类型，串行化同一类型的更新和删除。 */
     private AndonTypeEntity getTypeForUpdate(Long id) {
         return typeRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(AndonErrorCodeConstants.TYPE_NOT_EXISTS));
     }
 
+    /** 立即刷新以捕获并发写入触发的唯一约束异常，并转换为稳定业务错误。 */
     private void saveType(AndonTypeEntity type) {
         try {
             typeRepository.saveAndFlush(type);
@@ -173,10 +193,14 @@ public class AndonTypeServiceImpl implements AndonTypeService {
         }
     }
 
+    /** 在事务成功提交后失效类型详情，回滚时保留原缓存。 */
     private void evictTypeCacheAfterCommit(Long id) {
         andonCache.evictDetailAfterCommit(AndonRedisKeyConstants.TYPE_RESOURCE, id);
     }
 
+    /**
+     * 类型展示字段变化会影响多个聚合响应，因此级联失效类型及其原因、配置、事件详情缓存。
+     */
     private void evictTypeAggregateCacheAfterCommit(Long typeId) {
         evictTypeCacheAfterCommit(typeId);
         andonCache.evictDetailsAfterCommit(AndonRedisKeyConstants.REASON_RESOURCE,
@@ -187,6 +211,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
                 eventRepository.findIdsByAndonTypeIdAndDeletedFalse(typeId));
     }
 
+    /** 无登录上下文时使用系统默认操作者，兼容初始化和后台调用。 */
     private Long getCurrentOperatorId() {
         if (SecurityContextHolder.getLoginUser() == null) {
             return DEFAULT_OPERATOR_ID;

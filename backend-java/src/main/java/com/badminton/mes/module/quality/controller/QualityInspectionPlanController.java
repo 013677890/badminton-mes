@@ -27,13 +27,10 @@ import static com.badminton.mes.common.security.RoleCodeConstants.TEAM_LEADER;
 import static com.badminton.mes.common.security.RoleCodeConstants.WORKSHOP_MANAGER;
 
 /**
- * 质量检验标准方案 REST 接口。
+ * 质量检验标准方案管理接口。
  *
- * <p>{@link Valid} 校验请求体/查询对象的字段格式，{@link RequiresRoles} 由鉴权拦截器
- * 校验角色；所有业务状态和版本规则下沉到 {@code QualityInspectionPlanService}。
- *
- * @author MES 开发组
- * @date 2026/07/16
+ * <p>方案按“草稿（DRAFT）—生效（EFFECTIVE）—停用（DISABLED）”流转；维护类操作仅向质量管理员和
+ * 检验员开放，生产计划、车间管理及班组岗位仅可查询已经按业务规则开放的方案数据。
  */
 @RestController
 @RequestMapping("/api/quality/inspection-plans")
@@ -45,14 +42,14 @@ public class QualityInspectionPlanController {
         this.planService = planService;
     }
 
-    /** 创建检验方案草稿。 */
+    /** 创建包含检验项目快照的方案草稿，并返回新方案主键。 */
     @PostMapping
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Long> create(@Valid @RequestBody QualityInspectionPlanSaveReqVO request) {
         return CommonResult.success(planService.createPlan(request));
     }
 
-    /** 修改检验方案草稿。 */
+    /** 修改指定的草稿方案；方案主键必须为正整数，生效或停用版本不可直接改写。 */
     @PutMapping("/{id}")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> update(@PathVariable @Positive Long id,
@@ -61,7 +58,7 @@ public class QualityInspectionPlanController {
         return CommonResult.success(null);
     }
 
-    /** 逻辑删除检验方案。 */
+    /** 删除指定的草稿方案；已进入后续生命周期的版本由服务层拒绝删除。 */
     @DeleteMapping("/{id}")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> delete(@PathVariable @Positive Long id) {
@@ -69,7 +66,7 @@ public class QualityInspectionPlanController {
         return CommonResult.success(null);
     }
 
-    /** 审核并生效检验方案。 */
+    /** 审核草稿并使其生效，同时固化版本、默认方案及计划生效日期等规则。 */
     @PutMapping("/{id}/audit")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> audit(@PathVariable @Positive Long id) {
@@ -77,7 +74,7 @@ public class QualityInspectionPlanController {
         return CommonResult.success(null);
     }
 
-    /** 停用已生效检验方案。 */
+    /** 停用指定的生效方案，使其不再用于后续检验单建单。 */
     @PutMapping("/{id}/disable")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> disable(@PathVariable @Positive Long id) {
@@ -85,21 +82,21 @@ public class QualityInspectionPlanController {
         return CommonResult.success(null);
     }
 
-    /** 从已有方案复制创建新版本草稿。 */
+    /** 从指定历史版本复制内容并创建下一版本草稿，返回新版本主键。 */
     @PostMapping("/{id}/versions")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Long> createNewVersion(@PathVariable @Positive Long id) {
         return CommonResult.success(planService.createNewVersion(id));
     }
 
-    /** 查询检验方案详情及项目明细。 */
+    /** 按正整数主键查询方案基本信息及其检验项目明细。 */
     @GetMapping("/{id}")
     @RequiresRoles({ADMIN, INSPECTOR, PMC, WORKSHOP_MANAGER, TEAM_LEADER})
     public CommonResult<QualityInspectionPlanRespVO> get(@PathVariable @Positive Long id) {
         return CommonResult.success(planService.getPlan(id));
     }
 
-    /** 分页查询检验方案。 */
+    /** 按关键字、适用范围、检验类型和方案状态分页筛选方案。 */
     @GetMapping("/page")
     @RequiresRoles({ADMIN, INSPECTOR, PMC, WORKSHOP_MANAGER, TEAM_LEADER})
     public CommonResult<PageResult<QualityInspectionPlanRespVO>> page(
