@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>03 实时生产看板｜默认</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Source+Sans+3:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-fixed": "#00201d",
+                    "on-primary-container": "#a3faef",
+                    "on-secondary-fixed-variant": "#00504b",
+                    "surface-dim": "#cbdbf5",
+                    "surface-container-high": "#dce9ff",
+                    "primary": "#005c55",
+                    "on-primary-fixed-variant": "#00504a",
+                    "tertiary-fixed": "#ffdbca",
+                    "tertiary-container": "#af4c00",
+                    "outline-variant": "#bdc9c6",
+                    "secondary": "#216963",
+                    "on-tertiary-fixed-variant": "#783200",
+                    "error": "#ba1a1a",
+                    "surface-tint": "#006a63",
+                    "inverse-surface": "#213145",
+                    "surface-container": "#e5eeff",
+                    "secondary-fixed": "#abefe8",
+                    "on-secondary": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "on-secondary-container": "#266d68",
+                    "on-background": "#0b1c30",
+                    "primary-container": "#0f766e",
+                    "secondary-container": "#a8ece5",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed": "#00201e",
+                    "tertiary": "#893a00",
+                    "primary-fixed-dim": "#80d5cb",
+                    "on-tertiary-fixed": "#341100",
+                    "surface-container-low": "#eff4ff",
+                    "secondary-fixed-dim": "#8fd3cc",
+                    "on-tertiary-container": "#ffe6da",
+                    "on-tertiary": "#ffffff",
+                    "surface": "#f8f9ff",
+                    "tertiary-fixed-dim": "#ffb690",
+                    "surface-bright": "#f8f9ff",
+                    "on-primary": "#ffffff",
+                    "on-surface": "#0b1c30",
+                    "inverse-on-surface": "#eaf1ff",
+                    "error-container": "#ffdad6",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-surface-variant": "#3e4947",
+                    "primary-fixed": "#9cf2e8",
+                    "surface-variant": "#d3e4fe",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-primary": "#80d5cb",
+                    "background": "#f8f9ff",
+                    "outline": "#6e7977",
+                    "warning": "#F97316",
+                    "success": "#15803D"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "fontFamily": {
+                    "headline": ["\"Noto Sans SC\"", "sans-serif"],
+                    "display": ["\"Noto Sans SC\"", "sans-serif"],
+                    "body": ["\"Noto Sans SC\"", "sans-serif"],
+                    "label": ["\"Noto Sans SC\"", "sans-serif"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background-color: #F8FAFC;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .status-dot-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .4; }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface select-none">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">factory</span>
+<h1 class="text-lg font-bold text-on-surface">实时生产看板</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center active:bg-surface-container-high transition-colors duration-200 rounded-full">
+<span class="material-symbols-outlined text-on-surface-variant">refresh</span>
+</button>
+</header>
+<main class="pt-14 pb-20 px-4">
+<!-- Header Info Section -->
+<section class="py-4 flex justify-between items-end">
+<div class="space-y-1">
+<h2 class="text-sm font-medium text-on-surface-variant">羽毛球一车间 · 1号产线</h2>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-success status-dot-pulse"></span>
+<span class="text-xs text-on-surface-variant/80">数据实时更新 · 14:30:05</span>
+</div>
+</div>
+<div class="flex gap-2">
+<span class="material-symbols-outlined text-on-surface-variant/60 text-lg">settings_input_component</span>
+</div>
+</section>
+<!-- KPI Section: Bento Style -->
+<section class="grid grid-cols-2 gap-3 mb-6">
+<div class="bg-white p-4 rounded-xl border border-outline-variant/50 shadow-sm">
+<p class="text-xs text-on-surface-variant mb-1">计划量</p>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-bold font-headline">12,000</span>
+<span class="text-[10px] text-on-surface-variant font-medium">件</span>
+</div>
+</div>
+<div class="bg-white p-4 rounded-xl border border-outline-variant/50 shadow-sm">
+<p class="text-xs text-on-surface-variant mb-1">完成量</p>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-bold font-headline text-primary">8,640</span>
+<span class="text-[10px] text-on-surface-variant font-medium">件</span>
+</div>
+</div>
+<div class="bg-white p-4 rounded-xl border border-outline-variant/50 shadow-sm">
+<p class="text-xs text-on-surface-variant mb-1">不良量</p>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-bold font-headline text-warning">96</span>
+<span class="text-[10px] text-on-surface-variant font-medium">件</span>
+</div>
+</div>
+<div class="bg-white p-4 rounded-xl border border-outline-variant/50 shadow-sm">
+<p class="text-xs text-on-surface-variant mb-1">异常数</p>
+<div class="flex items-baseline gap-1">
+<span class="text-2xl font-bold font-headline text-error">3</span>
+<span class="text-[10px] text-on-surface-variant font-medium">项</span>
+</div>
+</div>
+</section>
+<!-- Overall Progress Section -->
+<section class="bg-white p-4 rounded-xl border border-outline-variant/50 shadow-sm mb-6">
+<div class="flex justify-between items-center mb-3">
+<h3 class="text-sm font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">trending_up</span>
+                    总体进度
+                </h3>
+<span class="text-primary font-bold">72%</span>
+</div>
+<div class="w-full h-3 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full transition-all duration-1000" style="width: 72%"></div>
+</div>
+<div class="flex justify-between mt-2 text-[10px] text-on-surface-variant">
+<span>开始时间: 08:00</span>
+<span>预计结束: 18:30</span>
+</div>
+</section>
+<!-- Task List Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h3 class="text-sm font-bold flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">receipt_long</span>
+                    在制任务
+                </h3>
+<span class="text-[10px] bg-surface-container px-2 py-0.5 rounded-full text-on-surface-variant">共 2 条任务</span>
+</div>
+<!-- Task Card 1: Normal -->
+<div class="bg-white rounded-xl border border-outline-variant/50 shadow-sm overflow-hidden active:bg-surface-container-low transition-colors">
+<div class="p-4 space-y-3">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-[10px] text-on-surface-variant font-medium mb-0.5">TK20231024001</p>
+<h4 class="font-bold text-on-surface">高端训练级羽毛球</h4>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-secondary-container text-on-secondary-container">运行中</span>
+</div>
+<div class="grid grid-cols-2 gap-4 text-xs">
+<div>
+<p class="text-on-surface-variant mb-0.5">批次编号</p>
+<p class="font-medium">B2023-1024A</p>
+</div>
+<div>
+<p class="text-on-surface-variant mb-0.5">完工进度</p>
+<p class="font-medium text-primary">4,200 / 5,000</p>
+</div>
+</div>
+<div class="pt-1">
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary" style="width: 84%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Task Card 2: Abnormal -->
+<div class="bg-white rounded-xl border border-outline-variant/50 shadow-sm overflow-hidden active:bg-surface-container-low transition-colors">
+<div class="p-4 space-y-3">
+<div class="flex justify-between items-start">
+<div>
+<p class="text-[10px] text-on-surface-variant font-medium mb-0.5">TK20231024005</p>
+<h4 class="font-bold text-on-surface">专业比赛级羽毛球 (鹅毛)</h4>
+</div>
+<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-error-container text-on-error-container">产线异常</span>
+</div>
+<div class="grid grid-cols-2 gap-4 text-xs">
+<div>
+<p class="text-on-surface-variant mb-0.5">批次编号</p>
+<p class="font-medium">B2023-1024C</p>
+</div>
+<div>
+<p class="text-on-surface-variant mb-0.5">完工进度</p>
+<p class="font-medium text-error">1,240 / 3,000</p>
+</div>
+</div>
+<div class="pt-1">
+<div class="w-full h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-error" style="width: 41%"></div>
+</div>
+</div>
+<div class="bg-error-container/20 p-2 rounded-lg flex items-center gap-2 border border-error/10">
+<span class="material-symbols-outlined text-error text-sm">warning</span>
+<p class="text-[10px] text-error font-medium">设备报警：3号封盖机供料卡死 (E-401)</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-2 pt-1 h-16 bg-surface border-t border-outline-variant shadow-sm">
+<!-- Dashboard (Active) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1 scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-xl" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label text-xs">看板</span>
+</a>
+<!-- Analysis -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 active:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-xl">analytics</span>
+<span class="font-label text-xs">分析</span>
+</a>
+<!-- Traceability -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 active:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-xl">history_edu</span>
+<span class="font-label text-xs">追溯</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 active:bg-surface-container-low transition-all duration-150" href="#">
+<span class="material-symbols-outlined text-xl">person</span>
+<span class="font-label text-xs">我的</span>
+</a>
+</nav>
+<script>
+        // Simple interactive micro-interactions
+        document.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('touchstart', function() {
+                this.style.opacity = '0.7';
+            });
+            el.addEventListener('touchend', function() {
+                this.style.opacity = '1';
+            });
+        });
+
+        // Dynamic timestamp update simulation
+        const timeDisplay = document.querySelector('.status-dot-pulse').nextElementSibling;
+        setInterval(() => {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            timeDisplay.textContent = `数据实时更新 · ${timeStr}`;
+        }, 1000);
+    </script>
+</body></html>

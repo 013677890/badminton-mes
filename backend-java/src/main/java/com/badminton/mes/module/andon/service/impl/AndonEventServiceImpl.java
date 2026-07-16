@@ -59,7 +59,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
-/** 现场安灯异常 Service 实现。 */
+/**
+ * 现场安灯异常 Service 实现。
+ *
+ * <p>这是安灯状态机的唯一业务编排入口：Controller 调用人工操作方法，
+ * {@code AndonTimeoutScheduler} 调用超时扫描方法；实现类在同一事务内完成行锁校验、
+ * 状态更新、处理日志和通知记录，并在提交后让详情缓存失效。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class AndonEventServiceImpl implements AndonEventService {
 
@@ -135,6 +144,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         this.timeoutTransactionTemplate.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
     }
 
+    /** 创建异常，依据类型的 {@code handlingMode} 初始化自处理、协助处理或无需处理流程。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEvent(AndonEventCreateReqVO request) {
@@ -173,6 +183,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return event.getId();
     }
 
+    /** 确认待确认异常，并把实际原因和确认人写入处理轨迹。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void confirmEvent(Long id, AndonEventActionReqVO request) {
@@ -192,6 +203,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已确认");
     }
 
+    /** 开始处理已确认异常，状态由 {@code CONFIRMED} 推进到 {@code PROCESSING}。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void startProcessing(Long id, AndonEventActionReqVO request) {
@@ -201,6 +213,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         transitionSimple(event, request, STATUS_PROCESSING, "START_PROCESS", "异常开始处理");
     }
 
+    /** 转派异常责任人或责任角色；转派不会改变当前处理状态。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void transferEvent(Long id, AndonEventActionReqVO request) {
@@ -219,6 +232,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已转派");
     }
 
+    /** 提交处理结果并进入等待管理人员关闭的状态。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void completeEvent(Long id, AndonEventActionReqVO request) {
@@ -243,6 +257,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常处理已完成，等待关闭");
     }
 
+    /** 关闭已完成异常，并在模拟灯控开启时执行对应的关闭动作记录。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void closeEvent(Long id, AndonEventActionReqVO request) {
@@ -265,6 +280,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         saveStatusNotifications(event, "异常已关闭");
     }
 
+    /** 手工升级异常，优先使用请求目标，未提供时回退到配置中的升级对象。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void escalateEvent(Long id, AndonEventActionReqVO request) {
@@ -300,6 +316,11 @@ public class AndonEventServiceImpl implements AndonEventService {
                 "安灯异常已升级：" + event.getEventNo()));
     }
 
+    /**
+     * 扫描超时候选并逐条在新事务中处理，单条失败不会阻断同批其他异常。
+     *
+     * @return 本轮实际标记超时或完成升级的异常数量
+     */
     @Override
     @Transactional(readOnly = true)
     public int processTimeoutEvents() {
@@ -376,6 +397,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return true;
     }
 
+    /** 查询异常详情；{@link AndonCache} 未命中时回源事件、日志和通知表。 */
     @Override
     @Transactional(readOnly = true)
     public AndonEventRespVO getEvent(Long id) {
@@ -391,6 +413,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         });
     }
 
+    /** 分页查询异常列表，并批量补齐安灯类型，避免逐行查询类型档案。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<AndonEventRespVO> getEventPage(AndonEventPageReqVO request) {
@@ -414,6 +437,7 @@ public class AndonEventServiceImpl implements AndonEventService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 校验异常存在后读取完整处理日志，供详情页展示时间线。 */
     @Override
     @Transactional(readOnly = true)
     public List<AndonProcessLogRespVO> getProcessLogs(Long id) {

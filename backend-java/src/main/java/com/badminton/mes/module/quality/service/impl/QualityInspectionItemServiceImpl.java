@@ -32,7 +32,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 检验项目 Service 实现。 */
+/**
+ * 检验项目 Service 实现。
+ *
+ * <p>负责项目编码唯一性、分类可用性和数值判定规则校验；已被检验方案引用的项目
+ * 删除时受引用保护。详情查询使用 {@link QualityCache}。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class QualityInspectionItemServiceImpl implements QualityInspectionItemService {
 
@@ -59,6 +67,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         this.qualityCache = qualityCache;
     }
 
+    /** 创建检验项目并校验分类和判定规则。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createItem(QualityInspectionItemSaveReqVO request) {
@@ -74,6 +83,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         return item.getId();
     }
 
+    /** 修改检验项目，保存前再次校验编码唯一性与规则组合。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateItem(Long id, QualityInspectionItemSaveReqVO request) {
@@ -96,6 +106,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
                 planItemRepository.findDistinctPlanIdsByInspectionItemId(id));
     }
 
+    /** 在确认未被方案引用后逻辑删除检验项目。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteItem(Long id) {
@@ -114,6 +125,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         evictItemCacheAfterCommit(id);
     }
 
+    /** 查询检验项目详情，优先读取缓存。 */
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionItemRespVO getItem(Long id) {
@@ -126,6 +138,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         });
     }
 
+    /** 分页查询检验项目并批量补齐分类信息。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<QualityInspectionItemRespVO> getItemPage(QualityInspectionItemPageReqVO request) {
@@ -151,6 +164,7 @@ public class QualityInspectionItemServiceImpl implements QualityInspectionItemSe
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 校验值类型、判定方式及上下限/标准值之间的组合是否自洽。 */
     private void validateInspectionRule(QualityInspectionItemSaveReqVO request) {
         boolean numericValue = VALUE_TYPE_NUMERIC.equals(request.getValueType());
         boolean hasBothLimits = request.getLowerLimit() != null && request.getUpperLimit() != null;

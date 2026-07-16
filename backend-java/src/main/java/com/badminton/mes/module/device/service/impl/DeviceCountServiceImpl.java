@@ -42,7 +42,16 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 设备计数接入及异常处理 Service 实现。 */
+/**
+ * 设备计数接入及异常处理 Service 实现。
+ *
+ * <p>设备上报调用 {@link #reportCount(DeviceCountReportReqVO)}；后台页面调用查询和异常
+ * 处理方法。实现类用摘要键和数据库唯一约束实现幂等，并把设备停用、计数回退、突增等
+ * 情况落成异常记录，避免异常数据直接进入生产报工。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class DeviceCountServiceImpl implements DeviceCountService {
 
@@ -81,6 +90,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         this.deviceCache = deviceCache;
     }
 
+    /** 校验接入配置和设备状态，计算增量，幂等保存计数记录并按需生成异常。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DeviceCountReportRespVO reportCount(DeviceCountReportReqVO request) {
@@ -116,6 +126,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
                 record, evaluation.exceptionType(), evaluation.processingMessage());
     }
 
+    /** 查询单条计数记录，使用 Cache Aside 降低重复详情查询成本。 */
     @Override
     @Transactional(readOnly = true)
     public DeviceCountRecordRespVO getCountRecord(Long id) {
@@ -128,6 +139,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         });
     }
 
+    /** 分页查询计数记录。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<DeviceCountRecordRespVO> getCountRecordPage(DeviceCountRecordPageReqVO request) {
@@ -146,6 +158,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 查询单条计数异常，优先读取详情缓存。 */
     @Override
     @Transactional(readOnly = true)
     public DeviceCountExceptionRespVO getCountException(Long id) {
@@ -158,6 +171,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         });
     }
 
+    /** 分页查询计数异常。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<DeviceCountExceptionRespVO> getCountExceptionPage(DeviceCountExceptionPageReqVO request) {
@@ -176,6 +190,7 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /** 锁定异常记录后写入处理结果，防止多个处理人并发重复处理。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void processCountException(Long id, DeviceCountExceptionResolveReqVO request) {
@@ -192,6 +207,9 @@ public class DeviceCountServiceImpl implements DeviceCountService {
         deviceCache.evictDetailAfterCommit(DeviceRedisKeyConstants.COUNT_EXCEPTION_RESOURCE, id);
     }
 
+    /**
+     * 按配置和设备现状评估本次计数：返回可入账增量，或返回应记录的异常类型与说明。
+     */
     private CountEvaluation evaluateCount(DeviceAccessConfigEntity config,
                                           EquipmentLedgerRespVO equipment,
                                           DeviceCountReportReqVO request) {
@@ -249,6 +267,9 @@ public class DeviceCountServiceImpl implements DeviceCountService {
                 || NORMAL_EQUIPMENT_STATUS_RUNNING.equals(equipmentStatus);
     }
 
+    /**
+     * 使用配置、采集时间和设备序列号生成稳定摘要，供数据库唯一索引拦截重复上报。
+     */
     private String buildDeduplicationKey(Long configId, DeviceCountReportReqVO request) {
         String source = configId + "|" + request.getCollectedAt() + "|" + request.getSerialNumber();
         try {

@@ -1,0 +1,15 @@
+<view class="manage-page">
+  <view class="top-bar"><view class="back" bindtap="back"><view></view></view><text>人员与职位</text><view class="placeholder"></view></view>
+  <view class="manage-content">
+    <view class="manage-intro"><image src="/assets/icons/assignment.svg" mode="aspectFit"/><view><text>人员权限配置</text><small>分配职位、车间与产线；管理员权限不可在小程序中变更。</small></view></view>
+    <view class="search-card">
+      <view class="search-row"><input value="{{keyword}}" placeholder="搜索工号或真实姓名" bindinput="input" confirm-type="search" bindconfirm="search"/><button bindtap="search">搜索</button></view>
+      <view class="filter-row"><picker range="{{roles}}" range-key="roleName" value="{{roleIndex}}" bindchange="chooseRole"><view>{{roleIndex >= 0 ? roles[roleIndex].roleName : '全部职位'}}</view></picker><picker range="{{workshops}}" range-key="workshopName" value="{{workshopIndex}}" bindchange="chooseWorkshop"><view>{{workshopIndex >= 0 ? workshops[workshopIndex].workshopName : '全部车间'}}</view></picker><view class="clear-filter" bindtap="clearFilters">重置</view></view>
+      <view class="bind-filters"><view class="{{bindFilter === '' ? 'active' : ''}}" data-value="" bindtap="chooseBinding">全部</view><view class="{{bindFilter === 'bound' ? 'active' : ''}}" data-value="bound" bindtap="chooseBinding">微信已绑定</view><view class="{{bindFilter === 'unbound' ? 'active' : ''}}" data-value="unbound" bindtap="chooseBinding">微信未绑定</view></view>
+    </view>
+    <view wx:if="{{state === 'loading'}}" class="page-state">正在加载人员资料…</view>
+    <view wx:elif="{{state === 'error'}}" class="page-state"><text>{{error}}</text><button bindtap="search">重新加载</button></view>
+    <view wx:elif="{{state === 'empty'}}" class="page-state">没有符合条件的用户</view>
+    <view wx:else class="user-list"><view wx:for="{{users}}" wx:key="id" class="user-item" data-id="{{item.id}}" bindtap="openUser"><view class="avatar">{{item.initial}}</view><view class="user-copy"><view><text>{{item.userName}}</text><small class="{{item.status === 1 ? '' : 'disabled'}}">{{item.status === 1 ? '正常' : '停用'}}</small></view><view>工号 {{item.userNo}}</view><view>{{item.roleText}}</view></view><view class="user-side"><view class="bind-state {{item.wechatBound ? 'bound' : ''}}">{{item.wechatBound ? '微信已绑定' : '微信未绑定'}}</view><view class="chevron"></view></view></view><button wx:if="{{users.length < total}}" class="load-more" loading="{{loading}}" bindtap="loadMore">加载更多</button><view class="total">共 {{total}} 名用户</view></view>
+  </view>
+</view>

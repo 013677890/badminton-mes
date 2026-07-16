@@ -1,2 +1,2 @@
 import { ensureLogin } from '../../services/auth'
-Page({ login() { wx.showLoading({ title: '登录中' }); ensureLogin().catch(error => wx.showToast({ title: error.message, icon: 'none' })).finally(() => wx.hideLoading()) } })
+Page({ data: { loading: false, error: '' }, accountLogin() { wx.navigateTo({ url: '/pages/account-login/account-login' }) }, async wechatLogin() { if (this.data.loading) return; this.setData({ loading: true, error: '' }); try { await ensureLogin() } catch (error) { this.setData({ error: (error as Error).message || '微信登录失败，请重试' }) } finally { this.setData({ loading: false }) } } })

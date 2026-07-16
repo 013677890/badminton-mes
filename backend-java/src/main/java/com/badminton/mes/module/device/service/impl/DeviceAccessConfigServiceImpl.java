@@ -28,7 +28,15 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 设备接入配置 Service 实现。 */
+/**
+ * 设备接入配置 Service 实现。
+ *
+ * <p>负责接入编码/设备绑定唯一性、设备可用性和联调状态约束；已有计数数据的配置
+ * 删除受保护，防止历史记录失去来源。详情缓存仅保存可重建数据。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService {
 
@@ -61,6 +69,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         this.deviceCache = deviceCache;
     }
 
+    /** 创建接入配置，并初始化尚未联调的状态。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createAccessConfig(DeviceAccessConfigSaveReqVO request) {
@@ -80,6 +89,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         return config.getId();
     }
 
+    /** 修改接入配置；关键绑定变化前校验设备和历史计数约束。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateAccessConfig(Long id, DeviceAccessConfigSaveReqVO request) {
@@ -105,6 +115,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         evictAccessConfigCacheAfterCommit(id);
     }
 
+    /** 在无有效计数引用时逻辑删除配置并释放唯一编码。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteAccessConfig(Long id) {
@@ -126,6 +137,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         evictAccessConfigCacheAfterCommit(id);
     }
 
+    /** 查询接入配置详情，优先读取缓存。 */
     @Override
     @Transactional(readOnly = true)
     public DeviceAccessConfigRespVO getAccessConfig(Long id) {
@@ -136,6 +148,7 @@ public class DeviceAccessConfigServiceImpl implements DeviceAccessConfigService 
         });
     }
 
+    /** 分页查询设备接入配置。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<DeviceAccessConfigRespVO> getAccessConfigPage(DeviceAccessConfigPageReqVO request) {

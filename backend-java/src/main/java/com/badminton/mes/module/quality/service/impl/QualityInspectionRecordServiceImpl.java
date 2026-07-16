@@ -46,7 +46,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 统一质量检验单 Service 实现。 */
+/**
+ * 统一质量检验单 Service 实现。
+ *
+ * <p>负责“创建草稿 → 保存结果 → 提交判定”的完整流程。创建时把方案项目复制成
+ * 检验结果快照，避免方案后续变更影响历史检验事实；写方法使用事务保证检验单和结果一致。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class QualityInspectionRecordServiceImpl implements QualityInspectionRecordService {
 
@@ -89,6 +97,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         this.qualityCache = qualityCache;
     }
 
+    /** 创建检验单并固化当时的方案项目快照。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRecord(String inspectionType, QualityInspectionRecordCreateReqVO request) {
@@ -109,6 +118,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         return record.getId();
     }
 
+    /** 保存草稿结果；只更新属于当前检验单的结果行。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveResults(Long id, QualityInspectionResultsSaveReqVO request) {
@@ -139,6 +149,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         evictRecordCacheAfterCommit(id);
     }
 
+    /** 校验必检项和结论完整性后提交，并计算放行/阻断状态。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submitRecord(Long id, QualityInspectionRecordSubmitReqVO request) {
@@ -176,6 +187,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         evictRecordCacheAfterCommit(id);
     }
 
+    /** 从缓存读取检验单详情，未命中时聚合主表和结果明细。 */
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionRecordRespVO getRecord(Long id) {
@@ -189,6 +201,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         });
     }
 
+    /** 分页查询检验单，供质量列表页和报表筛选使用。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<QualityInspectionRecordRespVO> getRecordPage(QualityInspectionRecordPageReqVO request) {
@@ -237,6 +250,9 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         return record;
     }
 
+    /**
+     * 根据工单等可信来源补齐检验单范围字段，并拒绝前端提交值与来源档案冲突的请求。
+     */
     private void enrichAndValidateSource(QualityInspectionRecordEntity record,
                                          QualityInspectionRecordCreateReqVO request) {
         if (PRODUCTION_INSPECTION_TYPES.contains(record.getInspectionType())) {
@@ -334,6 +350,7 @@ public class QualityInspectionRecordServiceImpl implements QualityInspectionReco
         }
     }
 
+    /** 提交前确认所有必检项目均已填写并完成判定，防止生成不完整质量结论。 */
     private void validateResultsComplete(List<QualityInspectionResultEntity> results) {
         if (results.isEmpty()) {
             throw new ServiceException(QualityErrorCodeConstants.RECORD_RESULTS_INCOMPLETE);

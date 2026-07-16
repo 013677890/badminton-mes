@@ -1,6 +1,7 @@
 package com.badminton.mes.module.system.service;
 
 import com.badminton.mes.common.core.PageResult;
+import com.badminton.mes.module.system.controller.vo.UserAssignmentReqVO;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
 import com.badminton.mes.module.system.controller.vo.UserSaveReqVO;
@@ -35,6 +36,14 @@ public interface UserService {
      *         或角色不可用时抛出
      */
     void updateUser(Long id, UserSaveReqVO reqVO);
+
+    /**
+     * 调整用户非 ADMIN 职位与生产组织，保留目标用户已有 ADMIN 关系。
+     *
+     * @param id 用户主键
+     * @param reqVO 分配请求
+     */
+    void updateUserAssignment(Long id, UserAssignmentReqVO reqVO);
 
     /**
      * 逻辑删除用户并强制下线，授权关系随用户失效；不能删除当前登录账号。

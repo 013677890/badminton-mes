@@ -1,0 +1,1 @@
+<view class="timeline"><view wx:for="{{items}}" wx:key="operateTime" class="timeline__item"><view class="timeline__dot"></view><view class="timeline__content"><view class="timeline__title">{{item.processName}}</view><view class="timeline__time">{{item.operateTime}}</view></view></view></view>

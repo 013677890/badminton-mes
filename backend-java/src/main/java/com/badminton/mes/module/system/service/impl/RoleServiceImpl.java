@@ -1,9 +1,11 @@
 package com.badminton.mes.module.system.service.impl;
 
 import java.util.List;
+import java.util.Set;
 
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
 import com.badminton.mes.module.system.controller.vo.RoleRespVO;
 import com.badminton.mes.module.system.controller.vo.RoleUserRespVO;
@@ -25,6 +27,13 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class RoleServiceImpl implements RoleService {
+
+    private static final Set<String> REGISTRATION_ROLE_CODES = Set.of(
+            RoleCodeConstants.TEAM_LEADER,
+            RoleCodeConstants.OPERATOR,
+            RoleCodeConstants.INSPECTOR,
+            RoleCodeConstants.CRAFT_ENGINEER
+    );
 
     private final RoleRepository roleRepository;
 
@@ -52,6 +61,25 @@ public class RoleServiceImpl implements RoleService {
                 .stream()
                 .map(this::toRespVO)
                 .toList();
+    }
+
+    @Override
+    public List<RoleRespVO> getRegistrationRoles() {
+        return roleRepository.findByStatusAndDeletedFalseOrderByIdAsc(CommonStatusEnum.ENABLED.getStatus())
+                .stream()
+                .filter(role -> REGISTRATION_ROLE_CODES.contains(role.getRoleCode()))
+                .map(this::toRespVO)
+                .toList();
+    }
+
+    @Override
+    public boolean isRegistrationRole(Long roleId) {
+        return roleRepository.findById(roleId)
+                .filter(role -> !Boolean.TRUE.equals(role.getDeleted()))
+                .filter(role -> CommonStatusEnum.ENABLED.getStatus().equals(role.getStatus()))
+                .map(RoleEntity::getRoleCode)
+                .filter(REGISTRATION_ROLE_CODES::contains)
+                .isPresent();
     }
 
     @Override

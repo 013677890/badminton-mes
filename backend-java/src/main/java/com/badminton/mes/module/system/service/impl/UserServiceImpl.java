@@ -14,22 +14,26 @@ import java.util.stream.Collectors;
 import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
+import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.common.util.DesensitizeUtils;
 import com.badminton.mes.module.production.service.ProductionOrganizationReferenceQuery;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
+import com.badminton.mes.module.system.controller.vo.UserAssignmentReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
 import com.badminton.mes.module.system.controller.vo.UserSaveReqVO;
 import com.badminton.mes.module.system.dal.entity.RoleEntity;
 import com.badminton.mes.module.system.dal.entity.UserEntity;
 import com.badminton.mes.module.system.dal.entity.UserRoleEntity;
+import com.badminton.mes.module.system.dal.entity.WechatUserBindingEntity;
 import com.badminton.mes.module.system.dal.redis.LoginSessionRedisDAO;
 import com.badminton.mes.module.system.dal.repository.RoleRepository;
 import com.badminton.mes.module.system.dal.repository.UserRepository;
 import com.badminton.mes.module.system.dal.repository.UserRoleRepository;
 import com.badminton.mes.module.system.dal.repository.UserSpecifications;
 import com.badminton.mes.module.system.service.UserService;
+import com.badminton.mes.module.system.service.WechatUserBindingService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +75,8 @@ public class UserServiceImpl implements UserService {
 
     private final ProductionOrganizationReferenceQuery organizationReferenceQuery;
 
+    private final WechatUserBindingService wechatUserBindingService;
+
     /**
      * 构造器注入，依赖不可变。
      *
@@ -84,13 +90,15 @@ public class UserServiceImpl implements UserService {
     public UserServiceImpl(UserRepository userRepository, UserRoleRepository userRoleRepository,
                            RoleRepository roleRepository, LoginSessionRedisDAO loginSessionRedisDAO,
                            PasswordEncoder passwordEncoder,
-                           ProductionOrganizationReferenceQuery organizationReferenceQuery) {
+                           ProductionOrganizationReferenceQuery organizationReferenceQuery,
+                           WechatUserBindingService wechatUserBindingService) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.loginSessionRedisDAO = loginSessionRedisDAO;
         this.passwordEncoder = passwordEncoder;
         this.organizationReferenceQuery = organizationReferenceQuery;
+        this.wechatUserBindingService = wechatUserBindingService;
     }
 
     @Override
@@ -155,6 +163,38 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void updateUserAssignment(Long id, UserAssignmentReqVO reqVO) {
+        UserEntity user = validateUserExists(id);
+        Set<Long> requestedRoleIds = new LinkedHashSet<>(reqVO.getRoleIds());
+        validateAssignableRoles(requestedRoleIds);
+        validateOrganization(reqVO.getWorkshopId(), reqVO.getLineId());
+
+        Set<Long> targetRoleIds = new LinkedHashSet<>(requestedRoleIds);
+        List<UserRoleEntity> activeRelations = userRoleRepository.findByUserIdAndDeletedFalse(id);
+        Set<Long> activeRoleIds = activeRelations.stream()
+                .map(UserRoleEntity::getRoleId)
+                .collect(Collectors.toSet());
+        if (!activeRoleIds.isEmpty()) {
+            roleRepository.findByIdInAndDeletedFalse(activeRoleIds).stream()
+                    .filter(role -> RoleCodeConstants.ADMIN.equals(role.getRoleCode()))
+                    .map(RoleEntity::getId)
+                    .forEach(targetRoleIds::add);
+        }
+        if (targetRoleIds.isEmpty()) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_REQUIRED);
+        }
+
+        user.setWorkshopId(reqVO.getWorkshopId());
+        user.setLineId(reqVO.getLineId());
+        userRepository.save(user);
+        replaceUserRoles(id, targetRoleIds);
+        evictSessionAfterCommit(id);
+        logger.info("[调整用户职位与组织] id: {}, operator: {}",
+                id, SecurityContextHolder.getRequiredLoginUserId());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteUser(Long id) {
         validateNotCurrentUser(id);
         UserEntity user = validateUserExists(id);
@@ -202,21 +242,42 @@ public class UserServiceImpl implements UserService {
     public UserRespVO getUser(Long id) {
         UserEntity user = validateUserExists(id);
         Map<Long, List<RoleEntity>> rolesByUser = loadRolesByUserIds(List.of(id));
-        return toRespVO(user, rolesByUser.getOrDefault(id, List.of()));
+        WechatUserBindingEntity binding = wechatUserBindingService.findActiveByUserId(id).orElse(null);
+        return toRespVO(user, rolesByUser.getOrDefault(id, List.of()), binding);
     }
 
     @Override
     public PageResult<UserRespVO> getUserPage(UserPageReqVO reqVO) {
-        Collection<Long> userIdsFilter = null;
+        Set<Long> includedUserIds = null;
         if (reqVO.getRoleId() != null) {
-            userIdsFilter = userRoleRepository.findByRoleIdAndDeletedFalse(reqVO.getRoleId()).stream()
+            includedUserIds = userRoleRepository.findByRoleIdAndDeletedFalse(reqVO.getRoleId()).stream()
                     .map(UserRoleEntity::getUserId)
                     .collect(Collectors.toSet());
-            if (userIdsFilter.isEmpty()) {
+            if (includedUserIds.isEmpty()) {
                 return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
             }
         }
-        Specification<UserEntity> specification = UserSpecifications.page(reqVO, userIdsFilter);
+        Set<Long> excludedUserIds = null;
+        if (reqVO.getWechatBound() != null) {
+            Set<Long> boundUserIds = wechatUserBindingService.findActiveUserIds();
+            if (Boolean.TRUE.equals(reqVO.getWechatBound())) {
+                if (boundUserIds.isEmpty()) {
+                    return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
+                }
+                if (includedUserIds == null) {
+                    includedUserIds = new HashSet<>(boundUserIds);
+                } else {
+                    includedUserIds.retainAll(boundUserIds);
+                }
+                if (includedUserIds.isEmpty()) {
+                    return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
+                }
+            } else if (!boundUserIds.isEmpty()) {
+                excludedUserIds = boundUserIds;
+            }
+        }
+        Specification<UserEntity> specification = UserSpecifications.page(
+                reqVO, includedUserIds, excludedUserIds);
         // 先 count：总数为 0 直接返回空页，省一次列表查询(SQL-005)
         long total = userRepository.count(specification);
         if (total == 0) {
@@ -232,8 +293,10 @@ public class UserServiceImpl implements UserService {
 
         List<Long> userIds = page.getContent().stream().map(UserEntity::getId).toList();
         Map<Long, List<RoleEntity>> rolesByUser = loadRolesByUserIds(userIds);
+        Map<Long, WechatUserBindingEntity> bindingsByUser = wechatUserBindingService.findActiveByUserIds(userIds);
         List<UserRespVO> list = page.getContent().stream()
-                .map(user -> toRespVO(user, rolesByUser.getOrDefault(user.getId(), List.of())))
+                .map(user -> toRespVO(user, rolesByUser.getOrDefault(user.getId(), List.of()),
+                        bindingsByUser.get(user.getId())))
                 .toList();
         return PageResult.of(list, total, pageNo, pageSize);
     }
@@ -272,6 +335,21 @@ public class UserServiceImpl implements UserService {
                 .allMatch(role -> CommonStatusEnum.ENABLED.getStatus().equals(role.getStatus()));
         if (!allEnabled) {
             throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_INVALID);
+        }
+    }
+
+    private void validateAssignableRoles(Collection<Long> roleIds) {
+        if (roleIds.isEmpty()) {
+            return;
+        }
+        List<RoleEntity> roles = roleRepository.findByIdInAndDeletedFalse(roleIds);
+        boolean allEnabled = roles.size() == roleIds.size() && roles.stream()
+                .allMatch(role -> CommonStatusEnum.ENABLED.getStatus().equals(role.getStatus()));
+        if (!allEnabled) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_INVALID);
+        }
+        if (roles.stream().anyMatch(role -> RoleCodeConstants.ADMIN.equals(role.getRoleCode()))) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_ADMIN_ROLE_PROTECTED);
         }
     }
 
@@ -357,7 +435,8 @@ public class UserServiceImpl implements UserService {
      * @param roles 用户角色列表(按 id 升序)
      * @return 响应 VO
      */
-    private UserRespVO toRespVO(UserEntity user, List<RoleEntity> roles) {
+    private UserRespVO toRespVO(UserEntity user, List<RoleEntity> roles,
+                                WechatUserBindingEntity binding) {
         UserRespVO respVO = new UserRespVO();
         respVO.setId(user.getId());
         respVO.setUserNo(user.getUserNo());
@@ -369,6 +448,7 @@ public class UserServiceImpl implements UserService {
         respVO.setRoleIds(roles.stream().map(RoleEntity::getId).toList());
         respVO.setRoleCodes(roles.stream().map(RoleEntity::getRoleCode).toList());
         respVO.setRoleNames(roles.stream().map(RoleEntity::getRoleName).toList());
+        respVO.setWechatBound(binding != null);
         respVO.setCreateTime(user.getCreateTime());
         return respVO;
     }

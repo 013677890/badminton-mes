@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>04 生产分析｜默认</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&amp;family=Source+Sans+3:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "primary-fixed": "#9cf2e8",
+                "on-primary-fixed": "#00201d",
+                "on-primary-fixed-variant": "#00504a",
+                "surface-tint": "#006a63",
+                "surface-container": "#e5eeff",
+                "secondary-fixed-dim": "#8fd3cc",
+                "secondary": "#216963",
+                "on-tertiary-fixed-variant": "#783200",
+                "tertiary-fixed": "#ffdbca",
+                "surface-bright": "#f8f9ff",
+                "surface-container-high": "#dce9ff",
+                "on-background": "#0b1c30",
+                "surface-dim": "#cbdbf5",
+                "on-primary": "#ffffff",
+                "surface-container-low": "#eff4ff",
+                "surface": "#f8f9ff",
+                "primary": "#005c55",
+                "outline-variant": "#bdc9c6",
+                "on-tertiary-container": "#ffe6da",
+                "on-secondary": "#ffffff",
+                "surface-variant": "#d3e4fe",
+                "on-surface": "#0b1c30",
+                "on-secondary-fixed": "#00201e",
+                "on-error": "#ffffff",
+                "tertiary": "#893a00",
+                "on-tertiary-fixed": "#341100",
+                "background": "#f8f9ff",
+                "primary-fixed-dim": "#80d5cb",
+                "tertiary-container": "#af4c00",
+                "surface-container-highest": "#d3e4fe",
+                "secondary-container": "#a8ece5",
+                "error-container": "#ffdad6",
+                "on-secondary-container": "#266d68",
+                "primary-container": "#0f766e",
+                "on-primary-container": "#a3faef",
+                "inverse-surface": "#213145",
+                "on-tertiary": "#ffffff",
+                "on-surface-variant": "#3e4947",
+                "inverse-primary": "#80d5cb",
+                "on-secondary-fixed-variant": "#00504b",
+                "surface-container-lowest": "#ffffff",
+                "secondary-fixed": "#abefe8",
+                "inverse-on-surface": "#eaf1ff",
+                "outline": "#6e7977",
+                "error": "#ba1a1a",
+                "on-error-container": "#93000a",
+                "tertiary-fixed-dim": "#ffb690",
+                "safety-orange": "#F97316",
+                "success-green": "#15803D"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "fontFamily": {
+                "headline": ["Noto Sans SC", "Source Sans 3"],
+                "display": ["Noto Sans SC", "Source Sans 3"],
+                "body": ["Noto Sans SC", "Source Sans 3"],
+                "label": ["Noto Sans SC", "Source Sans 3"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary" data-icon="factory">factory</span>
+<h1 class="font-headline text-on-surface font-bold text-lg">生产分析</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full active:bg-surface-container-high transition-colors duration-200">
+<span class="material-symbols-outlined text-primary" data-icon="refresh">refresh</span>
+</button>
+</header>
+<main class="pt-14 px-4">
+<!-- Segmented Control -->
+<div class="mt-4 bg-surface-container-low p-1 rounded-xl flex items-center shadow-sm">
+<button class="flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-200 bg-primary-container text-on-primary-container shadow-sm">今日</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-lg text-on-surface-variant transition-all duration-200">近7天</button>
+<button class="flex-1 py-2 text-sm font-medium rounded-lg text-on-surface-variant transition-all duration-200">近30天</button>
+</div>
+<!-- Time Range Text -->
+<div class="mt-3 flex items-center gap-1.5 text-on-surface-variant">
+<span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span>
+<p class="text-xs font-label">2026-07-15 00:00 至当前</p>
+</div>
+<!-- Core Metrics Bento Grid (2x3) -->
+<div class="mt-4 grid grid-cols-3 gap-3">
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24">
+<span class="text-[11px] text-on-surface-variant font-medium">计划量</span>
+<span class="text-lg font-bold font-display text-on-surface">12,000</span>
+</div>
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24">
+<span class="text-[11px] text-on-surface-variant font-medium">投入量</span>
+<span class="text-lg font-bold font-display text-on-surface">9,080</span>
+</div>
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24">
+<span class="text-[11px] text-on-surface-variant font-medium">良品量</span>
+<span class="text-lg font-bold font-display text-on-surface">8,544</span>
+</div>
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24">
+<span class="text-[11px] text-on-surface-variant font-medium">不良量</span>
+<div class="flex flex-col">
+<span class="text-lg font-bold font-display text-safety-orange">96</span>
+<span class="text-[9px] text-safety-orange flex items-center gap-0.5"><span class="material-symbols-outlined text-[10px]" data-icon="warning">warning</span> 预警</span>
+</div>
+</div>
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24">
+<span class="text-[11px] text-on-surface-variant font-medium">返工量</span>
+<span class="text-lg font-bold font-display text-on-surface">42</span>
+</div>
+<div class="bg-white p-3 rounded-xl border border-outline-variant/30 flex flex-col justify-between h-24 ring-2 ring-primary/10">
+<span class="text-[11px] text-primary font-bold">完成率</span>
+<span class="text-xl font-black font-display text-primary">72%</span>
+</div>
+</div>
+<!-- Highlight Card: Defect Rate -->
+<div class="mt-4 bg-white p-4 rounded-xl border border-outline-variant/30 relative overflow-hidden group">
+<!-- Subtle background accent -->
+<div class="absolute top-0 right-0 w-24 h-24 bg-success-green/5 rounded-full -mr-8 -mt-8 transition-transform group-active:scale-110"></div>
+<div class="flex items-center justify-between relative z-10">
+<div>
+<h3 class="text-sm font-medium text-on-surface-variant">不良率</h3>
+<div class="flex items-baseline gap-1.5 mt-1">
+<span class="text-3xl font-black font-display text-on-surface">1.1%</span>
+<span class="text-xs font-medium text-success-green bg-success-green/10 px-2 py-0.5 rounded-full">正常</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="w-12 h-12 rounded-full bg-success-green/10 flex items-center justify-center text-success-green">
+<span class="material-symbols-outlined text-2xl" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+</div>
+<div class="mt-3 pt-3 border-t border-dashed border-outline-variant/40 flex items-center gap-2">
+<span class="text-xs text-on-surface-variant">处于安全范围（&lt;1.5%）</span>
+</div>
+</div>
+<!-- Visualization Placeholder (Optional decoration to make it feel high-end) -->
+<div class="mt-4 bg-white p-4 rounded-xl border border-outline-variant/30">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-sm font-bold">生产趋势分析</h3>
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="trending_up">trending_up</span>
+</div>
+<div class="h-40 w-full relative flex items-end justify-between px-2 gap-1">
+<!-- Bar Chart Sim -->
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[40%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[60%] group-active:bg-primary"></div>
+</div>
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[55%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[75%] group-active:bg-primary"></div>
+</div>
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[70%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[85%] group-active:bg-primary"></div>
+</div>
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[60%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[70%] group-active:bg-primary"></div>
+</div>
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[85%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[95%] group-active:bg-primary"></div>
+</div>
+<div class="w-full bg-surface-container-low rounded-t-sm relative group h-[45%]">
+<div class="absolute bottom-0 w-full bg-primary-container/40 rounded-t-sm h-[55%] group-active:bg-primary"></div>
+</div>
+</div>
+<div class="mt-2 flex justify-between text-[10px] text-on-surface-variant font-label px-1">
+<span>08:00</span>
+<span>10:00</span>
+<span>12:00</span>
+<span>14:00</span>
+<span>16:00</span>
+<span>18:00</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-2 pt-1 h-16 bg-surface border-t border-outline-variant shadow-sm">
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label text-xs">看板</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1 scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined" data-icon="analytics" style="font-variation-settings: 'FILL' 1;">analytics</span>
+<span class="font-label text-xs">分析</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+<span class="font-label text-xs">追溯</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label text-xs">我的</span>
+</div>
+</nav>
+<script>
+        // Micro-interactions for Segmented Control
+        const buttons = document.querySelectorAll('.bg-surface-container-low button');
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                buttons.forEach(b => {
+                    b.classList.remove('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+                    b.classList.add('text-on-surface-variant');
+                });
+                btn.classList.add('bg-primary-container', 'text-on-primary-container', 'shadow-sm');
+                btn.classList.remove('text-on-surface-variant');
+            });
+        });
+    </script>
+</body></html>

@@ -25,7 +25,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 检验分类 Service 实现。 */
+/**
+ * 检验分类 Service 实现，负责分类编码唯一性、项目引用保护和详情缓存一致性。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class QualityInspectionCategoryServiceImpl implements QualityInspectionCategoryService {
 
@@ -46,6 +51,7 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         this.qualityCache = qualityCache;
     }
 
+    /** 创建检验分类，数据库唯一约束作为并发查重兜底。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createCategory(QualityInspectionCategorySaveReqVO request) {
@@ -58,6 +64,7 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         return category.getId();
     }
 
+    /** 修改检验分类并在事务提交后清理缓存。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateCategory(Long id, QualityInspectionCategorySaveReqVO request) {
@@ -74,6 +81,7 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
                 itemRepository.findIdsByCategoryIdAndDeletedFalse(id));
     }
 
+    /** 确认无检验项目引用后逻辑删除分类。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteCategory(Long id) {
@@ -92,6 +100,7 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         evictCategoryCacheAfterCommit(id);
     }
 
+    /** 查询分类详情，优先读取缓存。 */
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionCategoryRespVO getCategory(Long id) {
@@ -102,6 +111,7 @@ public class QualityInspectionCategoryServiceImpl implements QualityInspectionCa
         });
     }
 
+    /** 分页查询检验分类。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<QualityInspectionCategoryRespVO> getCategoryPage(

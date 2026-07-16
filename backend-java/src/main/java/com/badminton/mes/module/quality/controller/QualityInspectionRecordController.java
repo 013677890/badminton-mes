@@ -29,7 +29,15 @@ import static com.badminton.mes.common.security.RoleCodeConstants.PMC;
 import static com.badminton.mes.common.security.RoleCodeConstants.TEAM_LEADER;
 import static com.badminton.mes.common.security.RoleCodeConstants.WORKSHOP_MANAGER;
 
-/** 首末件、巡检、入库检和发货检统一接口。 */
+/**
+ * 首末件、巡检、入库检和发货检统一 REST 接口。
+ *
+ * <p>创建接口通过 {@code inspectionType} 区分检验场景；结果保存和提交分成两个请求，
+ * 由 Service 在提交时做必检项完整性和放行状态计算。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @RestController
 @RequestMapping("/api/quality/inspection-records")
 public class QualityInspectionRecordController {
@@ -40,6 +48,7 @@ public class QualityInspectionRecordController {
         this.recordService = recordService;
     }
 
+    /** 创建指定检验类型的检验单草稿。 */
     @PostMapping
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Long> create(
@@ -50,6 +59,7 @@ public class QualityInspectionRecordController {
         return CommonResult.success(recordService.createRecord(inspectionType, request));
     }
 
+    /** 保存检验项目结果，检验单仍保持草稿状态。 */
     @PutMapping("/{id}/results")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> saveResults(@PathVariable @Positive Long id,
@@ -58,6 +68,7 @@ public class QualityInspectionRecordController {
         return CommonResult.success(null);
     }
 
+    /** 提交检验单并计算最终质量结论。 */
     @PutMapping("/{id}/submit")
     @RequiresRoles({ADMIN, INSPECTOR})
     public CommonResult<Void> submit(@PathVariable @Positive Long id,
@@ -66,12 +77,14 @@ public class QualityInspectionRecordController {
         return CommonResult.success(null);
     }
 
+    /** 查询检验单详情和结果明细。 */
     @GetMapping("/{id}")
     @RequiresRoles({ADMIN, INSPECTOR, PMC, WORKSHOP_MANAGER, TEAM_LEADER})
     public CommonResult<QualityInspectionRecordRespVO> get(@PathVariable @Positive Long id) {
         return CommonResult.success(recordService.getRecord(id));
     }
 
+    /** 分页查询检验单。 */
     @GetMapping("/page")
     @RequiresRoles({ADMIN, INSPECTOR, PMC, WORKSHOP_MANAGER, TEAM_LEADER})
     public CommonResult<PageResult<QualityInspectionRecordRespVO>> page(

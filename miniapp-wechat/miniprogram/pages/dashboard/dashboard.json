@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "实时看板" }
+{ "navigationStyle": "custom", "enablePullDownRefresh": true, "backgroundTextStyle": "dark", "usingComponents": { "app-state": "/components/app-state/app-state", "metric-card": "/components/metric-card/metric-card", "task-card": "/components/task-card/task-card" } }

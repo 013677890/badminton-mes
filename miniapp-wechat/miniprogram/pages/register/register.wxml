@@ -1,0 +1,15 @@
+<view class="register-page safe-bottom">
+  <view class="top-bar"><view class="back-button" bindtap="back"><view class="back-arrow"></view></view><text>注册 MES 账号</text><view class="top-placeholder"></view></view>
+  <view class="register-content">
+    <view class="welcome-title">创建账号</view><view class="welcome-desc">填写基本信息并选择职位，注册后即可使用工号登录。</view>
+    <view class="form-card">
+      <view class="field"><view class="field-label">工号<text>*</text></view><input class="input" value="{{userNo}}" maxlength="32" placeholder="例如 MES10086" data-key="userNo" bindinput="input"/></view>
+      <view class="field"><view class="field-label">姓名<text>*</text></view><input class="input" value="{{userName}}" maxlength="64" placeholder="请输入真实姓名" data-key="userName" bindinput="input"/></view>
+      <view class="field"><view class="field-label">职位<text>*</text></view><picker disabled="{{loadingRoles}}" range="{{roles}}" range-key="roleName" value="{{roleIndex}}" bindchange="chooseRole"><view class="picker {{roleName ? '' : 'picker--placeholder'}}">{{loadingRoles ? '正在加载职位…' : roleName || '请选择职位'}}<view class="picker-arrow"></view></view></picker></view>
+      <view class="field"><view class="field-label">密码<text>*</text></view><view class="password-shell"><input value="{{password}}" password="{{!showPassword}}" maxlength="32" placeholder="请输入 6-32 位密码" data-key="password" bindinput="input"/><view bindtap="togglePassword">{{showPassword ? '隐藏' : '显示'}}</view></view></view>
+      <view class="field"><view class="field-label">确认密码<text>*</text></view><input class="input" value="{{confirmPassword}}" password maxlength="32" placeholder="请再次输入密码" data-key="confirmPassword" bindinput="input"/></view>
+      <view wx:if="{{error}}" class="form-error">{{error}}</view>
+      <button class="register-button" loading="{{loading}}" disabled="{{loading || loadingRoles}}" bindtap="register">{{loading ? '正在注册…' : '注册账号'}}</button>
+    </view>
+  </view>
+</view>

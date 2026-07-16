@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>08 个人中心｜解绑确认</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Source+Sans+3:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary-fixed-dim": "#ffb690",
+                        "error": "#ba1a1a",
+                        "tertiary": "#893a00",
+                        "primary": "#005c55",
+                        "on-tertiary-fixed-variant": "#783200",
+                        "on-secondary-fixed-variant": "#00504b",
+                        "surface-container-high": "#dce9ff",
+                        "on-secondary-container": "#266d68",
+                        "tertiary-fixed": "#ffdbca",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#a8ece5",
+                        "outline-variant": "#bdc9c6",
+                        "primary-fixed-dim": "#80d5cb",
+                        "on-primary-container": "#a3faef",
+                        "surface-bright": "#f8f9ff",
+                        "on-surface-variant": "#3e4947",
+                        "on-primary": "#ffffff",
+                        "secondary": "#216963",
+                        "on-primary-fixed-variant": "#00504a",
+                        "primary-fixed": "#9cf2e8",
+                        "secondary-fixed-dim": "#8fd3cc",
+                        "on-secondary-fixed": "#00201e",
+                        "secondary-fixed": "#abefe8",
+                        "surface-container": "#e5eeff",
+                        "inverse-primary": "#80d5cb",
+                        "tertiary-container": "#af4c00",
+                        "surface-variant": "#d3e4fe",
+                        "primary-container": "#0f766e",
+                        "outline": "#6e7977",
+                        "on-tertiary-fixed": "#341100",
+                        "on-background": "#0b1c30",
+                        "surface-tint": "#006a63",
+                        "inverse-on-surface": "#eaf1ff",
+                        "inverse-surface": "#213145",
+                        "surface-dim": "#cbdbf5",
+                        "on-tertiary-container": "#ffe6da",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "on-primary-fixed": "#00201d",
+                        "background": "#f8f9ff",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface": "#f8f9ff",
+                        "on-error-container": "#93000a",
+                        "industry-red": "#B42318",
+                        "industry-text-secondary": "#64748B",
+                        "industry-border": "#E2E8F0"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1rem",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["'Noto Sans SC'", "sans-serif"],
+                        "display": ["'Noto Sans SC'", "sans-serif"],
+                        "body": ["'Noto Sans SC'", "sans-serif"],
+                        "label": ["'Noto Sans SC'", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #F8FAFC;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-blur-overlay {
+            backdrop-filter: blur(4px);
+            background-color: rgba(11, 28, 48, 0.4);
+        }
+        .modal-shadow {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col h-screen w-[375px] mx-auto overflow-hidden relative">
+<!-- Background Content: Profile Page (Inactive/Blurred) -->
+<div class="flex-1 overflow-y-auto bg-[#F8FAFC]">
+<!-- Top App Bar Content -->
+<header class="fixed top-0 left-0 w-full z-10 flex justify-between items-center px-4 h-14 bg-surface border-b border-industry-border">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">factory</span>
+<span class="text-lg font-bold text-primary">MES 生产管理</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant">refresh</span>
+</header>
+<!-- User Profile Placeholder Content -->
+<main class="pt-20 px-4 pb-20">
+<div class="bg-white rounded-2xl p-6 mb-4 flex items-center gap-4">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center">
+<span class="material-symbols-outlined text-3xl text-industry-text-secondary">person</span>
+</div>
+<div>
+<h2 class="text-lg font-bold text-on-surface">张建设</h2>
+<p class="text-sm text-industry-text-secondary">工号：CN-20240501</p>
+</div>
+</div>
+<div class="space-y-3">
+<div class="bg-white rounded-xl p-4 flex justify-between items-center border border-industry-border">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">settings</span>
+<span class="text-on-surface">个人设置</span>
+</div>
+<span class="material-symbols-outlined text-industry-text-secondary">chevron_right</span>
+</div>
+<div class="bg-white rounded-xl p-4 flex justify-between items-center border border-industry-border">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">security</span>
+<span class="text-on-surface">账号安全</span>
+</div>
+<span class="material-symbols-outlined text-industry-text-secondary">chevron_right</span>
+</div>
+<div class="bg-white rounded-xl p-4 flex justify-between items-center border border-industry-border">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-industry-red">logout</span>
+<span class="text-industry-red font-medium">解除绑定</span>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Bottom Nav Bar (Blurred Placeholder) -->
+<nav class="fixed bottom-0 left-0 w-full z-10 flex justify-around items-center px-2 pb-2 pt-1 h-16 bg-surface border-t border-industry-border opacity-50">
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] mt-0.5">看板</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] mt-0.5">分析</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1">
+<span class="material-symbols-outlined">history_edu</span>
+<span class="text-[10px] mt-0.5">追溯</span>
+</div>
+<div class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] mt-0.5">我的</span>
+</div>
+</nav>
+<!-- Modal Overlay -->
+<div class="absolute inset-0 z-50 bg-blur-overlay flex items-center justify-center px-8">
+<div class="flex flex-col items-center w-full">
+<!-- Main Dialog -->
+<div class="bg-white w-full rounded-2xl p-6 modal-shadow animate-in fade-in zoom-in duration-300">
+<div class="flex flex-col items-center text-center">
+<!-- Warning Icon -->
+<div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-industry-red text-3xl">warning</span>
+</div>
+<h3 class="text-xl font-bold text-on-surface mb-3">解除账号绑定？</h3>
+<p class="text-[15px] leading-relaxed text-industry-text-secondary mb-8">
+                        解绑后当前登录会失效，下次微信登录需要重新绑定 MES 账号；生产数据不会被删除。
+                    </p>
+<!-- Buttons -->
+<div class="flex flex-col w-full gap-3">
+<button class="w-full h-12 rounded-xl bg-industry-red text-white font-bold text-base active:opacity-90 transition-opacity">
+                            确认解绑
+                        </button>
+<button class="w-full h-12 rounded-xl bg-surface-container-low text-on-surface font-medium text-base active:bg-surface-container-high transition-colors">
+                            取消
+                        </button>
+</div>
+</div>
+</div>
+<!-- Developer/Spec Loading State Note -->
+<div class="mt-8 self-start w-full">
+<div class="flex items-center gap-2 px-3 py-2 bg-slate-800/80 rounded-lg border border-slate-700">
+<div class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+<span class="text-xs text-white font-medium">正在解除绑定…</span>
+<div class="ml-auto">
+<span class="text-[10px] px-1.5 py-0.5 bg-primary/20 text-primary-fixed rounded border border-primary/30 uppercase">Loading State Spec</span>
+</div>
+</div>
+<p class="text-[10px] text-white/60 mt-1.5 px-1 italic">交互说明：点击“确认解绑”后按钮进入加载态并展示上述提示</p>
+</div>
+</div>
+</div>
+<!-- Interactive Script for micro-interactions -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const confirmBtn = document.querySelector('button.bg-industry-red');
+            const cancelBtn = document.querySelector('button.bg-surface-container-low');
+            const loadingSpec = document.querySelector('.bg-slate-800\\/80');
+
+            confirmBtn.addEventListener('click', () => {
+                confirmBtn.innerHTML = `
+                    <div class="flex items-center justify-center gap-2">
+                        <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>处理中</span>
+                    </div>
+                `;
+                confirmBtn.disabled = true;
+                loadingSpec.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-transparent');
+                
+                // Reset after 2s for demo purposes
+                setTimeout(() => {
+                    confirmBtn.innerHTML = '确认解绑';
+                    confirmBtn.disabled = false;
+                    loadingSpec.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-transparent');
+                }, 2000);
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                document.querySelector('.bg-blur-overlay').style.display = 'none';
+            });
+        });
+    </script>
+</body></html>

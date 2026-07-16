@@ -37,7 +37,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 设备保养记录 Service 实现。 */
+/**
+ * 设备保养记录 Service 实现。
+ *
+ * <p>保养记录状态变化会同步设备台账状态：执行中置为维护中，完成或取消后恢复可用状态；
+ * 完成记录还会回写计划最近完成时间。以上修改在同一事务内完成，并在提交后清理设备缓存。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenanceRecordService {
 
@@ -72,6 +80,7 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
         this.equipmentCache = equipmentCache;
     }
 
+    /** 创建保养记录，并根据初始状态同步设备和计划。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEquipmentMaintenanceRecord(EquipmentMaintenanceRecordSaveReqVO reqVO) {
@@ -104,6 +113,7 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
         return record.getId();
     }
 
+    /** 修改可编辑记录，校验状态迁移、执行时间和完成结果。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentMaintenanceRecord(Long id, EquipmentMaintenanceRecordSaveReqVO reqVO) {
@@ -163,6 +173,7 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
         logger.info("[修改设备保养记录] id: {}, recordNo: {}", id, existing.getRecordNo());
     }
 
+    /** 逻辑删除未形成不可逆事实的保养记录。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentMaintenanceRecord(Long id) {
@@ -185,12 +196,14 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
         logger.info("[删除设备保养记录] id: {}", id);
     }
 
+    /** 查询保养记录详情。 */
     @Override
     @Transactional(readOnly = true)
     public EquipmentMaintenanceRecordRespVO getEquipmentMaintenanceRecord(Long id) {
         return EquipmentMaintenanceRecordConvert.toRespVO(validateRecordExists(id));
     }
 
+    /** 分页查询设备保养记录。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<EquipmentMaintenanceRecordRespVO> getEquipmentMaintenanceRecordPage(
@@ -355,6 +368,9 @@ public class EquipmentMaintenanceRecordServiceImpl implements EquipmentMaintenan
         }
     }
 
+    /**
+     * 根据保养记录状态同步设备台账；状态真正变化时才写库，减少无效更新和缓存抖动。
+     */
     private void synchronizeEquipmentStatus(EquipmentMaintenanceRecordEntity record,
                                             EquipmentLedgerEntity equipment,
                                             String previousRecordStatus,

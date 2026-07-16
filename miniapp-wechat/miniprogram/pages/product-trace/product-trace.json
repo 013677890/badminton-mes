@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "产品追溯" }
+{ "navigationStyle": "custom", "usingComponents": { "app-state": "/components/app-state/app-state", "status-chip": "/components/status-chip/status-chip", "trace-timeline": "/components/trace-timeline/trace-timeline" } }

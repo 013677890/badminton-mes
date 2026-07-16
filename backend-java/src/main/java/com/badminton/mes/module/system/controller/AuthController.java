@@ -1,11 +1,16 @@
 package com.badminton.mes.module.system.controller;
 
+import java.util.List;
+
 import com.badminton.mes.common.core.CommonResult;
 import com.badminton.mes.module.system.controller.vo.AuthLoginReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthLoginRespVO;
 import com.badminton.mes.module.system.controller.vo.AuthPasswordReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthProfileRespVO;
+import com.badminton.mes.module.system.controller.vo.AuthRegisterReqVO;
+import com.badminton.mes.module.system.controller.vo.RoleRespVO;
 import com.badminton.mes.module.system.service.AuthService;
+import com.badminton.mes.module.system.service.RoleService;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,13 +36,16 @@ public class AuthController {
 
     private final AuthService authService;
 
+    private final RoleService roleService;
+
     /**
      * 构造器注入，依赖不可变。
      *
      * @param authService 认证 Service
      */
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, RoleService roleService) {
         this.authService = authService;
+        this.roleService = roleService;
     }
 
     /**
@@ -49,6 +57,27 @@ public class AuthController {
     @PostMapping("/login")
     public CommonResult<AuthLoginRespVO> login(@Valid @RequestBody AuthLoginReqVO reqVO) {
         return CommonResult.success(authService.login(reqVO));
+    }
+
+    /**
+     * 注册小程序账号。
+     *
+     * @param reqVO 注册请求
+     * @return 新用户主键
+     */
+    @PostMapping("/register")
+    public CommonResult<Long> register(@Valid @RequestBody AuthRegisterReqVO reqVO) {
+        return CommonResult.success(authService.register(reqVO));
+    }
+
+    /**
+     * 查询小程序注册页可选择的职位。
+     *
+     * @return 可注册职位列表
+     */
+    @GetMapping("/registration_roles")
+    public CommonResult<List<RoleRespVO>> getRegistrationRoles() {
+        return CommonResult.success(roleService.getRegistrationRoles());
     }
 
     /**

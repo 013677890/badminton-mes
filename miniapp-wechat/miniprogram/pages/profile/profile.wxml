@@ -1,1 +1,18 @@
-<view class="page"><view class="card"><view class="title">{{user.userName}}</view><view class="muted">工号：{{user.userNo}}</view><view class="muted">角色：{{user.roleCodes}}</view></view><button class="danger" bindtap="logout">退出登录</button></view>
+<view class="profile-page">
+  <view class="profile-top"><view class="top-icon"></view><text>我的</text><view class="top-icon"></view></view>
+  <view class="profile-content">
+    <view class="user-card">
+      <view class="user-head"><view class="avatar"><view class="avatar-head"></view><view class="avatar-body"></view></view><view class="user-main"><view class="name-line"><text class="profile-name">{{user.userName || 'MES 用户'}}</text><text class="role-badge">{{roleText}}</text></view><view class="profile-no">工号：{{user.userNo || '未读取工号'}}</view></view><view class="bind-badge {{user.wechatBound ? '' : 'bind-badge--warning'}}"><view class="bind-dot"></view>{{user.wechatBound ? '微信已绑定' : '微信未绑定'}}</view></view>
+      <view class="org-row"><view><image src="/assets/icons/factory.svg" mode="aspectFit"/><text>{{workshopText}}</text></view><view><image src="/assets/icons/process.svg" mode="aspectFit"/><text>{{lineText}}</text></view></view>
+      <view class="basic-grid"><view><text>账号状态</text><text class="basic-value">正常使用</text></view><view><text>微信快捷登录</text><text class="basic-value">{{user.wechatBound ? '已启用' : '待绑定'}}</text></view><view><text>联系方式</text><text class="basic-value">{{user.mobile || '暂未绑定'}}</text></view><view><text>数据权限</text><text class="basic-value">{{roleText}}</text></view></view>
+    </view>
+    <view wx:if="{{isAdmin}}" class="admin-card" bindtap="goUserManagement"><view class="admin-icon"><image src="/assets/icons/assignment.svg" mode="aspectFit"/></view><view class="admin-copy"><text>人员与职位管理</text><small>分配用户职位、所属车间和生产线</small></view><view class="admin-badge">管理员</view><view class="chevron"></view></view>
+    <view class="settings-card"><view class="setting-row" bindtap="goSecurity"><image src="/assets/tabbar/profile-selected.png" mode="aspectFit"/><view class="setting-copy"><text>账号与安全</text><small>绑定信息、登录密码与账号保护</small></view><view class="chevron"></view></view><view class="setting-divider"></view><view class="setting-row" bindtap="showAbout"><image src="/assets/tabbar/dashboard-selected.png" mode="aspectFit"/><view class="setting-copy"><text>关于系统</text><small>版本信息与系统说明</small></view><view class="chevron"></view></view></view>
+    <view wx:if="{{mode === 'mock'}}" class="mock-entry">开发模式 · {{scenario}}</view>
+    <button class="profile-action" bindtap="openLogout"><image class="action-icon" src="/assets/icons/logout.svg" mode="aspectFit"/>退出登录</button>
+    <button wx:if="{{user.wechatBound}}" class="profile-action profile-action--danger" bindtap="openUnbind"><image class="action-icon" src="/assets/icons/unlink.svg" mode="aspectFit"/>解除微信绑定</button>
+    <view wx:if="{{user.wechatBound}}" class="unbind-tip">解绑后微信快捷登录会失效，账户密码仍可继续使用</view>
+    <view class="version">MES MOBILE V2.4.0<br/><text>© 2026 Badminton Intelligent Manufacturing</text></view>
+  </view>
+  <confirm-dialog visible="{{dialog !== ''}}" title="{{dialog === 'unbind' ? '确认解除绑定？' : '确认退出登录？'}}" description="{{dialog === 'unbind' ? '解除后，下次登录需要重新验证 MES 工号和密码。' : '退出不会删除已记住的登录账号。'}}" confirmText="{{dialog === 'unbind' ? '解除绑定' : '退出登录'}}" danger="{{dialog === 'unbind'}}" loading="{{processing}}" bind:cancel="closeDialog" bind:confirm="confirmAction"/>
+</view>

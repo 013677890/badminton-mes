@@ -37,7 +37,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-/** 检验标准方案 Service 实现。 */
+/**
+ * 检验标准方案 Service 实现。
+ *
+ * <p>{@link Service} 让 Spring 扫描并注册本业务组件；写方法上的
+ * {@link Transactional} 保证方案主表、明细和版本状态一起提交或回滚。
+ * Controller 通过 {@code QualityInspectionPlanService} 调用本类。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanService {
 
@@ -67,6 +76,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         this.qualityCache = qualityCache;
     }
 
+    /** 创建草稿方案，并一次性校验、保存方案内的检验项目快照。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createPlan(QualityInspectionPlanSaveReqVO request) {
@@ -86,6 +96,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         return plan.getId();
     }
 
+    /** 修改草稿方案；主表和明细替换处于同一事务。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updatePlan(Long id, QualityInspectionPlanSaveReqVO request) {
@@ -104,6 +115,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         evictPlanCacheAfterCommit(id);
     }
 
+    /** 逻辑删除草稿方案及其明细，并在提交后清除详情缓存。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deletePlan(Long id) {
@@ -118,6 +130,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         evictPlanCacheAfterCommit(id);
     }
 
+    /** 审核方案并使其生效，同时处理同编码历史生效版本的状态。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void auditPlan(Long id) {
@@ -143,6 +156,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         evictPlanCacheAfterCommit(id);
     }
 
+    /** 停用当前生效方案，阻止新检验单继续引用。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disablePlan(Long id) {
@@ -156,6 +170,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         evictPlanCacheAfterCommit(id);
     }
 
+    /** 复制方案主表和项目明细，创建版本号递增的新草稿。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createNewVersion(Long id) {
@@ -189,6 +204,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         return newVersion.getId();
     }
 
+    /** 通过 Cache Aside 查询方案详情，缓存未命中时回源主表与明细。 */
     @Override
     @Transactional(readOnly = true)
     public QualityInspectionPlanRespVO getPlan(Long id) {
@@ -203,6 +219,7 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         });
     }
 
+    /** 分页查询方案列表，空结果直接返回空页并修正越界页码。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<QualityInspectionPlanRespVO> getPlanPage(QualityInspectionPlanPageReqVO request) {
@@ -223,6 +240,9 @@ public class QualityInspectionPlanServiceImpl implements QualityInspectionPlanSe
         return PageResult.of(list, total, pageNo, pageSize);
     }
 
+    /**
+     * 批量加载并校验方案项目，避免逐条查询造成 N+1；返回的 Map 供后续快照落库复用。
+     */
     private Map<Long, QualityInspectionItemEntity> validatePlanItems(
             List<QualityInspectionPlanItemSaveReqVO> requests) {
         Set<Long> inspectionItemIds = requests.stream()

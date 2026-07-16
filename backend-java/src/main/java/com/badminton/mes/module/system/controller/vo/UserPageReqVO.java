@@ -17,6 +17,10 @@ import lombok.EqualsAndHashCode;
 @EqualsAndHashCode(callSuper = true)
 public class UserPageReqVO extends PageParam {
 
+    /** 工号或姓名关键字，两个字段使用 OR 前缀匹配。 */
+    @Size(max = 64, message = "关键字长度不能超过 64")
+    private String keyword;
+
     /** 工号，前缀匹配 */
     @Size(max = 32, message = "工号长度不能超过 32")
     private String userNo;
@@ -35,4 +39,7 @@ public class UserPageReqVO extends PageParam {
 
     /** 状态：1 启用 0 停用 */
     private Integer status;
+
+    /** 微信绑定状态，可空表示不筛选。 */
+    private Boolean wechatBound;
 }

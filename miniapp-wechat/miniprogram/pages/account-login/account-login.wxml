@@ -1,0 +1,17 @@
+<view class="account-page safe-bottom">
+  <view class="top-bar"><view class="back" bindtap="back"><view></view></view><text>账户密码登录</text><view class="placeholder"></view></view>
+  <view class="account-main">
+    <view class="welcome">欢迎登录</view>
+    <view class="welcome-desc">使用 MES 工号和密码进入生产管理系统</view>
+    <view class="form-card">
+      <view class="field-label">工号</view>
+      <view class="input-shell"><image class="field-icon" src="/assets/icons/user.svg" mode="aspectFit"/><input value="{{userNo}}" maxlength="32" placeholder="请输入 MES 工号" data-key="userNo" bindinput="input"/></view>
+      <view class="field-label password-label">密码</view>
+      <view class="input-shell"><image class="field-icon" src="/assets/icons/lock.svg" mode="aspectFit"/><input value="{{password}}" password="{{!showPassword}}" maxlength="64" placeholder="请输入登录密码" data-key="password" bindinput="input" confirm-type="done" bindconfirm="login"/><view class="show" bindtap="togglePassword">{{showPassword ? '隐藏' : '显示'}}</view></view>
+      <view class="options"><view class="remember" bindtap="toggleRemember"><view class="checkbox {{rememberMe ? 'checked' : ''}}"><view wx:if="{{rememberMe}}"></view></view><text>记住我（7 天）</text></view><view class="register" bindtap="goRegister">注册账号</view></view>
+      <view wx:if="{{error}}" class="error">{{error}}</view>
+      <button class="submit" loading="{{loading}}" disabled="{{loading}}" bindtap="login">{{loading ? '正在登录…' : '登录'}}</button>
+    </view>
+    <view class="security">账号密码仅用于身份验证，请勿在公共设备保存密码</view>
+  </view>
+</view>

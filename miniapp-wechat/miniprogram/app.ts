@@ -1,7 +1,5 @@
-import { ensureLogin } from './services/auth'
-
 App({
   onLaunch() {
-    void ensureLogin()
+    if (wx.getStorageSync('mes_token')) wx.reLaunch({ url: '/pages/dashboard/dashboard' })
   }
 })

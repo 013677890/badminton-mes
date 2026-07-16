@@ -27,13 +27,22 @@ public final class UserSpecifications {
      * 构造分页筛选条件。
      *
      * @param reqVO   分页请求
-     * @param userIds 角色筛选命中的用户 id 集合，null 表示未按角色筛选
+     * @param includedUserIds 必须包含的用户 id 集合，null 表示不限制
+     * @param excludedUserIds 必须排除的用户 id 集合，null 表示不限制
      * @return JPA Specification
      */
-    public static Specification<UserEntity> page(UserPageReqVO reqVO, Collection<Long> userIds) {
+    public static Specification<UserEntity> page(UserPageReqVO reqVO,
+                                                  Collection<Long> includedUserIds,
+                                                  Collection<Long> excludedUserIds) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
+            if (StringUtils.hasText(reqVO.getKeyword())) {
+                String keyword = reqVO.getKeyword() + "%";
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.like(root.get("userNo"), keyword),
+                        criteriaBuilder.like(root.get("userName"), keyword)));
+            }
             if (StringUtils.hasText(reqVO.getUserNo())) {
                 predicates.add(criteriaBuilder.like(root.get("userNo"), reqVO.getUserNo() + "%"));
             }
@@ -46,8 +55,11 @@ public final class UserSpecifications {
             if (reqVO.getStatus() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), reqVO.getStatus()));
             }
-            if (userIds != null) {
-                predicates.add(root.get("id").in(userIds));
+            if (includedUserIds != null) {
+                predicates.add(root.get("id").in(includedUserIds));
+            }
+            if (excludedUserIds != null && !excludedUserIds.isEmpty()) {
+                predicates.add(criteriaBuilder.not(root.get("id").in(excludedUserIds)));
             }
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };

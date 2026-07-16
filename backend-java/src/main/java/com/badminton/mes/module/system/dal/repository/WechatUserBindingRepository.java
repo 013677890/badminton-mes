@@ -1,5 +1,7 @@
 package com.badminton.mes.module.system.dal.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import com.badminton.mes.module.system.dal.entity.WechatUserBindingEntity;
@@ -34,4 +36,11 @@ public interface WechatUserBindingRepository extends JpaRepository<WechatUserBin
      */
     Optional<WechatUserBindingEntity> findByAppIdAndUserIdAndStatusAndDeletedFalse(
             String appId, Long userId, Integer status);
+
+    /** 批量查询指定用户的有效绑定。 */
+    List<WechatUserBindingEntity> findByAppIdAndUserIdInAndStatusAndDeletedFalse(
+            String appId, Collection<Long> userIds, Integer status);
+
+    /** 查询当前小程序全部有效绑定。 */
+    List<WechatUserBindingEntity> findByAppIdAndStatusAndDeletedFalse(String appId, Integer status);
 }

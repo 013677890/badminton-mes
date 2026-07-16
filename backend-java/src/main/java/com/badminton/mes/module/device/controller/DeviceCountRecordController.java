@@ -25,7 +25,15 @@ import static com.badminton.mes.common.security.RoleCodeConstants.PMC;
 import static com.badminton.mes.common.security.RoleCodeConstants.TEAM_LEADER;
 import static com.badminton.mes.common.security.RoleCodeConstants.WORKSHOP_MANAGER;
 
-/** 设备计数记录接口。 */
+/**
+ * 设备计数记录 REST 接口。
+ *
+ * <p>设备或接入网关调用 {@code /report} 上报计数，后台角色调用详情和分页查询；
+ * 请求校验、角色限制和统一响应由 Web 层完成，计数幂等与异常判断由 Service 完成。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @RestController
 @RequestMapping("/api/device/count-records")
 public class DeviceCountRecordController {
@@ -36,6 +44,7 @@ public class DeviceCountRecordController {
         this.countService = countService;
     }
 
+    /** 接收一次设备计数上报。 */
     @PostMapping("/report")
     @RequiresRoles({ADMIN, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<DeviceCountReportRespVO> report(
@@ -43,12 +52,14 @@ public class DeviceCountRecordController {
         return CommonResult.success(countService.reportCount(request));
     }
 
+    /** 查询单条计数记录。 */
     @GetMapping("/{id}")
     @RequiresRoles({ADMIN, PMC, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<DeviceCountRecordRespVO> get(@PathVariable @Positive Long id) {
         return CommonResult.success(countService.getCountRecord(id));
     }
 
+    /** 分页查询计数记录。 */
     @GetMapping("/page")
     @RequiresRoles({ADMIN, PMC, WORKSHOP_MANAGER, TEAM_LEADER, OPERATOR})
     public CommonResult<PageResult<DeviceCountRecordRespVO>> page(

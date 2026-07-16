@@ -3,6 +3,7 @@ package com.badminton.mes.module.system.service.impl;
 import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
 
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
@@ -14,9 +15,11 @@ import com.badminton.mes.module.system.controller.vo.AuthLoginReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthLoginRespVO;
 import com.badminton.mes.module.system.controller.vo.AuthPasswordReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthProfileRespVO;
+import com.badminton.mes.module.system.controller.vo.AuthRegisterReqVO;
 import com.badminton.mes.module.system.dal.entity.RoleEntity;
 import com.badminton.mes.module.system.dal.entity.UserEntity;
 import com.badminton.mes.module.system.dal.entity.UserRoleEntity;
+import com.badminton.mes.module.system.dal.entity.WechatUserBindingEntity;
 import com.badminton.mes.module.system.dal.redis.LoginSessionRedisDAO;
 import com.badminton.mes.module.system.dal.redis.SystemRedisKeyConstants;
 import com.badminton.mes.module.system.dal.repository.RoleRepository;
@@ -24,7 +27,10 @@ import com.badminton.mes.module.system.dal.repository.UserRepository;
 import com.badminton.mes.module.system.dal.repository.UserRoleRepository;
 import com.badminton.mes.module.system.service.AuthService;
 import com.badminton.mes.module.system.service.AuthenticationSupport;
+import com.badminton.mes.module.system.service.RoleService;
+import com.badminton.mes.module.system.service.WechatUserBindingService;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,6 +70,10 @@ public class AuthServiceImpl implements AuthService {
 
     private final AuthenticationSupport authenticationSupport;
 
+    private final RoleService roleService;
+
+    private final WechatUserBindingService wechatUserBindingService;
+
     /**
      * 构造器注入，依赖不可变。
      *
@@ -76,24 +86,60 @@ public class AuthServiceImpl implements AuthService {
      */
     public AuthServiceImpl(UserRepository userRepository, UserRoleRepository userRoleRepository,
                            RoleRepository roleRepository, LoginSessionRedisDAO loginSessionRedisDAO,
-                           PasswordEncoder passwordEncoder, AuthenticationSupport authenticationSupport) {
+                           PasswordEncoder passwordEncoder, AuthenticationSupport authenticationSupport,
+                           RoleService roleService, WechatUserBindingService wechatUserBindingService) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
         this.roleRepository = roleRepository;
         this.loginSessionRedisDAO = loginSessionRedisDAO;
         this.passwordEncoder = passwordEncoder;
         this.authenticationSupport = authenticationSupport;
+        this.roleService = roleService;
+        this.wechatUserBindingService = wechatUserBindingService;
     }
 
     @Override
     public AuthLoginRespVO login(AuthLoginReqVO reqVO) {
+        AuthLoginRespVO response;
         if (authenticationSupport == null) {
-            return loginWithLocalDependencies(reqVO);
+            response = loginWithLocalDependencies(reqVO);
+        } else {
+            UserEntity user = authenticationSupport.authenticate(reqVO.getUserNo(), reqVO.getPassword());
+            response = authenticationSupport.createSession(user);
+            logger.info("[登录成功] userId: {}, userNo: {}", user.getId(), user.getUserNo());
         }
-        UserEntity user = authenticationSupport.authenticate(reqVO.getUserNo(), reqVO.getPassword());
-        AuthLoginRespVO response = authenticationSupport.createSession(user);
-        logger.info("[登录成功] userId: {}, userNo: {}", user.getId(), user.getUserNo());
+        applyWechatBinding(response, response.getUserId());
         return response;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long register(AuthRegisterReqVO reqVO) {
+        if (userRepository.existsByUserNoAndDeletedFalse(reqVO.getUserNo())) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_NO_DUPLICATE);
+        }
+        if (!roleService.isRegistrationRole(reqVO.getRoleId())) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_INVALID);
+        }
+
+        UserEntity user = new UserEntity();
+        user.setUserNo(reqVO.getUserNo());
+        user.setUserName(reqVO.getUserName());
+        user.setPassword(passwordEncoder.encode(reqVO.getPassword()));
+        user.setStatus(CommonStatusEnum.ENABLED.getStatus());
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ServiceException(SystemErrorCodeConstants.USER_NO_DUPLICATE);
+        }
+
+        UserRoleEntity relation = new UserRoleEntity();
+        relation.setUserId(user.getId());
+        relation.setRoleId(reqVO.getRoleId());
+        userRoleRepository.save(relation);
+        logger.info("[小程序注册成功] userId: {}, userNo: {}, roleId: {}",
+                user.getId(), user.getUserNo(), reqVO.getRoleId());
+        return user.getId();
     }
 
     private AuthLoginRespVO loginWithLocalDependencies(AuthLoginReqVO reqVO) {
@@ -150,7 +196,29 @@ public class AuthServiceImpl implements AuthService {
         respVO.setLineId(user.getLineId());
         respVO.setRoleCodes(roles.stream().map(RoleEntity::getRoleCode).toList());
         respVO.setRoleNames(roles.stream().map(RoleEntity::getRoleName).toList());
+        Optional<WechatUserBindingEntity> binding = findWechatBinding(userId);
+        respVO.setWechatBound(binding.isPresent());
+        binding.ifPresent(value -> {
+            respVO.setWechatBindingTime(value.getCreateTime());
+            respVO.setWechatLastLoginTime(value.getLastLoginTime());
+        });
         return respVO;
+    }
+
+    private void applyWechatBinding(AuthLoginRespVO response, Long userId) {
+        Optional<WechatUserBindingEntity> binding = findWechatBinding(userId);
+        response.setWechatBound(binding.isPresent());
+        binding.ifPresent(value -> {
+            response.setWechatBindingTime(value.getCreateTime());
+            response.setWechatLastLoginTime(value.getLastLoginTime());
+        });
+    }
+
+    private Optional<WechatUserBindingEntity> findWechatBinding(Long userId) {
+        if (wechatUserBindingService == null) {
+            return Optional.empty();
+        }
+        return wechatUserBindingService.findActiveByUserId(userId);
     }
 
     @Override

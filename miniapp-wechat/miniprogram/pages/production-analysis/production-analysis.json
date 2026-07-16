@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "生产分析" }
+{ "navigationStyle": "custom", "usingComponents": { "app-state": "/components/app-state/app-state" } }

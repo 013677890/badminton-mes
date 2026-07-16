@@ -23,10 +23,18 @@ public class SecurityWebConfig implements WebMvcConfigurer {
     /** 登录接口路径，唯一免登录白名单 */
     public static final String LOGIN_PATH = "/api/system/auth/login";
 
+    /** 账号密码登录、注册和注册职位查询公开路径 */
+    public static final String[] AUTH_PUBLIC_PATHS = {
+            LOGIN_PATH,
+            "/api/system/auth/register",
+            "/api/system/auth/registration_roles"
+    };
+
     /** 微信小程序免登录路径，仅用于换取身份和首次绑定 */
     public static final String[] MINI_APP_PUBLIC_PATHS = {
             "/api/system/mini_app/auth/login",
-            "/api/system/mini_app/auth/bind"
+            "/api/system/mini_app/auth/binding_codes/*/preview",
+            "/api/system/mini_app/auth/bind_by_code"
     };
 
     private final AuthInterceptor authInterceptor;
@@ -69,7 +77,7 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns(LOGIN_PATH)
+                .excludePathPatterns(AUTH_PUBLIC_PATHS)
                 .excludePathPatterns(MINI_APP_PUBLIC_PATHS);
     }
 }

@@ -21,6 +21,21 @@ public interface RoleService {
     List<RoleRespVO> getEnabledRoles();
 
     /**
+     * 查询允许在小程序中自助注册的职位。
+     *
+     * @return 可注册职位列表，按 id 升序
+     */
+    List<RoleRespVO> getRegistrationRoles();
+
+    /**
+     * 判断角色是否允许在小程序中自助注册。
+     *
+     * @param roleId 角色主键
+     * @return true 表示允许自助注册
+     */
+    boolean isRegistrationRole(Long roleId);
+
+    /**
      * 按角色反查启用用户(安灯按角色匹配处理人等场景)。
      *
      * @param roleId 角色主键

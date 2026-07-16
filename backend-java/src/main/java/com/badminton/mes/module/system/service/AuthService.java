@@ -4,6 +4,7 @@ import com.badminton.mes.module.system.controller.vo.AuthLoginReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthLoginRespVO;
 import com.badminton.mes.module.system.controller.vo.AuthPasswordReqVO;
 import com.badminton.mes.module.system.controller.vo.AuthProfileRespVO;
+import com.badminton.mes.module.system.controller.vo.AuthRegisterReqVO;
 
 /**
  * 认证 Service 接口：登录、登出、当前用户、修改本人密码。
@@ -29,6 +30,14 @@ public interface AuthService {
      *         锁定中或账户停用时抛出
      */
     AuthLoginRespVO login(AuthLoginReqVO reqVO);
+
+    /**
+     * 注册小程序账号并分配一个允许自助注册的职位。
+     *
+     * @param reqVO 注册请求
+     * @return 新用户主键
+     */
+    Long register(AuthRegisterReqVO reqVO);
 
     /**
      * 登出：删除当前请求 token 对应的会话，天然幂等。

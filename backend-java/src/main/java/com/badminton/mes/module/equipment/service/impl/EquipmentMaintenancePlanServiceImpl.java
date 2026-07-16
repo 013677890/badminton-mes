@@ -30,7 +30,15 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 设备保养计划 Service 实现。 */
+/**
+ * 设备保养计划 Service 实现。
+ *
+ * <p>Controller 通过接口调用本类。写方法在事务内锁定计划、设备和责任人相关数据，
+ * 避免计划保存期间设备被报废或责任人被停用；删除采用逻辑删除保留保养追溯链路。
+ *
+ * @author MES 开发组
+ * @date 2026/07/16
+ */
 @Service
 public class EquipmentMaintenancePlanServiceImpl implements EquipmentMaintenancePlanService {
 
@@ -56,6 +64,7 @@ public class EquipmentMaintenancePlanServiceImpl implements EquipmentMaintenance
         this.userRepository = userRepository;
     }
 
+    /** 创建设备保养计划并校验设备、责任人和计划编码。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createEquipmentMaintenancePlan(EquipmentMaintenancePlanSaveReqVO reqVO) {
@@ -76,6 +85,7 @@ public class EquipmentMaintenancePlanServiceImpl implements EquipmentMaintenance
         return plan.getId();
     }
 
+    /** 修改保养计划，已有执行记录时保护不应改变的关联关系。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateEquipmentMaintenancePlan(Long id, EquipmentMaintenancePlanSaveReqVO reqVO) {
@@ -114,6 +124,7 @@ public class EquipmentMaintenancePlanServiceImpl implements EquipmentMaintenance
         logger.info("[修改设备保养计划] id: {}, planCode: {}", id, existing.getPlanCode());
     }
 
+    /** 在业务规则允许时逻辑删除计划，并改写唯一编码释放占用。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteEquipmentMaintenancePlan(Long id) {
@@ -132,12 +143,14 @@ public class EquipmentMaintenancePlanServiceImpl implements EquipmentMaintenance
         logger.info("[删除设备保养计划] id: {}", id);
     }
 
+    /** 查询单条保养计划详情。 */
     @Override
     @Transactional(readOnly = true)
     public EquipmentMaintenancePlanRespVO getEquipmentMaintenancePlan(Long id) {
         return EquipmentMaintenancePlanConvert.toRespVO(validatePlanExists(id));
     }
 
+    /** 分页查询保养计划，并将越界页码收敛到最后一页。 */
     @Override
     @Transactional(readOnly = true)
     public PageResult<EquipmentMaintenancePlanRespVO> getEquipmentMaintenancePlanPage(

@@ -29,7 +29,13 @@ public final class SystemRedisKeyConstants {
     public static final int LOGIN_FAIL_MAX = 5;
 
     /** 微信小程序绑定票据 Key 模板，参数为随机票据 */
-    public static final String MINI_APP_BIND_TICKET = "mes:system:mini-app:bind-ticket:%s";
+    public static final String MINI_APP_BIND_TICKET = "mes:system:wechat-bind:ticket:%s";
+
+    /** 微信绑定结果 Key 模板，值为 WechatBindingResult JSON。 */
+    public static final String MINI_APP_BIND_RESULT = "mes:system:wechat-bind:result:%s";
+
+    /** 微信 access_token Key 模板，按 AppID 隔离。 */
+    public static final String WECHAT_ACCESS_TOKEN = "mes:system:wechat:access-token:%s";
 
     /**
      * 构造会话正查 Key。
@@ -69,6 +75,14 @@ public final class SystemRedisKeyConstants {
      */
     public static String miniAppBindTicketKey(String ticket) {
         return String.format(MINI_APP_BIND_TICKET, ticket);
+    }
+
+    public static String miniAppBindResultKey(String ticket) {
+        return String.format(MINI_APP_BIND_RESULT, ticket);
+    }
+
+    public static String wechatAccessTokenKey(String appId) {
+        return String.format(WECHAT_ACCESS_TOKEN, appId);
     }
 
     private SystemRedisKeyConstants() {
