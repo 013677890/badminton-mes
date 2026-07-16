@@ -108,3 +108,14 @@ export const RELEASE_STATUS_MAP: StatusMap = {
   RELEASED: { type: 'success', text: '已放行' },
   BLOCKED: { type: 'danger', text: '已阻断' },
 }
+
+/** 检验分类/项目的启停状态（后端 enabledStatus 字段，1 启用 / 0 停用）。 */
+export const INSPECTION_ENABLE_STATUS_MAP: StatusMap = {
+  1: { type: 'success', text: '启用' },
+  0: { type: 'danger', text: '停用' },
+}
+
+export const INSPECTION_ENABLE_STATUS_OPTIONS: OptionItem[] = [
+  { label: '启用', value: 1 },
+  { label: '停用', value: 0 },
+]

@@ -9,7 +9,14 @@ import {
 } from '@/constants/integration'
 import { DEVICE_VIEW_ROLES } from '@/constants/device'
 import { ANDON_VIEW_ROLES } from '@/constants/andon'
-import { SCENE_EXECUTION_ROLES } from '@/constants/scene'
+import { SCENE_EXECUTION_ROLES, SCENE_TASK_MANAGE_ROLES } from '@/constants/scene'
+import { QUALITY_VIEW_ROLES } from '@/constants/quality'
+import {
+  MAINTENANCE_PLAN_VIEW_ROLES,
+  MAINTENANCE_RECORD_READ_WRITE_ROLES,
+} from '@/constants/equipment'
+import { REPORT_VIEW_ROLES } from '@/constants/report'
+import { BARCODE_CONFIG_ROLES } from '@/constants/barcode'
 
 /**
  * 主框架菜单路由（树形，供侧边菜单/面包屑使用）。
@@ -221,14 +228,198 @@ export const menuRoutes: RouteRecordRaw[] = [
   },
   {
     path: '/scene',
-    redirect: '/scene/execution',
+    redirect: '/scene/tasks',
     meta: { title: '现场执行', icon: 'Guide', roles: SCENE_EXECUTION_ROLES },
     children: [
+      {
+        path: '/scene/tasks',
+        name: 'SceneTaskList',
+        component: () => import('@/views/scene/SceneTaskList.vue'),
+        meta: { title: '生产任务', roles: SCENE_TASK_MANAGE_ROLES },
+      },
+      {
+        path: '/scene/dispatches',
+        name: 'SceneDispatchList',
+        component: () => import('@/views/scene/SceneDispatchList.vue'),
+        meta: { title: '派工管理' },
+      },
+      {
+        path: '/scene/reports',
+        name: 'SceneWorkReportList',
+        component: () => import('@/views/scene/SceneWorkReportList.vue'),
+        meta: { title: '报工记录' },
+      },
+      {
+        path: '/scene/repairs',
+        name: 'SceneRepairList',
+        component: () => import('@/views/scene/SceneRepairList.vue'),
+        meta: { title: '返修工单' },
+      },
+      {
+        path: '/scene/product-statuses',
+        name: 'SceneProductStatusList',
+        component: () => import('@/views/scene/SceneProductStatusList.vue'),
+        meta: { title: '产品批次状态' },
+      },
       {
         path: '/scene/execution',
         name: 'SceneExecution',
         component: () => import('@/views/scene/SceneExecution.vue'),
         meta: { title: '现场执行操作台', roles: SCENE_EXECUTION_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/quality',
+    redirect: '/quality/inspection-records',
+    meta: { title: '质量管理', icon: 'Checked', roles: QUALITY_VIEW_ROLES },
+    children: [
+      {
+        path: '/quality/inspection-categories',
+        name: 'QualityInspectionCategoryList',
+        component: () => import('@/views/quality/QualityInspectionCategoryList.vue'),
+        meta: { title: '检验分类', roles: QUALITY_VIEW_ROLES },
+      },
+      {
+        path: '/quality/inspection-items',
+        name: 'QualityInspectionItemList',
+        component: () => import('@/views/quality/QualityInspectionItemList.vue'),
+        meta: { title: '检验项目', roles: QUALITY_VIEW_ROLES },
+      },
+      {
+        path: '/quality/inspection-plans',
+        name: 'QualityInspectionPlanList',
+        component: () => import('@/views/quality/QualityInspectionPlanList.vue'),
+        meta: { title: '检验方案', roles: QUALITY_VIEW_ROLES },
+      },
+      {
+        path: '/quality/inspection-records',
+        name: 'QualityInspectionRecordList',
+        component: () => import('@/views/quality/QualityInspectionRecordList.vue'),
+        meta: { title: '检验单', roles: QUALITY_VIEW_ROLES },
+      },
+    ],
+  },
+  {
+    path: '/equipment',
+    redirect: '/equipment/ledgers',
+    meta: { title: '设备管理', icon: 'Cpu' },
+    children: [
+      {
+        path: '/equipment/ledgers',
+        name: 'EquipmentLedgerList',
+        component: () => import('@/views/equipment/EquipmentLedgerList.vue'),
+        meta: { title: '设备台账' },
+      },
+      {
+        path: '/equipment/repair-orders',
+        name: 'EquipmentRepairOrderList',
+        component: () => import('@/views/equipment/EquipmentRepairOrderList.vue'),
+        meta: { title: '报修任务' },
+      },
+      {
+        path: '/equipment/maintenance-plans',
+        name: 'EquipmentMaintenancePlanList',
+        component: () => import('@/views/equipment/EquipmentMaintenancePlanList.vue'),
+        meta: { title: '保养计划', roles: MAINTENANCE_PLAN_VIEW_ROLES },
+      },
+      {
+        path: '/equipment/maintenance-records',
+        name: 'EquipmentMaintenanceRecordList',
+        component: () => import('@/views/equipment/EquipmentMaintenanceRecordList.vue'),
+        meta: { title: '保养记录', roles: MAINTENANCE_RECORD_READ_WRITE_ROLES },
+      },
+      {
+        path: '/equipment/categories',
+        name: 'EquipmentCategoryList',
+        component: () => import('@/views/equipment/EquipmentCategoryList.vue'),
+        meta: { title: '设备类别' },
+      },
+      {
+        path: '/equipment/fault-principles',
+        name: 'EquipmentFaultPrincipleList',
+        component: () => import('@/views/equipment/EquipmentFaultPrincipleList.vue'),
+        meta: { title: '故障原理' },
+      },
+      {
+        path: '/equipment/manufacturers',
+        name: 'EquipmentManufacturerList',
+        component: () => import('@/views/equipment/EquipmentManufacturerList.vue'),
+        meta: { title: '制造商' },
+      },
+    ],
+  },
+  {
+    path: '/barcode',
+    redirect: '/barcode/types',
+    meta: { title: '条码管理', icon: 'Ticket', roles: BARCODE_CONFIG_ROLES },
+    children: [
+      {
+        path: '/barcode/types',
+        name: 'BarcodeTypeList',
+        component: () => import('@/views/barcode/BarcodeTypeList.vue'),
+        meta: { title: '条码类型' },
+      },
+      {
+        path: '/barcode/rules',
+        name: 'BarcodeRuleList',
+        component: () => import('@/views/barcode/BarcodeRuleList.vue'),
+        meta: { title: '条码规则' },
+      },
+      {
+        path: '/barcode/templates',
+        name: 'BarcodeTemplateList',
+        component: () => import('@/views/barcode/BarcodeTemplateList.vue'),
+        meta: { title: '条码模板' },
+      },
+      {
+        path: '/barcode/instances',
+        name: 'BarcodeInstanceList',
+        component: () => import('@/views/barcode/BarcodeInstanceList.vue'),
+        meta: { title: '条码实例' },
+      },
+      {
+        path: '/barcode/application-rules',
+        name: 'BarcodeApplicationRuleList',
+        component: () => import('@/views/barcode/BarcodeApplicationRuleList.vue'),
+        meta: { title: '应用规则' },
+      },
+    ],
+  },
+  {
+    path: '/report',
+    redirect: '/report/production-outputs',
+    meta: { title: '报表分析', icon: 'TrendCharts', roles: REPORT_VIEW_ROLES },
+    children: [
+      {
+        path: '/report/production-outputs',
+        name: 'ProductionOutputReport',
+        component: () => import('@/views/report/ProductionOutputReport.vue'),
+        meta: { title: '产量报表' },
+      },
+      {
+        path: '/report/workshop-periods',
+        name: 'WorkshopPeriodReport',
+        component: () => import('@/views/report/WorkshopPeriodReport.vue'),
+        meta: { title: '车间时段报表' },
+      },
+      {
+        path: '/report/realtime-production',
+        name: 'RealtimeProductionView',
+        component: () => import('@/views/report/RealtimeProductionView.vue'),
+        meta: { title: '实时生产' },
+      },
+      {
+        path: '/report/defects',
+        name: 'DefectReportView',
+        component: () => import('@/views/report/DefectReportView.vue'),
+        meta: { title: '不良报表' },
+      },
+      {
+        path: '/report/traces',
+        name: 'ProductTraceView',
+        component: () => import('@/views/report/ProductTraceView.vue'),
+        meta: { title: '产品追溯' },
       },
     ],
   },

@@ -46,6 +46,16 @@ export function isMockSession(): boolean {
  * 字段访问得 undefined，列表/详情页均可安全渲染）；写操作返回统一业务错误。
  */
 function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse> {
+  // 演示模式导出返回空文件，避免下载逻辑报错
+  if (config.responseType === 'blob') {
+    return Promise.resolve({
+      data: new Blob([''], { type: 'application/octet-stream' }),
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config,
+    })
+  }
   const method = (config.method ?? 'get').toLowerCase()
   let body: ApiResult
   if (method === 'get') {
@@ -128,6 +138,10 @@ function isApiResult(data: unknown): data is ApiResult {
 
 service.interceptors.response.use(
   (response) => {
+    // 文件导出等二进制流：返回完整响应，供 download 读取响应头与文件名
+    if (response.config.responseType === 'blob') {
+      return response as never
+    }
     const body = response.data as ApiResult
     if (body.code !== SUCCESS_CODE) {
       ElMessage.error(body.userTip || body.message || '请求失败')
@@ -176,6 +190,46 @@ export function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig)
 
 export function del<T>(url: string, params?: object): Promise<T> {
   return service.delete(url, { params }) as Promise<T>
+}
+
+/** 从 Content-Disposition 解析下载文件名，解析失败回退 fallback */
+function parseFileName(disposition: string | undefined, fallback: string): string {
+  if (!disposition) return fallback
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  if (star?.[1]) return decodeURIComponent(star[1])
+  const plain = /filename="?([^";]+)"?/i.exec(disposition)
+  return plain?.[1] ?? fallback
+}
+
+/**
+ * 文件导出下载：以 blob 接收二进制流并触发浏览器下载。
+ * 后端导出异常时仍以 JSON CommonResult 返回，此处解析后走统一错误提示。
+ */
+export async function download(
+  url: string,
+  params?: object,
+  fallbackFileName = 'export',
+): Promise<void> {
+  const response = await service.get(url, { params, responseType: 'blob' })
+  const blob = response.data as Blob
+  // 业务异常（鉴权/校验失败）以 JSON 返回，需解析为 ApiError
+  if (blob.type.includes('application/json')) {
+    const result = JSON.parse(await blob.text()) as ApiResult
+    ElMessage.error(result.userTip || result.message || '导出失败')
+    throw new ApiError(result)
+  }
+  const fileName = parseFileName(
+    response.headers['content-disposition'] as string | undefined,
+    fallbackFileName,
+  )
+  const href = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = href
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(href)
 }
 
 export default service
