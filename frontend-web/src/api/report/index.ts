@@ -329,8 +329,16 @@ export interface ProductTraceRespVO {
 
 // ---------- 电子看板 ----------
 
-/** 看板快照结构由后端动态组装，前端按需取值 */
-export type KanbanSnapshot = Record<string, unknown>
+/** 电子看板快照（KanbanSnapshotServiceImpl） */
+export interface KanbanSnapshot {
+  snapshotTime?: string
+  lastRefreshTime?: string
+  /** FRESH / PARTIAL，后端后续可扩展其他状态 */
+  dataStatus?: string
+  sourceWarnings: string[]
+  version?: number
+  overview: RealtimeProductionOverview
+}
 
 // ---------- 产量报表接口 ----------
 

@@ -424,6 +424,34 @@ export const menuRoutes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/kanban',
+    redirect: '/kanban/central',
+    meta: { title: '电子看板', icon: 'DataBoard', roles: REPORT_VIEW_ROLES },
+    children: [
+      {
+        path: '/kanban/line',
+        name: 'LineKanban',
+        component: () => import('@/views/kanban/KanbanBoardView.vue'),
+        props: { mode: 'line' },
+        meta: { title: '产线看板' },
+      },
+      {
+        path: '/kanban/workshop',
+        name: 'WorkshopKanban',
+        component: () => import('@/views/kanban/KanbanBoardView.vue'),
+        props: { mode: 'workshop' },
+        meta: { title: '车间看板' },
+      },
+      {
+        path: '/kanban/central',
+        name: 'CentralKanban',
+        component: () => import('@/views/kanban/KanbanBoardView.vue'),
+        props: { mode: 'central' },
+        meta: { title: '中控看板' },
+      },
+    ],
+  },
+  {
     path: '/demo',
     redirect: '/demo/table',
     meta: { title: '组件示例', icon: 'Grid' },

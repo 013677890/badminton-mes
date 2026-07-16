@@ -126,6 +126,11 @@ const businessEntries: DemoEntry[] = [
     description: '报工审核与生产完工单创建、审核、作废操作台',
     path: '/scene/execution',
   },
+  {
+    title: '电子看板',
+    description: '产线、车间与中控实时指标，集中展示生产进度、质量、设备及安灯异常',
+    path: '/kanban/central',
+  },
 ]
 
 const demoEntries: DemoEntry[] = [
