@@ -18,9 +18,9 @@ import jakarta.persistence.LockModeType;
  * @date 2026/07/13
  */
 @Repository("integrationDeviceCountExceptionRepository")
-public interface DeviceCountExceptionRepository
-        extends JpaRepository<DeviceCountExceptionEntity, Long>,
-        JpaSpecificationExecutor<DeviceCountExceptionEntity> {
+public interface IntegrationDeviceCountExceptionRepository
+        extends JpaRepository<IntegrationDeviceCountExceptionEntity, Long>,
+        JpaSpecificationExecutor<IntegrationDeviceCountExceptionEntity> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

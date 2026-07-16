@@ -91,12 +91,12 @@ async function handleRowAction(key: string, row: SceneProductStatus) {
   }
 }
 
-function normalizeParams(params: Record<string, any>) {
+function normalizeParams(params: Record<string, any>): SceneProductStatusPageParams {
   const next = { ...params }
   if (next.taskId) next.taskId = Number(next.taskId)
   if (next.abnormal === 'true') next.abnormal = true
   else if (next.abnormal === 'false') next.abnormal = false
-  return next
+  return next as SceneProductStatusPageParams
 }
 </script>
 

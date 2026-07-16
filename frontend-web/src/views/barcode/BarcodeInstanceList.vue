@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'
 import FilterTable from '@/components/business/FilterTable.vue'
@@ -42,13 +42,13 @@ onMounted(async () => {
 
 const opsRef = ref<InstanceType<typeof BarcodeInstanceOps>>()
 
-const filterFields: FilterField[] = [
+const filterFields = computed<FilterField[]>(() => [
   { prop: 'barcodeValue', label: '条码值', type: 'input' },
   { prop: 'batchNo', label: '批次号', type: 'input' },
-  { prop: 'barcodeTypeId', label: '条码类型', type: 'select', options: typeOptions },
+  { prop: 'barcodeTypeId', label: '条码类型', type: 'select', options: typeOptions.value },
   { prop: 'sourceType', label: '来源', type: 'select', options: BARCODE_SOURCE_OPTIONS },
   { prop: 'barcodeStatus', label: '状态', type: 'select', options: BARCODE_STATUS_OPTIONS },
-]
+])
 
 const columns: ColumnDef<BarcodeInstance>[] = [
   { prop: 'barcodeValue', label: '条码值', minWidth: 180 },

@@ -35,7 +35,20 @@ public class RealtimeProductionServiceImpl implements RealtimeProductionService 
     @Override
     @Transactional(readOnly = true)
     public RealtimeProductionRespVO.Overview overview(RealtimeReportQueryReqVO reqVO) {
-        List<RealtimeTask> rows = query(reqVO);
+        ReportDataScope scope = dataScopeService.resolve(reqVO.getWorkshopId(), reqVO.getLineId());
+        return buildOverview(reqVO, scope);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RealtimeProductionRespVO.Overview overviewForKanban(RealtimeReportQueryReqVO reqVO) {
+        ReportDataScope scope = new ReportDataScope(reqVO.getWorkshopId(), reqVO.getLineId());
+        return buildOverview(reqVO, scope);
+    }
+
+    private RealtimeProductionRespVO.Overview buildOverview(RealtimeReportQueryReqVO reqVO,
+                                                              ReportDataScope scope) {
+        List<RealtimeTask> rows = query(reqVO, scope);
         RealtimeProductionRespVO.Overview result = new RealtimeProductionRespVO.Overview();
         result.setActiveTaskCount(rows.stream().filter(row -> row.taskStatus() == 3).count());
         result.setPausedTaskCount(rows.stream().filter(row -> row.taskStatus() == 4).count());
@@ -44,7 +57,6 @@ public class RealtimeProductionServiceImpl implements RealtimeProductionService 
         result.setInputQuantity(rows.stream().mapToLong(row -> zero(row.inputQuantity())).sum());
         result.setGoodQuantity(rows.stream().mapToLong(row -> zero(row.goodQuantity())).sum());
         result.setDefectQuantity(rows.stream().mapToLong(row -> zero(row.defectQuantity())).sum());
-        ReportDataScope scope = dataScopeService.resolve(reqVO.getWorkshopId(), reqVO.getLineId());
         RealtimeSupport support = repository.loadRealtimeSupport(scope.workshopId(), scope.lineId());
         result.setEquipmentTotalCount(support.equipmentTotalCount());
         result.setRunningEquipmentCount(support.runningEquipmentCount());
@@ -60,11 +72,11 @@ public class RealtimeProductionServiceImpl implements RealtimeProductionService 
     @Override
     @Transactional(readOnly = true)
     public List<RealtimeProductionRespVO.Task> tasks(RealtimeReportQueryReqVO reqVO) {
-        return query(reqVO).stream().map(this::toTask).toList();
+        ReportDataScope scope = dataScopeService.resolve(reqVO.getWorkshopId(), reqVO.getLineId());
+        return query(reqVO, scope).stream().map(this::toTask).toList();
     }
 
-    private List<RealtimeTask> query(RealtimeReportQueryReqVO reqVO) {
-        ReportDataScope scope = dataScopeService.resolve(reqVO.getWorkshopId(), reqVO.getLineId());
+    private List<RealtimeTask> query(RealtimeReportQueryReqVO reqVO, ReportDataScope scope) {
         return repository.listRealtimeTasks(scope.workshopId(), scope.lineId(), reqVO.getProductId());
     }
 

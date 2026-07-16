@@ -213,10 +213,10 @@ async function handleRowAction(key: string, row: SceneDispatchOrder) {
           <template #default="scope">
             <StatusTag
               v-if="col.statusMap"
-              :status="scope.row[col.prop]"
+              :status="scope.row[col.prop] as string | number"
               :status-map="col.statusMap"
             />
-            <template v-else-if="col.formatter">{{ col.formatter(scope.row) }}</template>
+              <template v-else-if="col.formatter">{{ col.formatter(scope.row as SceneDispatchDetail) }}</template>
             <template v-else>{{ scope.row[col.prop] ?? '-' }}</template>
           </template>
         </el-table-column>

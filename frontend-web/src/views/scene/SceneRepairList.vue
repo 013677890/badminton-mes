@@ -46,7 +46,10 @@ async function handleCreate() {
   if (!valid) return
   createLoading.value = true
   try {
-    const id = await createRepairWorkOrder(createForm)
+    const id = await createRepairWorkOrder({
+      ...createForm,
+      sourceReportId: createForm.sourceReportId!,
+    })
     ElMessage.success(`返修工单 #${id} 已创建`)
     createForm.sourceReportId = undefined
     createForm.batchNo = ''

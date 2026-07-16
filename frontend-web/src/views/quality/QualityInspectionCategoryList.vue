@@ -10,7 +10,6 @@ import { useFormDialog } from '@/composables/useFormDialog'
 import {
   INSPECTION_ENABLE_STATUS_MAP,
   INSPECTION_ENABLE_STATUS_OPTIONS,
-  QUALITY_VIEW_ROLES,
   QUALITY_WRITE_ROLES,
 } from '@/constants/quality'
 import {

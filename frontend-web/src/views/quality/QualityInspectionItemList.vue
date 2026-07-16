@@ -184,6 +184,8 @@ async function handleRowAction(key: string, row: InspectionItem) {
       ...row,
       unit: row.unit ?? '',
       standardValue: row.standardValue ?? '',
+      lowerLimit: row.lowerLimit ?? undefined,
+      upperLimit: row.upperLimit ?? undefined,
       inspectionMethod: row.inspectionMethod ?? '',
       remark: row.remark ?? '',
     })

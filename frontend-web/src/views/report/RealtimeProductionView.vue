@@ -73,8 +73,8 @@ function handleReset() {
   tasks.value = []
 }
 
-function toggleAutoRefresh(value: boolean) {
-  if (value) {
+function toggleAutoRefresh(value: string | number | boolean) {
+  if (value === true) {
     resume()
   } else {
     pause()

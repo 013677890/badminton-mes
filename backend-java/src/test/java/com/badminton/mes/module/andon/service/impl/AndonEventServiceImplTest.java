@@ -199,7 +199,7 @@ class AndonEventServiceImplTest {
     @DisplayName("开始处理安灯事件：非指派人且无指派角色时拒绝操作")
     void startProcessingRejectsUnauthorizedOperator() {
         // 使用普通角色的其他用户，刻意同时绕开“本人”和“指派角色”两条授权路径。
-        setLoginUser(999L, List.of("OPERATOR"));
+        setLoginUser(999L, List.of("INSPECTOR"));
         when(eventRepository.findByIdAndDeletedFalseForUpdate(EVENT_ID))
                 .thenReturn(Optional.of(buildEvent("CONFIRMED")));
 

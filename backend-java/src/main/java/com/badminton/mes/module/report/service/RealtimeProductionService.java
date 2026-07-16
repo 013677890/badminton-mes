@@ -16,6 +16,13 @@ public interface RealtimeProductionService {
     /** 查询实时生产总览。 */
     RealtimeProductionRespVO.Overview overview(RealtimeReportQueryReqVO reqVO);
 
+    /**
+     * 由系统看板任务查询实时生产总览，不依赖 HTTP 登录上下文。
+     *
+     * <p>仅供服务端受控的看板快照调用，调用方必须传入其允许发布的车间、产线范围。</p>
+     */
+    RealtimeProductionRespVO.Overview overviewForKanban(RealtimeReportQueryReqVO reqVO);
+
     /** 查询当前在制任务。 */
     List<RealtimeProductionRespVO.Task> tasks(RealtimeReportQueryReqVO reqVO);
 }

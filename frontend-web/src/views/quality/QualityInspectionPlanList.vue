@@ -29,7 +29,6 @@ import {
 } from '@/api/quality/inspectionPlan'
 import type {
   InspectionPlan,
-  InspectionPlanItemSaveReq,
   InspectionPlanPageParams,
   InspectionPlanSaveReq,
 } from '@/api/quality/inspectionPlan'
@@ -111,8 +110,16 @@ const { data, loading, pagination, query, reset, refresh, onPageChange } = useTa
   InspectionPlanPageParams
 >({ fetcher: getInspectionPlanPage })
 
-interface PlanItemForm extends InspectionPlanItemSaveReq {
+interface PlanItemForm {
   _uid: number
+  inspectionItemId: number | undefined
+  sortOrder?: number | null
+  sampleQuantity: number
+  requiredFlag?: boolean | null
+  standardValue?: string | null
+  lowerLimit?: number | null
+  upperLimit?: number | null
+  judgmentMethod?: string | null
 }
 
 let itemUidSeed = 0
@@ -145,6 +152,10 @@ const dialog = useFormDialog<PlanForm>(
         ElMessage.warning('请至少添加一个检验项目')
         throw new Error('empty items')
       }
+      if (model.items.some((item) => !item.inspectionItemId)) {
+        ElMessage.warning('请选择每一行的检验项目')
+        throw new Error('missing inspection item')
+      }
       const payload: InspectionPlanSaveReq = {
         planCode: model.planCode,
         planName: model.planName,
@@ -152,7 +163,10 @@ const dialog = useFormDialog<PlanForm>(
         effectiveDate: model.effectiveDate || undefined,
         defaultFlag: model.defaultFlag,
         remark: model.remark || undefined,
-        items: model.items.map(({ _uid: _, ...rest }) => rest),
+        items: model.items.map(({ _uid: _, inspectionItemId, ...rest }) => ({
+          ...rest,
+          inspectionItemId: inspectionItemId!,
+        })),
       }
       if (mode === 'create') {
         await createInspectionPlan(payload)

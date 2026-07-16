@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'
 import FilterTable from '@/components/business/FilterTable.vue'
 import FormDialog from '@/components/base/FormDialog.vue'
@@ -32,7 +32,6 @@ import {
 import type {
   InspectionRecord,
   InspectionRecordPageParams,
-  InspectionResult,
   InspectionResultSaveReq,
   InspectionRecordSubmitReq,
 } from '@/api/quality/inspectionRecord'
