@@ -10,6 +10,12 @@ docker compose up -d --build
 
 开发环境启动时，Flyway 会创建并写入从 `2026-07-05` 到容器当前日期的演示工单、生产任务、派工明细、批次状态和报工事实数据，供生产报表、实时生产和电子看板联调使用。
 
+只读接口冒烟测试会从前端 API 客户端自动提取路径，经 Nginx 逐条请求，不会写入业务数据：
+
+```powershell
+.\scripts\test-api-readonly.ps1
+```
+
 如需完全重建本地数据库与演示数据：
 
 ```powershell

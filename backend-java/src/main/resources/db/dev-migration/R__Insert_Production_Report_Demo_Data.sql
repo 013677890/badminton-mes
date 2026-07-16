@@ -139,7 +139,9 @@ JOIN (
 JOIN craft_process p ON p.process_code = steps.process_code
 WHERE d.dispatch_no LIKE 'PD-DEMO-%';
 
--- 每任务两道工序、每道工序四次报工，共生成 8 × 天数 × 产品数条事实数据。
+-- 每任务两道工序、每道工序 250 次报工。以 5/6 件合格与少量不良的组合，
+-- 保持单任务的 input/good/defect 汇总与 prod_task 快照一致。
+-- 当前 12 天、2 种产品时生成 12,000 条事实数据，供报表分页与看板压力联调使用。
 INSERT INTO prod_report (
     report_no, request_no, task_id, dispatch_detail_id, process_id, batch_no,
     report_type, record_type, user_id, input_quantity, good_quantity,
@@ -149,11 +151,20 @@ SELECT
     CONCAT('RPT-DEMO-', DATE_FORMAT(t.plan_date, '%Y%m%d'), '-', t.id, '-', d.seq, '-', n.step_no),
     CONCAT('REQ-DEMO-', t.id, '-', d.id, '-', n.step_no),
     t.id, d.id, d.process_id, t.batch_no,
-    1, 1, 1, 350, 340, 10, 2, 2,
-    t.plan_start_time + INTERVAL (n.step_no * 2 + d.seq) HOUR
+    1, 1, 1,
+    CASE WHEN n.step_no <= 110 THEN 6 ELSE 5 END + CASE WHEN n.step_no <= 40 THEN 1 ELSE 0 END,
+    CASE WHEN n.step_no <= 110 THEN 6 ELSE 5 END,
+    CASE WHEN n.step_no <= 40 THEN 1 ELSE 0 END,
+    0, 2,
+    TIMESTAMP(t.plan_date, '08:00:00') + INTERVAL ((n.step_no - 1) * 2 + d.seq * 15) MINUTE
 FROM prod_task t
 JOIN prod_process_dispatch_detail d ON d.task_id = t.id AND d.is_deleted = 0
 JOIN (
-    SELECT 1 AS step_no UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+    WITH RECURSIVE report_series AS (
+        SELECT 1 AS step_no
+        UNION ALL
+        SELECT step_no + 1 FROM report_series WHERE step_no < 250
+    )
+    SELECT step_no FROM report_series
 ) n
 WHERE t.task_no LIKE 'TASK-DEMO-%';
