@@ -43,6 +43,7 @@ public class CraftRouteChildService {
      * @return 路线子记录
      */
     public CraftRouteChildren load(Long routeId) {
+        // 产品按主键、步骤按工序顺序稳定读取，保证接口响应和审计快照具备确定性。
         return new CraftRouteChildren(
                 productRepository.findByRouteIdAndDeletedFalseOrderByProductIdAsc(routeId),
                 detailRepository.findByRouteIdAndDeletedFalseOrderBySequenceNoAsc(routeId));
@@ -62,6 +63,7 @@ public class CraftRouteChildService {
             List<Long> productIds,
             List<CraftRouteStepSaveReqVO> steps,
             Long operatorId) {
+        // 草稿编辑采用整组替换，避免逐条差异更新遗漏已从请求中移除的子记录。
         deleteAll(routeId, operatorId);
         return create(routeId, productIds, steps, operatorId);
     }
@@ -81,6 +83,7 @@ public class CraftRouteChildService {
             List<CraftRouteStepSaveReqVO> steps,
             Long operatorId) {
 
+        // 先在内存构造两类实体，再分别批量写入，避免每条关系单独往返数据库。
         List<CraftRouteProductEntity> products = productIds.stream()
                 .map(productId -> buildProduct(routeId, productId, operatorId))
                 .toList();
@@ -102,6 +105,7 @@ public class CraftRouteChildService {
      */
     public CraftRouteChildren cloneTo(
             Long newRouteId, CraftRouteChildren source, Long operatorId) {
+        // 克隆只复制业务字段，不复用旧主键、审计人和默认路线标记。
         List<CraftRouteProductEntity> products = source.products().stream()
                 .map(relation -> buildProduct(newRouteId, relation.getProductId(), operatorId))
                 .toList();
@@ -121,6 +125,7 @@ public class CraftRouteChildService {
      * @param operatorId 操作人主键
      */
     public void activateDefaults(Long routeId, List<Long> productIds, Long operatorId) {
+        // 必须先清除同产品的其他默认关系，再标记当前路线，维持每个产品唯一默认路线。
         productRepository.clearOtherDefaults(productIds, routeId, operatorId);
         productRepository.markRouteAsDefault(routeId, operatorId);
     }
@@ -142,6 +147,7 @@ public class CraftRouteChildService {
      * @param operatorId 操作人主键
      */
     public void deleteAll(Long routeId, Long operatorId) {
+        // 子记录采用逻辑删除保留版本审计；先明细后产品关系与聚合结构方向一致。
         detailRepository.logicDeleteByRouteId(routeId, operatorId);
         productRepository.logicDeleteByRouteId(routeId, operatorId);
     }
@@ -158,6 +164,7 @@ public class CraftRouteChildService {
         CraftRouteProductEntity relation = new CraftRouteProductEntity();
         relation.setRouteId(routeId);
         relation.setProductId(productId);
+        // 草稿创建和版本克隆均不能自动成为默认路线，默认标记只在审核生效时切换。
         relation.setDefaultRoute(false);
         relation.setCreateBy(operatorId);
         relation.setUpdateBy(operatorId);

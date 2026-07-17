@@ -170,10 +170,12 @@ public final class BarcodeTemplateConvert {
     private static String resolveSampleContent(BarcodeTemplateFieldEntity field,
                                                String sampleBarcodeValue,
                                                Map<String, String> sampleData) {
+        // 条码和二维码字段展示同一条码事实，不受自定义 dataSource 样例值覆盖。
         if (BarcodeTemplateFieldTypeEnum.carriesBarcodeValue(field.getFieldType())
                 && StringUtils.hasText(sampleBarcodeValue)) {
             return sampleBarcodeValue;
         }
+        // 普通文本字段按配置的数据源键取值；未提供样例映射时保留空内容供前端占位。
         return sampleData == null ? null : sampleData.get(field.getDataSource());
     }
 

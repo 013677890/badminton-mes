@@ -1,6 +1,7 @@
 import { logout, refreshProfile, unbindAccount } from '../../services/auth'
 import { getDataSourceMode, getMockScenario, MockScenario, setMockScenario } from '../../services/config'
 import { MiniAppLoginResponse } from '../../types/api'
+// 个人页先展示本地用户快照，再尝试刷新服务端档案；网络失败时保留最近一次成功数据。
 Page({
   data: { user: {} as MiniAppLoginResponse, roleText: '', isAdmin: false, workshopText: '未分配车间', lineText: '未分配产线', mode: '', scenario: '', dialog: '', processing: false },
   onShow() { this.getTabBar?.()?.setData({ selected: 3 }); void this.loadUser() },

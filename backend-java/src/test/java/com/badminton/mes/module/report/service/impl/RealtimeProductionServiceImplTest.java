@@ -9,7 +9,6 @@ import com.badminton.mes.module.report.service.ReportDataScopeService.ReportData
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -17,8 +16,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /** 实时生产总览、任务映射和空值聚合单元测试。 @author 范家权 */
@@ -65,7 +64,8 @@ class RealtimeProductionServiceImplTest {
         assertThat(result.getLastRefreshTime()).isNotNull();
         assertThat(result.getDataStatus()).isEqualTo("PARTIAL");
         assertThat(result.getWarnings()).singleElement().asString().contains("OEE");
-        verify(dataScopeService, times(2)).resolve(10L, 20L);
+        // overview 只在入口解析一次数据范围，后续任务和支持指标查询复用同一范围对象。
+        verify(dataScopeService).resolve(10L, 20L);
     }
 
     @Test
@@ -104,6 +104,21 @@ class RealtimeProductionServiceImplTest {
         assertThat(result.getInputQuantity()).isZero();
         assertThat(result.getGoodQuantity()).isZero();
         assertThat(result.getDefectQuantity()).isZero();
+    }
+
+    @Test
+    void kanbanOverviewUsesSystemScopeWithoutLoginContext() {
+        // 电子看板使用系统级查询范围，不应依赖当前登录用户的数据权限上下文。
+        when(repository.listRealtimeTasks(null, null, null)).thenReturn(List.of());
+        when(repository.loadRealtimeSupport(null, null))
+                .thenReturn(new RealtimeSupport(3, 2, 1, 4, 1));
+
+        var result = service.overviewForKanban(new RealtimeReportQueryReqVO());
+
+        assertThat(result.getEquipmentTotalCount()).isEqualTo(3);
+        assertThat(result.getOpenAndonCount()).isEqualTo(4);
+        verify(repository).listRealtimeTasks(null, null, null);
+        verifyNoInteractions(dataScopeService);
     }
 
     private static RealtimeReportQueryReqVO request() {

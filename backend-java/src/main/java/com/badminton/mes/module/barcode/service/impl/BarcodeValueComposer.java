@@ -105,12 +105,15 @@ public final class BarcodeValueComposer {
     public static List<String> validate(int serialLength, List<RuleSegment> segments) {
         List<String> errors = new ArrayList<>();
         if (segments == null || segments.isEmpty()) {
+            // 明细为空时后续无法判断唯一性与长度，直接返回最根本的配置错误。
             errors.add("规则组成明细不能为空");
             return errors;
         }
 
+        // 顺序号在最终拼接时决定段位置，因此必须在同一规则内保持唯一。
         Set<Integer> seqSet = new HashSet<>();
         int serialCount = 0;
+        // 仅累计当前配置能够静态确定的长度；变量未限定长度时留到生成阶段做硬校验。
         int knownLength = 0;
         for (RuleSegment segment : segments) {
             if (segment.seq() != null && !seqSet.add(segment.seq())) {
@@ -134,6 +137,7 @@ public final class BarcodeValueComposer {
                     if (dateError != null) {
                         errors.add(dateError);
                     } else {
+                        // 使用固定样例日期实际格式化，避免只校验格式串语法却漏掉输出长度。
                         knownLength += SAMPLE_DATE.format(
                                 DateTimeFormatter.ofPattern(segment.dateFormat())).length();
                     }
@@ -147,6 +151,7 @@ public final class BarcodeValueComposer {
                 }
                 case SERIAL -> {
                     serialCount++;
+                    // 流水号的展示宽度由规则主表统一控制，明细若重复声明则必须保持一致。
                     if (segment.itemLength() != null && segment.itemLength() != serialLength) {
                         errors.add("组成顺序 " + segment.seq() + " 的流水号段长度与规则流水位数不一致");
                     }
@@ -175,11 +180,13 @@ public final class BarcodeValueComposer {
     public static List<ComposedSegment> composeSegments(List<RuleSegment> segments, ComposeContext context) {
         List<ComposedSegment> composed = new ArrayList<>();
         int totalLength = 0;
+        // 实体查询顺序不作为业务顺序依据，统一按规则明细的 seq 排序后再生成。
         List<RuleSegment> ordered = segments.stream()
                 .sorted(Comparator.comparing(RuleSegment::seq))
                 .toList();
         for (RuleSegment segment : ordered) {
             String content = composeSegment(segment, context);
+            // 在保留分段结果的同时累计真实长度，以覆盖不定长变量带来的动态超限场景。
             totalLength += content.length();
             composed.add(new ComposedSegment(segment.seq(), segment.itemType(), content));
         }
@@ -213,6 +220,7 @@ public final class BarcodeValueComposer {
      */
     public static long serialCapacity(int serialLength) {
         long capacity = 1;
+        // 逐位乘十可直接表达十进制位数容量，避免浮点 Math.pow 带来的转换误差。
         for (int i = 0; i < serialLength; i++) {
             capacity *= 10;
         }
@@ -236,8 +244,10 @@ public final class BarcodeValueComposer {
             case CONSTANT -> segment.itemValue();
             case DATE -> {
                 try {
+                    // 日期值取自本次业务上下文，保证同一批条码不会因执行跨日而出现日期分裂。
                     yield context.date().format(DateTimeFormatter.ofPattern(segment.dateFormat()));
                 } catch (RuntimeException e) {
+                    // 配置可能绕过保存校验或来自历史数据，生成阶段仍需兜底转换为统一业务异常。
                     throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_RULE_CONFIG_INVALID,
                             "组成顺序 " + segment.seq() + " 的日期格式不合法");
                 }
@@ -256,6 +266,7 @@ public final class BarcodeValueComposer {
      */
     private static String composeVariable(RuleSegment segment, ComposeContext context) {
         BarcodeRuleVariableEnum variable = BarcodeRuleVariableEnum.of(segment.itemValue());
+        // 变量名只负责选择上下文字段，不在组合器内查询产品或产线，避免生成循环产生数据库访问。
         String value = switch (variable) {
             case PRODUCT_CODE -> context.productCode();
             case LINE_CODE -> context.lineCode();
@@ -276,10 +287,12 @@ public final class BarcodeValueComposer {
      */
     private static String composeSerial(ComposeContext context) {
         long capacity = serialCapacity(context.serialLength());
+        // 从 1 开始且严禁溢出后回绕，否则会与数据库中已经生成的条码值发生冲突。
         if (context.serial() > capacity || context.serial() < 1) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_RULE_SERIAL_CAPACITY_EXCEEDED,
                     "流水号 " + context.serial() + " 超出规则容量 " + capacity);
         }
+        // 左侧补零只影响展示形式，Redis/MySQL 中仍以数值流水号维护递增事实。
         return String.format("%0" + context.serialLength() + "d", context.serial());
     }
 
@@ -294,6 +307,7 @@ public final class BarcodeValueComposer {
             return "组成顺序 " + segment.seq() + " 的日期格式不能为空";
         }
         try {
+            // 用实际日期执行一次格式化，可同时发现非法模式字符及运行期格式化错误。
             SAMPLE_DATE.format(DateTimeFormatter.ofPattern(segment.dateFormat()));
             return null;
         } catch (RuntimeException e) {

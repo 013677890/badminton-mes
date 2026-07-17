@@ -25,7 +25,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
-/** 物料主档 Controller。 */
+/**
+ * 物料主档 Controller。
+ *
+ * <p>Controller 仅负责 HTTP 参数校验、权限声明和响应包装；物料引用、单位锁和逻辑删除规则由 Service 统一处理。
+ */
 @RestController
 @RequestMapping("/api/production/materials")
 @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC,
@@ -34,19 +38,19 @@ public class MaterialController {
 
     private final MaterialService materialService;
 
-    /** @param materialService 物料主档服务 */
+    /** 构造器注入物料主档 Service。 */
     public MaterialController(MaterialService materialService) {
         this.materialService = materialService;
     }
 
-    /** @param reqVO 物料创建请求 @return 新物料主键 */
+    /** 创建物料主档并返回数据库生成的主键。 */
     @PostMapping
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Long> createMaterial(@Valid @RequestBody MaterialSaveReqVO reqVO) {
         return CommonResult.success(materialService.createMaterial(reqVO));
     }
 
-    /** @param id 物料主键 @param reqVO 物料修改请求 @return 空数据成功响应 */
+    /** 修改物料主档；单位不可变和引用校验由 Service 执行。 */
     @PutMapping("/{id}")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> updateMaterial(@PathVariable("id") @Positive Long id,
@@ -55,7 +59,7 @@ public class MaterialController {
         return CommonResult.success(null);
     }
 
-    /** @param id 物料主键 @param version 预期版本 @return 空数据成功响应 */
+    /** 逻辑删除物料，使用乐观锁版本避免旧页面删除新数据。 */
     @DeleteMapping("/{id}")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> deleteMaterial(@PathVariable("id") @Positive Long id,
@@ -64,7 +68,7 @@ public class MaterialController {
         return CommonResult.success(null);
     }
 
-    /** @param id 物料主键 @param reqVO 状态变更请求 @return 空数据成功响应 */
+    /** 启用或停用物料，停用前由 Service 检查生效 BOM 和活动工单。 */
     @PutMapping("/{id}/status")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> updateMaterialStatus(@PathVariable("id") @Positive Long id,
@@ -73,13 +77,13 @@ public class MaterialController {
         return CommonResult.success(null);
     }
 
-    /** @param id 物料主键 @return 物料详情 */
+    /** 查询未删除物料详情并转换为响应 VO。 */
     @GetMapping("/{id}")
     public CommonResult<MaterialRespVO> getMaterial(@PathVariable("id") @Positive Long id) {
         return CommonResult.success(materialService.getMaterial(id));
     }
 
-    /** @param reqVO 分页筛选条件 @return 物料分页结果 */
+    /** 按物料编码、名称、类型、单位、关键物料标识和状态查询分页结果。 */
     @GetMapping("/page")
     public CommonResult<PageResult<MaterialRespVO>> getMaterialPage(@Valid MaterialPageReqVO reqVO) {
         return CommonResult.success(materialService.getMaterialPage(reqVO));

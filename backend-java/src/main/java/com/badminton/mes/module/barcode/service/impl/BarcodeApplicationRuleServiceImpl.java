@@ -97,6 +97,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createBarcodeApplicationRule(BarcodeApplicationRuleSaveReqVO reqVO) {
+        // 先验证对象、来源以及类型/规则/模板引用，避免无效外键语义进入应用规则表。
         validateSaveRequest(reqVO);
         boolean defaultFlag = resolveDefaultFlag(reqVO);
         // 新规则默认启用，启用默认规则需预检唯一性；并发窗口由 uk_active_default 兜底
@@ -104,10 +105,12 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
             validateNoActiveDefault(reqVO, null);
         }
 
+        // 创建状态统一为启用；默认标记缺省值已经在服务层归一化为明确布尔值。
         BarcodeApplyRuleEntity applyRule = BarcodeApplicationRuleConvert.toEntity(reqVO);
         applyRule.setDefaultFlag(defaultFlag);
         applyRule.setStatus(CommonStatusEnum.ENABLED.getStatus());
         try {
+            // 立即 flush 触发活动默认规则的生成列唯一索引，兜住并发创建窗口。
             barcodeApplyRuleRepository.saveAndFlush(applyRule);
         } catch (DataIntegrityViolationException e) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_DEFAULT_DUPLICATE);
@@ -121,6 +124,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateBarcodeApplicationRule(Long id, BarcodeApplicationRuleSaveReqVO reqVO) {
+        // 读取现有状态用于决定默认规则唯一性是否生效；更新接口本身不改变启停状态。
         BarcodeApplyRuleEntity existing = validateApplyRuleExists(id);
         validateSaveRequest(reqVO);
         boolean defaultFlag = resolveDefaultFlag(reqVO);
@@ -131,6 +135,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
 
         int rows;
         try {
+            // Repository 使用条件更新并只覆盖业务字段，状态和逻辑删除标记保持不变。
             rows = barcodeApplyRuleRepository.updateInfo(id, reqVO.getObjectType(), reqVO.getProductId(),
                     reqVO.getMaterialId(), reqVO.getBarcodeTypeId(), reqVO.getBarcodeMode(),
                     reqVO.getRuleId(), reqVO.getTemplateId(), reqVO.getSourceType(), defaultFlag);
@@ -156,6 +161,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
         }
         validateBarcodeTemplateAvailable(applyRule.getTemplateId());
         if (Boolean.TRUE.equals(applyRule.getDefaultFlag())) {
+            // 默认规则按“对象 + 条码类型”检查，产品与物料统一折算为当前规则的对象主键。
             Long objectId = applyRule.getProductId() != null
                     ? applyRule.getProductId() : applyRule.getMaterialId();
             if (barcodeApplyRuleRepository.countActiveDefault(applyRule.getObjectType(), objectId,
@@ -166,6 +172,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
 
         int rows;
         try {
+            // CAS 只允许从停用切换到启用，重复请求不会产生无意义更新。
             rows = barcodeApplyRuleRepository.updateStatus(id, CommonStatusEnum.DISABLED.getStatus(),
                     CommonStatusEnum.ENABLED.getStatus());
         } catch (DataIntegrityViolationException e) {
@@ -182,6 +189,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableBarcodeApplicationRule(Long id) {
+        // 条件更新把当前状态判断与写入合并为原子操作，避免并发启停互相覆盖。
         int rows = barcodeApplyRuleRepository.updateStatus(id, CommonStatusEnum.ENABLED.getStatus(),
                 CommonStatusEnum.DISABLED.getStatus());
         if (rows == 0) {
@@ -197,10 +205,12 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
     public void deleteBarcodeApplicationRule(Long id) {
         validateApplyRuleExists(id);
         // 接口契约"删除未使用应用规则"：已生成条码即视为已使用
+        // 条码主表保留 apply_rule_id 历史来源，因此存在任何活动条码时必须阻止删除规则。
         if (barcodeRepository.existsByApplyRuleIdAndDeletedFalse(id)) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_IN_USE_NOT_DELETE);
         }
 
+        // Repository 通过条件逻辑删除避免并发重复删除，返回 0 表示记录已在检查后发生变化。
         int rows = barcodeApplyRuleRepository.logicDeleteById(id);
         if (rows == 0) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_NOT_EXISTS);
@@ -220,6 +230,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
     public PageResult<BarcodeApplicationRuleRespVO> getBarcodeApplicationRulePage(
             BarcodeApplicationRulePageReqVO reqVO) {
         Specification<BarcodeApplyRuleEntity> specification = BarcodeApplyRuleSpecifications.page(reqVO);
+        // 总数为零时直接返回标准空分页，不再执行内容查询。
         long total = barcodeApplyRuleRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
@@ -227,6 +238,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
 
         int pageSize = reqVO.getPageSize();
         int totalPages = (int) ((total + pageSize - 1) / pageSize);
+        // 请求页码超过末页时返回最后一页，保证分页元信息与内容一致。
         int pageNo = Math.min(reqVO.getPageNo(), totalPages);
         PageRequest pageRequest = PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "id"));
         Page<BarcodeApplyRuleEntity> page = barcodeApplyRuleRepository.findAll(specification, pageRequest);
@@ -250,12 +262,14 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
      * @param reqVO 保存请求
      */
     private void validateSaveRequest(BarcodeApplicationRuleSaveReqVO reqVO) {
+        // 对象类型决定产品/物料字段的互斥关系，并同时验证对应主数据处于启用状态。
         validateObjectMatch(reqVO);
         if (BarcodeSourceTypeEnum.RULE_GENERATE.getType().equals(reqVO.getSourceType())
                 && reqVO.getRuleId() == null) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_RULE_REQUIRED);
         }
         // 停用类型不允许新建应用规则(02-条码应用需求分析)
+        // 引用主数据逐项验证，避免新规则绑定已停用类型、规则或模板。
         validateBarcodeTypeAvailable(reqVO.getBarcodeTypeId());
         if (reqVO.getRuleId() != null) {
             validateBarcodeRuleAvailable(reqVO.getRuleId(), reqVO.getBarcodeTypeId());
@@ -270,6 +284,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
      */
     private void validateObjectMatch(BarcodeApplicationRuleSaveReqVO reqVO) {
         if (BarcodeApplyObjectTypeEnum.PRODUCT.getType().equals(reqVO.getObjectType())) {
+            // 产品规则必须且只能提供 productId，防止同一规则同时归属产品和物料。
             if (reqVO.getProductId() == null || reqVO.getMaterialId() != null) {
                 throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_OBJECT_MISMATCH);
             }
@@ -281,6 +296,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
             return;
         }
 
+        // 非产品分支按物料规则处理，必须且只能提供 materialId。
         if (reqVO.getMaterialId() == null || reqVO.getProductId() != null) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_OBJECT_MISMATCH);
         }
@@ -308,6 +324,7 @@ public class BarcodeApplicationRuleServiceImpl implements BarcodeApplicationRule
      * @param excludeId 排除的应用规则主键，创建时为 null
      */
     private void validateNoActiveDefault(BarcodeApplicationRuleSaveReqVO reqVO, Long excludeId) {
+        // 产品和物料规则统一转换为对象主键后执行同一条数据库统计语义。
         Long objectId = reqVO.getProductId() != null ? reqVO.getProductId() : reqVO.getMaterialId();
         long count = barcodeApplyRuleRepository.countActiveDefault(reqVO.getObjectType(), objectId,
                 reqVO.getBarcodeTypeId(), excludeId, CommonStatusEnum.ENABLED.getStatus());

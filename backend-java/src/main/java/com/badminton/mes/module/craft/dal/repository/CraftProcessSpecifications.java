@@ -29,9 +29,11 @@ public final class CraftProcessSpecifications {
     public static Specification<CraftProcessEntity> page(CraftProcessPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 软删除是所有工序分页的固定条件，调用方筛选项统一以 AND 方式追加。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
 
             if (StringUtils.hasText(reqVO.getProcessCode())) {
+                // 编码按写入规则转大写并执行前缀查询，兼顾用户输入习惯与索引利用。
                 String codePrefix = reqVO.getProcessCode().trim().toUpperCase(Locale.ROOT) + "%";
                 predicates.add(criteriaBuilder.like(root.get("processCode"), codePrefix));
             }
@@ -39,6 +41,7 @@ public final class CraftProcessSpecifications {
                 predicates.add(criteriaBuilder.like(root.get("processName"), reqVO.getProcessName().trim() + "%"));
             }
             if (StringUtils.hasText(reqVO.getProcessType())) {
+                // 工序类型是标准化枚举文本，使用等值查询而非模糊匹配。
                 String processType = reqVO.getProcessType().trim().toUpperCase(Locale.ROOT);
                 predicates.add(criteriaBuilder.equal(root.get("processType"), processType));
             }

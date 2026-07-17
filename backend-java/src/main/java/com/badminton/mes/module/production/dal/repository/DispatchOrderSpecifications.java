@@ -28,6 +28,7 @@ public final class DispatchOrderSpecifications {
      */
     public static Specification<DispatchOrderEntity> page(DispatchPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
+            // 动态条件只拼接请求中实际提供的字段，并始终保留逻辑删除过滤，保证 count 与列表口径一致。
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (reqVO.getWorkOrderId() != null) {
@@ -43,16 +44,20 @@ public final class DispatchOrderSpecifications {
                 predicates.add(criteriaBuilder.equal(root.get("dispatchStatus"), reqVO.getDispatchStatus()));
             }
             if (reqVO.getPlanDateBegin() != null) {
+                // 起始日期使用闭区间，包含用户选择的第一天。
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(
                         root.get("planDate"), reqVO.getPlanDateBegin()));
             }
             if (reqVO.getPlanDateEnd() != null) {
+                // 结束日期同样使用闭区间，包含用户选择的最后一天。
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("planDate"), reqVO.getPlanDateEnd()));
             }
+            // 所有筛选条件使用 AND，避免不同条件之间产生超出页面预期的 OR 结果集。
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
     }
 
     private DispatchOrderSpecifications() {
+        // 仅提供静态 Specification 工厂，不允许实例化。
     }
 }

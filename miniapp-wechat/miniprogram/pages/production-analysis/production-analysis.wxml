@@ -1,3 +1,4 @@
+<!-- 生产分析指标由后端按时间区间聚合，页面不自行计算百分比。 -->
 <view class="analysis-page">
   <view class="page-top"><image class="title-icon" src="/assets/tabbar/analysis-selected.png" mode="aspectFit"/><text>生产分析</text><view class="refresh-touch" bindtap="retry"><image src="/assets/icons/refresh.svg" mode="aspectFit"/></view></view>
   <view class="analysis-content">

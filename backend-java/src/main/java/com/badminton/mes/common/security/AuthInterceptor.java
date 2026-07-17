@@ -51,12 +51,14 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
+        // 只从标准 Authorization 请求头取 Bearer token，避免把 URL 参数或请求体中的敏感信息当作凭证。
         String token = resolveBearerToken(request);
         if (!StringUtils.hasText(token)) {
             throw new ServiceException(GlobalErrorCodeConstants.UNAUTHORIZED);
         }
         LoginUser loginUser = loginSessionReader.resolve(token)
                 .orElseThrow(() -> new ServiceException(GlobalErrorCodeConstants.UNAUTHORIZED));
+        // 先完成角色校验，再写入线程上下文；校验失败时不会遗留当前请求的登录信息。
         checkRoles(handlerMethod, loginUser);
         SecurityContextHolder.set(token, loginUser);
         return true;
@@ -65,6 +67,7 @@ public class AuthInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response,
                                 Object handler, Exception ex) {
+        // 请求结束后必须清理 ThreadLocal，防止 Web 容器线程复用时串用上一个用户的身份。
         SecurityContextHolder.clear();
     }
 
@@ -79,6 +82,7 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (!StringUtils.hasText(header) || !header.startsWith(BEARER_PREFIX)) {
             return null;
         }
+        // 去掉方案前缀和首尾空白后再交给会话读取器，避免把格式字符带入 Redis 查询。
         return header.substring(BEARER_PREFIX.length()).trim();
     }
 
@@ -94,11 +98,13 @@ public class AuthInterceptor implements HandlerInterceptor {
         if (requiresRoles == null) {
             requiresRoles = handlerMethod.getBeanType().getAnnotation(RequiresRoles.class);
         }
+        // 没有声明角色要求的接口只需要登录即可访问，不额外限制业务角色。
         if (requiresRoles == null) {
             return;
         }
         List<String> ownedRoles = loginUser.getRoleCodes() == null ? List.of() : loginUser.getRoleCodes();
         for (String required : requiresRoles.value()) {
+            // 角色注解采用“任一命中即可”规则；命中后立即返回，避免无意义地继续遍历。
             if (ownedRoles.contains(required)) {
                 return;
             }

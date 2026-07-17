@@ -45,6 +45,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ServiceException.class)
     public ResponseEntity<CommonResult<Void>> handleServiceException(ServiceException exception) {
+        // 业务异常已经携带稳定错误码；日志记录内部定位信息，响应只返回前端约定的错误结构。
         ErrorCode errorCode = exception.getErrorCode();
         logger.warn("[业务异常] code: {}, message: {}", errorCode.code(), exception.getMessage());
         return buildResponse(errorCode, exception.getMessage());
@@ -60,6 +61,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<CommonResult<Void>> handleMethodArgumentNotValidException(
             MethodArgumentNotValidException exception) {
         String detail = exception.getBindingResult().getFieldErrors().stream()
+                // 将字段名和校验消息拼成可读文本，便于前端日志定位具体输入项。
                 .map(fieldError -> fieldError.getField() + ": " + fieldError.getDefaultMessage())
                 .collect(Collectors.joining("; "));
         logger.warn("[参数校验失败] {}", detail);
@@ -118,6 +120,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<CommonResult<Void>> handleException(Exception exception) {
+        // 未知异常不把堆栈和数据库信息返回给用户，只在服务端保留完整堆栈供排查。
         logger.error("[系统未知异常] errorMessage: {}", exception.getMessage(), exception);
         return buildResponse(GlobalErrorCodeConstants.SYSTEM_ERROR,
                 GlobalErrorCodeConstants.SYSTEM_ERROR.message());
@@ -134,6 +137,7 @@ public class GlobalExceptionHandler {
      * @return 带 HTTP 状态码的统一响应
      */
     private ResponseEntity<CommonResult<Void>> buildResponse(ErrorCode errorCode, String message) {
+        // 先声明状态变量，再根据错误码来源分级映射 HTTP 状态，避免 Controller 各自处理异常协议。
         HttpStatus status;
         if (GlobalErrorCodeConstants.UNAUTHORIZED.code().equals(errorCode.code())) {
             status = HttpStatus.UNAUTHORIZED;
@@ -149,6 +153,7 @@ public class GlobalExceptionHandler {
                 default -> HttpStatus.INTERNAL_SERVER_ERROR;
             };
         }
+        // CommonResult 负责响应体，ResponseEntity 负责 HTTP 状态，两层协议同时满足前后端约定。
         return ResponseEntity.status(status).body(CommonResult.error(errorCode, message));
     }
 }

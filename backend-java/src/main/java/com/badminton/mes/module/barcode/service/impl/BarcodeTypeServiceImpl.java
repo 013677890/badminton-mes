@@ -71,8 +71,10 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
         }
 
         BarcodeTypeEntity barcodeType = BarcodeTypeConvert.toEntity(reqVO);
+        // 创建时统一启用，状态变更必须通过独立启停接口执行，避免保存请求混入状态副作用。
         barcodeType.setStatus(CommonStatusEnum.ENABLED.getStatus());
         try {
+            // 立即 flush 触发数据库编码唯一索引，处理并发创建穿透应用层预检的情况。
             barcodeTypeRepository.saveAndFlush(barcodeType);
         } catch (DataIntegrityViolationException e) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_TYPE_CODE_DUPLICATE);
@@ -85,6 +87,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateBarcodeType(Long id, BarcodeTypeSaveReqVO reqVO) {
+        // 先区分不存在错误，再检查排除自身后的活动编码唯一性，给前端返回准确提示。
         validateBarcodeTypeExists(id);
         if (barcodeTypeRepository.existsByTypeCodeAndIdNotAndDeletedFalse(reqVO.getTypeCode(), id)) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_TYPE_CODE_DUPLICATE);
@@ -92,6 +95,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
 
         int rows;
         try {
+            // 条件更新只修改未删除记录，类型状态不随基础信息修改而变化。
             rows = barcodeTypeRepository.updateInfo(id, reqVO.getTypeCode(), reqVO.getTypeName(),
                     reqVO.getApplyObject());
         } catch (DataIntegrityViolationException e) {
@@ -109,6 +113,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void enableBarcodeType(Long id) {
+        // 一条 CAS SQL 同时校验原状态并完成启用，避免先查后改造成并发覆盖。
         int rows = barcodeTypeRepository.updateStatus(id, CommonStatusEnum.DISABLED.getStatus(),
                 CommonStatusEnum.ENABLED.getStatus());
         if (rows == 0) {
@@ -123,6 +128,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableBarcodeType(Long id) {
+        // 仅启用类型能够转为停用，未命中时回查实体以区分不存在和已停用。
         int rows = barcodeTypeRepository.updateStatus(id, CommonStatusEnum.ENABLED.getStatus(),
                 CommonStatusEnum.DISABLED.getStatus());
         if (rows == 0) {
@@ -140,6 +146,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
         // 已被条码规则或应用规则使用的类型不允许删除(02-条码应用需求分析)
         boolean inUse = barcodeRuleRepository.existsByBarcodeTypeIdAndDeletedFalse(id)
                 || barcodeApplyRuleRepository.existsByBarcodeTypeIdAndDeletedFalse(id);
+        // 任一规则引用都说明类型已经参与条码配置，逻辑删除会破坏历史规则解释，因此直接拒绝。
         if (inUse) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_TYPE_IN_USE_NOT_DELETE);
         }
@@ -181,6 +188,7 @@ public class BarcodeTypeServiceImpl implements BarcodeTypeService {
     @Override
     @Transactional(readOnly = true)
     public List<BarcodeTypeRespVO> getEnabledBarcodeTypeOptions() {
+        // 下拉选项只读取启用且未删除类型，并按业务编码排序以保持界面顺序稳定。
         return BarcodeTypeConvert.toRespVOList(
                 barcodeTypeRepository.findByStatusAndDeletedFalseOrderByTypeCodeAsc(
                         CommonStatusEnum.ENABLED.getStatus()));

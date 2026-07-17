@@ -1,26 +1,28 @@
 # ----------------------------------------------------------------------------
-# 羽毛球 MES 本地/测试环境编排：MySQL 8.4 + Redis + 后端应用
+# 羽毛球 MES 本地/测试环境编排：MySQL 8.4 + Redis + Spring Boot + Vue
 #
 # 使用：
-#   1. cp .env.example .env 并填写密码(.env 已被 .gitignore 忽略，不入库)
-#   2. docker compose up -d --build
-#   3. 应用地址 http://localhost:8080，Flyway 启动时自动建表并写入种子数据
+#   1. docker compose up -d --build
+#   2. 浏览器打开 http://localhost （管理员：admin / admin123）
+#   3. Flyway 自动建表，并在 dev 配置下写入 2026-07-05 至当前日期的演示数据
+#
+# 可选：复制 .env.example 为 .env 覆盖数据库密码、CORS 或微信小程序配置。
 # ----------------------------------------------------------------------------
 
 services:
 
   mysql:
-    image: mysql:8.4
+    image: ${MES_DOCKER_MIRROR:-docker.m.daocloud.io/library}/mysql:8.4
     container_name: mes-mysql
     environment:
       # 与应用容器同时区，保证 NOW() 写入的业务时间一致
       TZ: Asia/Shanghai
       MYSQL_DATABASE: badminton_mes
-      # :? 强制从 .env 提供，杜绝默认密码入库(安全规约：敏感信息禁止明文存储)
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      # 仅用于本地一键体验；实际部署请在 .env 或编排平台注入强密码。
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
       # 容器首次初始化时创建应用专用账号，并只授予 MYSQL_DATABASE 对应库的权限。
-      MYSQL_USER: ${MES_DB_USERNAME:?请在 .env 中设置 MES_DB_USERNAME}
-      MYSQL_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
+      MYSQL_USER: ${MES_DB_USERNAME:-mes}
+      MYSQL_PASSWORD: ${MES_DB_PASSWORD:-change-me}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
@@ -35,7 +37,7 @@ services:
       - "127.0.0.1:13306:3306"
 
   redis:
-    image: redis:8.0-alpine
+    image: ${MES_DOCKER_MIRROR:-docker.m.daocloud.io/library}/redis:8.0-alpine
     container_name: mes-redis
     # 开启 AOF 持久化：工单号当日流水计数存于 Redis，重启不丢、单号不重复
     command: ["redis-server", "--appendonly", "yes"]
@@ -53,6 +55,9 @@ services:
   backend:
     build:
       context: ./backend-java
+      args:
+        DOCKER_MIRROR: ${MES_DOCKER_MIRROR:-docker.m.daocloud.io/library}
+        GRADLE_MAVEN_MIRROR: ${MES_GRADLE_MAVEN_MIRROR:-https://maven.aliyun.com/repository/public}
     image: badminton-mes/backend:dev
     container_name: mes-backend
     environment:
@@ -61,12 +66,14 @@ services:
       # 服务间通过 compose 网络别名互访，主机名即服务名
       MES_DB_URL: jdbc:mysql://mysql:3306/badminton_mes?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai
       MES_DB_USERNAME: ${MES_DB_USERNAME:-mes}
-      MES_DB_PASSWORD: ${MES_DB_PASSWORD:?请在 .env 中设置 MES_DB_PASSWORD}
+      MES_DB_PASSWORD: ${MES_DB_PASSWORD:-change-me}
       MES_REDIS_HOST: redis
       MES_REDIS_PORT: "6379"
       MES_CORS_ALLOWED_ORIGINS: ${MES_CORS_ALLOWED_ORIGINS:-http://localhost:5173}
+      # 真实微信联调必须显式提供 AppID 和密钥，缺失时让 Compose 在启动前直接报错。
       MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:?请在 .env 中设置 MES_WECHAT_MINI_APP_ID}
       MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:?请在 .env 中设置 MES_WECHAT_MINI_APP_SECRET}
+      # develop/trial/release 决定后端生成的小程序码指向哪个微信版本。
       MES_WECHAT_CODE_ENV_VERSION: ${MES_WECHAT_CODE_ENV_VERSION:-develop}
       # Clash Fake-IP/TUN 下让容器经主机 TCP 桥接使用 Clash，不影响 MySQL/Redis 等连接。
       # 未设置时使用本地默认值；显式设置为空字符串可在生产环境关闭代理并直连微信。
@@ -84,6 +91,21 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend-web
+      args:
+        DOCKER_MIRROR: ${MES_DOCKER_MIRROR:-docker.m.daocloud.io/library}
+        NPM_REGISTRY: ${MES_NPM_REGISTRY:-https://registry.npmmirror.com}
+    image: badminton-mes/frontend:dev
+    container_name: mes-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

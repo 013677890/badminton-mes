@@ -51,6 +51,7 @@ public class CraftProcessAuditService {
      */
     public void record(Long processId, CraftProcessChangeTypeEnum changeType,
                        Object beforeValue, Object afterValue, String reason, Long operatorId) {
+        // 前后快照在写入日志实体前同步序列化，失败时让外层业务事务整体回滚。
         CraftProcessChangeLogEntity changeLog = new CraftProcessChangeLogEntity();
         changeLog.setProcessId(processId);
         changeLog.setChangeType(changeType.getType());
@@ -70,11 +71,13 @@ public class CraftProcessAuditService {
      */
     private String serialize(Object value, Long processId) {
         if (value == null) {
+            // 创建操作没有前快照、删除操作没有后快照，数据库中按 null 明确表达缺省侧。
             return null;
         }
         try {
             return objectMapper.writeValueAsString(value);
         } catch (RuntimeException exception) {
+            // 审计快照是业务变更的组成部分，序列化失败不能静默提交主数据。
             logger.error("[工序快照生成失败] processId: {}, errorMessage: {}",
                     processId, exception.getMessage(), exception);
             throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR, "工序变更快照生成失败");

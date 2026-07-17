@@ -26,8 +26,9 @@ withDefaults(
 )
 
 const emit = defineEmits<{
-  query: [params: Record<string, any>]
-  reset: [params: Record<string, any>]
+  /** 透传 FilterBar 的原始参数，避免限制各业务页的专用查询参数类型。 */
+  query: [params: any]
+  reset: [params: any]
   'page-change': [page: { pageNo: number; pageSize: number }]
   'selection-change': [rows: Row[]]
   'row-action': [key: string, row: Row]

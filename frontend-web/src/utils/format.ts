@@ -42,3 +42,29 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, wait = 200) 
     timer = window.setTimeout(() => fn(...args), wait)
   }
 }
+
+/**
+ * 将 JSON 字符串快照格式化为缩进展示文本，解析失败降级返回原文。
+ * 用于接口日志 / 异常池的 requestSnapshot 行内展开展示。
+ */
+export function formatSnapshot(snapshot: string | null | undefined): string {
+  if (!snapshot) return '-'
+  try {
+    return JSON.stringify(JSON.parse(snapshot), null, 2)
+  } catch {
+    return snapshot
+  }
+}
+
+/**
+ * 解析 JSON 快照为对象，解析失败返回 null。
+ * 用于异常池重试时从 requestSnapshot 预填表单。
+ */
+export function parseSnapshot<T = Record<string, any>>(snapshot: string | null | undefined): T | null {
+  if (!snapshot) return null
+  try {
+    return JSON.parse(snapshot) as T
+  } catch {
+    return null
+  }
+}

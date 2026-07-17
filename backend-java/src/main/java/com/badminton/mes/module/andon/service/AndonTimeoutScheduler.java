@@ -38,6 +38,7 @@ public class AndonTimeoutScheduler {
             initialDelayString = "${mes.andon.timeout-scan-initial-delay-ms:60000}",
             fixedDelayString = "${mes.andon.timeout-scan-interval-ms:60000}")
     public void processTimeoutEvents() {
+        // 调度层只触发业务入口；候选查询、逐条事务隔离和失败审计全部由事件服务统一处理。
         eventService.processTimeoutEvents();
     }
 }

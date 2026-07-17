@@ -27,7 +27,9 @@ public final class BarcodeApplyRuleSpecifications {
     public static Specification<BarcodeApplyRuleEntity> page(BarcodeApplicationRulePageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 软删除条件必须固定加入，防止分页接口把历史规则重新暴露给前端。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
+            // 仅为请求中实际传入的维度追加等值条件，未传条件不限制查询范围。
             if (reqVO.getObjectType() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("objectType"), reqVO.getObjectType()));
             }

@@ -3,6 +3,7 @@ import { connectDashboardRealtime, DashboardRealtimeConnection, DashboardRealtim
 import { handleSessionExpired } from '../../services/session'
 import { Overview, RealtimeDashboard, Task } from '../../types/api'
 type ViewTask = Task & { progress: number }
+// 看板优先使用实时推送；连接不可用时自动切换为一分钟轮询，并在页面离开时释放资源。
 Page({
   data: {
     overview: {} as Overview,
@@ -17,6 +18,7 @@ Page({
   timer: 0 as unknown as number,
   realtimeConnection: null as DashboardRealtimeConnection | null,
   onShow() {
+    // 前台进入时先加载完整快照，再建立增量实时连接。
     this.getTabBar?.()?.setData({ selected: 0 })
     this.stopPolling()
     void this.load()
@@ -52,6 +54,7 @@ Page({
     this.applyRealtimeUpdate(result)
   },
   applyRealtimeUpdate(update: DashboardRealtimeUpdate) {
+    // 实时消息可能只包含部分字段，因此基于当前快照合并后再计算展示进度。
     const sourceTasks = update.tasks || this.data.tasks
     const tasks = sourceTasks.map(task => ({
       ...task,
@@ -96,6 +99,7 @@ Page({
     else this.startPolling()
   },
   startPolling() {
+    // 同一页面只保留一个兜底定时器，避免重连期间重复请求。
     if (this.timer) return
     this.timer = setInterval(() => { void this.load() }, 60000)
   },

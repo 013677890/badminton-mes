@@ -1,3 +1,4 @@
+<!-- 个人页汇总账号、组织、角色和微信绑定信息，敏感操作通过确认弹窗二次确认。 -->
 <view class="profile-page">
   <view class="profile-top"><view class="top-icon"></view><text>我的</text><view class="top-icon"></view></view>
   <view class="profile-content">

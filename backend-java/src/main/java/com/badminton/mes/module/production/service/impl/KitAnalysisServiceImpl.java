@@ -105,6 +105,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Integer analyzeWorkOrder(Long workOrderId) {
+        // 工单行锁把“读取需求、重算结果、更新工单状态”串成一次数据库事务，避免两个分析请求互相覆盖。
         // 悲观锁锁工单行：串行化"软删旧结果+插新结果"，防并发重算残留双份
         WorkOrderEntity workOrder = workOrderRepository.findByIdForUpdate(workOrderId)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
@@ -122,6 +123,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
                 materialStockRepository.findByMaterialIdInAndDeletedFalse(materialIds).stream()
                         .collect(Collectors.toMap(MaterialStockEntity::getMaterialId, Function.identity(),
                                 (first, second) -> first));
+        // 库存按物料批量回查并转成 Map；库存缺失时由 calculateLine 按零可用量处理，结果仍完整落库。
 
         LocalDateTime analysisTime = LocalDateTime.now();
         List<KitAnalysisEntity> results = new ArrayList<>(materials.size());
@@ -132,6 +134,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
             results.add(result);
         }
 
+        // 先逻辑删除上一版结果，再插入本次快照；不物理删除，便于保留历史分析记录和审计依据。
         kitAnalysisRepository.softDeleteByWorkOrderId(workOrderId);
         kitAnalysisRepository.saveAll(results);
         workOrderRepository.updateKitStatus(workOrderId, orderKitStatus);
@@ -144,6 +147,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(readOnly = true)
     public List<KitAnalysisRespVO> getKitResult(Long workOrderId) {
+        // 只读取当前有效分析结果；物料主档单独批量回查，避免每条结果触发一次数据库查询。
         List<KitAnalysisEntity> results = kitAnalysisRepository.findByWorkOrderIdAndDeletedFalse(workOrderId);
         if (results.isEmpty()) {
             return List.of();
@@ -170,6 +174,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(readOnly = true)
     public List<ShortageBoardRespVO> getShortageBoard() {
+        // 聚合查询先在数据库按物料汇总欠料，再批量补齐物料名称；看板不加载每个工单明细，降低查询量。
         List<ShortageBoardProjection> aggregates = kitAnalysisRepository.aggregateShortageBoard();
         if (aggregates.isEmpty()) {
             return List.of();
@@ -184,6 +189,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
             respVO.setTotalShortage(aggregate.getTotalShortage());
             respVO.setAffectedOrderCount(aggregate.getAffectedOrderCount());
             respVO.setTransitQuantity(aggregate.getTransitQuantity());
+            // 只取最近一条处理中记录，用于展示预计到料日期；已解决记录不影响当前看板。
             kitShortageHandleRepository
                     .findFirstByMaterialIdAndHandleStatusAndDeletedFalseOrderByIdDesc(
                             aggregate.getMaterialId(), ShortageHandleStatusEnum.PROCESSING.getStatus())
@@ -195,6 +201,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(readOnly = true)
     public List<ShortageOrderRespVO> getShortageOrdersByMaterial(Long materialId) {
+        // 先筛出欠料行，再按工单主键批量回查工单信息，避免按欠料行逐条查询工单。
         List<KitAnalysisEntity> lines = kitAnalysisRepository
                 .findByMaterialIdAndShortageQuantityGreaterThanAndDeletedFalse(materialId, BigDecimal.ZERO);
         if (lines.isEmpty()) {
@@ -222,6 +229,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createShortageHandle(ShortageHandleSaveReqVO reqVO) {
+        // 先确认工单存在，再写入处理中记录；主键关系校验失败时不产生孤立处理单。
         workOrderRepository.findByIdAndDeletedFalse(reqVO.getWorkOrderId())
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         KitShortageHandleEntity entity = new KitShortageHandleEntity();
@@ -233,6 +241,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
         entity.setHandleRemark(reqVO.getHandleRemark());
         entity.setHandleStatus(ShortageHandleStatusEnum.PROCESSING.getStatus());
         entity.setCreateBy(SecurityContextHolder.getRequiredLoginUserId());
+        // 处理记录初始状态固定为处理中，后续通过 CAS 更新为已解决，保证重复点击不会重复完成。
         kitShortageHandleRepository.save(entity);
         return entity.getId();
     }
@@ -240,6 +249,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void resolveShortageHandle(Long id) {
+        // 使用状态条件 UPDATE 实现幂等完成：只有仍为处理中时才允许本次请求改变状态。
         int rows = kitShortageHandleRepository.updateHandleStatus(id,
                 ShortageHandleStatusEnum.PROCESSING.getStatus(), ShortageHandleStatusEnum.RESOLVED.getStatus());
         if (rows == 1) {
@@ -255,6 +265,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     @Override
     @Transactional(readOnly = true)
     public List<ShortageHandleRespVO> getShortageHandles(Long workOrderId) {
+        // 按工单倒序读取处理轨迹；物料档案采用一次批量查询，响应仅暴露展示所需字段。
         List<KitShortageHandleEntity> handles =
                 kitShortageHandleRepository.findByWorkOrderIdAndDeletedFalseOrderByIdDesc(workOrderId);
         if (handles.isEmpty()) {
@@ -290,6 +301,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
      */
     private KitAnalysisEntity calculateLine(WorkOrderMaterialEntity material,
                                             MaterialStockEntity stock, LocalDateTime analysisTime) {
+        // 已领数量先从需求中扣除，再与扣除锁定、在检后的净可用库存比较；所有负数按业务规则归零。
         BigDecimal issued = material.getIssuedQuantity() == null ? BigDecimal.ZERO : material.getIssuedQuantity();
         BigDecimal remain = material.getRequireQuantity().subtract(issued);
         BigDecimal available = BigDecimal.ZERO;
@@ -332,6 +344,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
      * @return 物料 id -> 物料实体
      */
     private Map<Long, MaterialEntity> loadMaterialMap(List<Long> materialIds) {
+        // 去重后一次性访问物料表；Map 的合并函数用于防止异常重复数据导致转换阶段失败。
         return materialRepository.findByIdInAndDeletedFalse(materialIds.stream().distinct().toList())
                 .stream()
                 .collect(Collectors.toMap(MaterialEntity::getId, Function.identity(), (first, second) -> first));
@@ -347,6 +360,7 @@ public class KitAnalysisServiceImpl implements KitAnalysisService {
     private void fillMaterialInfo(MaterialEntity material,
                                   Consumer<String> codeConsumer,
                                   Consumer<String> nameConsumer) {
+        // 分析结果允许保留物料历史记录，即使档案后来被逻辑删除；找不到档案时不阻断整批响应。
         if (material != null) {
             codeConsumer.accept(material.getMaterialCode());
             nameConsumer.accept(material.getMaterialName());

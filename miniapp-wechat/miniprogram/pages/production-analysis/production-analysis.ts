@@ -4,6 +4,7 @@ import { ProductionSummary } from '../../types/api'
 
 const periods = ['今日', '近7天', '近30天']
 
+// 每次进入页面或切换周期时重新计算时间范围，聚合指标由后端统一生成。
 const padDatePart = (value: number) => String(value).padStart(2, '0')
 
 const formatLocalDateTime = (date: Date) =>
@@ -23,6 +24,7 @@ Page({
   async load() {
     this.setData({ state: 'loading', error: '' })
     const now = new Date()
+    // 周期只决定查询起点；完成率、不良率等业务指标不在页面重复计算。
     const days = this.data.period === periods[2] ? 30 : this.data.period === periods[1] ? 7 : 1
     const start = new Date(now)
     start.setDate(now.getDate() - (days - 1))

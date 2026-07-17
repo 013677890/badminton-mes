@@ -134,6 +134,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRoute(CraftRouteSaveReqVO reqVO) {
+        // 路线编码与版本先规范化，再使用数据库最终值校验版本族唯一性。
         normalizeSaveRequest(reqVO);
         validateCodeVersion(reqVO.getRoutingCode(), reqVO.getRoutingVersion(), null);
         referenceValidator.validateForSave(reqVO.getProductIds(), reqVO.getSteps());
@@ -143,8 +144,10 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         route.setRoutingStatus(CraftRouteStatusEnum.DRAFT.getStatus());
         route.setCreateBy(operatorId);
         route.setUpdateBy(operatorId);
+        // 先保存主表取得 routeId，产品关系和工序步骤才能在同一事务内建立外键关联。
         saveRoute(route);
 
+        // 子记录整体创建完成后再生成聚合快照，确保审计内容与本次提交完全一致。
         CraftRouteChildren children = childService.create(
                 route.getId(), reqVO.getProductIds(), reqVO.getSteps(), operatorId);
         auditService.record(route.getId(), CraftRouteChangeTypeEnum.CREATE,
@@ -156,11 +159,13 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateRoute(Long id, CraftRouteUpdateReqVO reqVO) {
+        // 草稿修改仍使用版本号防止多人编辑覆盖；生效路线必须通过新版本流程演进。
         CraftRouteEntity route = requireRoute(id);
         CraftVersionValidator.validate(route.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.ROUTE_CONCURRENT_MODIFICATION);
         requireDraft(route);
         normalizeSaveRequest(reqVO);
+        // 派生版本必须继承路线编码和来源类型，避免同一版本链被改造成另一条业务路线。
         boolean versionIdentityChanged = route.getPreviousRouteId() != null
                 && (!route.getRoutingCode().equals(reqVO.getRoutingCode())
                 || !route.getSourceType().equals(reqVO.getSourceType()));
@@ -171,6 +176,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         referenceValidator.validateForSave(reqVO.getProductIds(), reqVO.getSteps());
 
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
+        // 替换子表前先加载旧聚合，保留产品与步骤的完整审计前快照。
         CraftRouteSnapshotDTO beforeSnapshot = toSnapshot(route, childService.load(id));
         CraftRouteConvert.copyToEntity(reqVO, route);
         route.setUpdateBy(operatorId);
@@ -185,10 +191,12 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteRoute(Long id, Integer expectedVersion) {
+        // 写锁将删除与审核、停用等状态迁移串行化，随后再执行请求版本校验。
         CraftRouteEntity route = requireRouteForUpdate(id);
         CraftVersionValidator.validate(route.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.ROUTE_CONCURRENT_MODIFICATION);
         requireDraft(route);
+        // 即使路线仍是草稿，只要已被工单引用也必须保留，避免生产事实出现悬空引用。
         if (workOrderRepository.existsByRoutingIdAndDeletedFalse(id)) {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_REFERENCED_BY_WORK_ORDER);
         }
@@ -196,18 +204,21 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
         CraftRouteChildren children = childService.load(id);
         CraftRouteSnapshotDTO beforeSnapshot = toSnapshot(route, children);
+        // 主表和全部子表统一软删除，审计日志保留删除前完整聚合快照。
         route.setDeleted(true);
         route.setUpdateBy(operatorId);
         saveRoute(route);
         childService.deleteAll(id, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.DELETE,
                 beforeSnapshot, null, DELETE_REASON, operatorId);
+        // 草稿原则上不是默认路线，但仍按产品维度失效缓存，覆盖历史异常数据场景。
         craftCache.evictDefaultRoutesAfterCommit(getProductIds(children));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approveRoute(Long id, CraftRouteStatusReqVO reqVO) {
+        // 审核使用悲观锁，保证同一路线不会被并发审核或删除。
         CraftRouteEntity route = requireRouteForUpdate(id);
         CraftVersionValidator.validate(route.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.ROUTE_CONCURRENT_MODIFICATION);
@@ -218,7 +229,9 @@ public class CraftRouteServiceImpl implements CraftRouteService {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_CONFIGURATION_INCOMPLETE);
         }
         List<Long> productIds = getProductIds(children);
+        // 按主键升序锁定全部产品，使多个路线并发审核时保持一致锁顺序并串行切换默认路线。
         productRepository.findAllByIdInForUpdateOrderByIdAsc(productIds);
+        // 审核时重新校验产品、工序和外部引用，防止草稿保存后关联档案已失效。
         referenceValidator.validateForApproval(children.products(), children.details());
 
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
@@ -228,6 +241,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         route.setAuditTime(LocalDateTime.now());
         route.setUpdateBy(operatorId);
         saveRoute(route);
+        // 生效后将当前路线设为这些产品的唯一默认路线，旧默认关系在同一事务内清除。
         childService.activateDefaults(id, productIds, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.APPROVE,
                 beforeSnapshot, toSnapshot(route, children), reqVO.getReason().trim(), operatorId);
@@ -248,6 +262,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         route.setRoutingStatus(CraftRouteStatusEnum.DISABLED.getStatus());
         route.setUpdateBy(operatorId);
         saveRoute(route);
+        // 停用路线不能继续作为产品默认路线，必须同步清除关系表默认标记。
         childService.clearDefaults(id, operatorId);
         auditService.record(id, CraftRouteChangeTypeEnum.DISABLE,
                 beforeSnapshot, toSnapshot(route, children), reqVO.getReason().trim(), operatorId);
@@ -257,6 +272,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createRouteVersion(Long id, CraftRouteNewVersionReqVO reqVO) {
+        // 仅生效版本可作为新版本来源，写锁防止复制期间源路线发生状态变化。
         CraftRouteEntity source = requireRouteForUpdate(id);
         CraftVersionValidator.validate(source.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.ROUTE_CONCURRENT_MODIFICATION);
@@ -274,9 +290,11 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         newRoute.setRoutingStatus(CraftRouteStatusEnum.DRAFT.getStatus());
         newRoute.setCreateBy(operatorId);
         newRoute.setUpdateBy(operatorId);
+        // 新版本先保存为独立草稿行，旧生效版本保持不变并继续服务现有生产。
         saveRoute(newRoute);
 
         CraftRouteChildren sourceChildren = childService.load(id);
+        // 产品关系与工序步骤按当前源版本完整复制，后续可在草稿上独立调整。
         CraftRouteChildren newChildren =
                 childService.cloneTo(newRoute.getId(), sourceChildren, operatorId);
         auditService.record(newRoute.getId(), CraftRouteChangeTypeEnum.CREATE_VERSION,
@@ -295,6 +313,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Transactional(readOnly = true)
     public PageResult<CraftRouteRespVO> getRoutePage(CraftRoutePageReqVO reqVO) {
         Specification<CraftRouteEntity> specification = CraftRouteSpecifications.page(reqVO);
+        // 先执行 count 支持空页快速返回及请求页码越界修正。
         long total = routeRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
@@ -312,6 +331,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
     @Override
     @Transactional(readOnly = true)
     public CraftRouteRespVO getDefaultRoute(Long productId) {
+        // 默认路线详情按产品维度缓存，未命中时回源关系表与路线主表双重校验。
         CraftRouteRespVO cached = craftCache.getDefaultRoute(productId).orElse(null);
         if (cached != null) {
             return cached;
@@ -323,6 +343,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
         CraftRouteEntity route = routeRepository.findByIdAndDeletedFalse(relation.getRouteId())
                 .orElseThrow(() -> new ServiceException(CraftErrorCodeConstants.ROUTE_DEFAULT_NOT_FOUND));
         if (!CraftRouteStatusEnum.EFFECTIVE.getStatus().equals(route.getRoutingStatus())) {
+            // 关系表默认标记不可信任为最终状态，主表必须仍处于生效状态。
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_DEFAULT_NOT_FOUND);
         }
         CraftRouteRespVO result = buildRouteDetail(route);
@@ -403,6 +424,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
      * @param excludeId      排除的路线主键，创建时为 null
      */
     private void validateCodeVersion(String routingCode, String routingVersion, Long excludeId) {
+        // 应用层预检提供友好错误，并发写入冲突仍由数据库组合唯一索引最终裁决。
         boolean exists = excludeId == null
                 ? routeRepository.existsByRoutingCodeAndRoutingVersionAndDeletedFalse(
                         routingCode, routingVersion)
@@ -420,6 +442,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
      */
     private void saveRoute(CraftRouteEntity route) {
         try {
+            // 立即 flush，使唯一约束和乐观锁冲突在当前用例内被准确转换为业务错误。
             routeRepository.saveAndFlush(route);
         } catch (DataIntegrityViolationException exception) {
             CraftPersistenceExceptionTranslator.translateUniqueConstraint(exception,
@@ -438,6 +461,7 @@ public class CraftRouteServiceImpl implements CraftRouteService {
      */
     private CraftRouteRespVO buildRouteDetail(CraftRouteEntity route) {
         CraftRouteChildren children = childService.load(route.getId());
+        // 先收集去重后的关联主键，再批量查询档案，避免按每个产品和步骤产生 N+1 查询。
         Set<Long> productIds = children.products().stream()
                 .map(CraftRouteProductEntity::getProductId)
                 .collect(Collectors.toSet());

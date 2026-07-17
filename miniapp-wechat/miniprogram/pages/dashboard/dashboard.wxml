@@ -1,3 +1,4 @@
+<!-- 指标和在制任务均直接展示后端聚合快照，空数组时保留看板骨架。 -->
 <view class="dashboard-page">
   <view class="page-top"><image class="title-icon" src="/assets/tabbar/dashboard-selected.png" mode="aspectFit"/><text>实时生产看板</text><view class="refresh-touch" bindtap="retry"><image src="/assets/icons/refresh.svg" mode="aspectFit"/></view></view>
   <view class="dashboard-content">

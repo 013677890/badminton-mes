@@ -36,9 +36,11 @@ public class CommonResult<T> {
      * @return 成功响应
      */
     public static <T> CommonResult<T> success(T data) {
+        // 统一使用全局成功码，避免不同 Controller 自行拼接成功响应导致前端判断口径不一致。
         CommonResult<T> result = new CommonResult<>();
         result.setCode(GlobalErrorCodeConstants.SUCCESS.code());
         result.setMessage(GlobalErrorCodeConstants.SUCCESS.message());
+        // 即使 data 为空也保留字段；列表接口应由调用方传入空集合，避免前端额外处理 null。
         result.setData(data);
         return result;
     }
@@ -51,6 +53,7 @@ public class CommonResult<T> {
      * @return 失败响应，data 为 null
      */
     public static <T> CommonResult<T> error(ErrorCode errorCode) {
+        // 默认采用错误码中的排查信息，保证错误码与错误描述始终成对出现。
         return error(errorCode, errorCode.message());
     }
 
@@ -63,6 +66,7 @@ public class CommonResult<T> {
      * @return 失败响应，data 为 null
      */
     public static <T> CommonResult<T> error(ErrorCode errorCode, String message) {
+        // 错误码负责稳定分类，message 允许调用方补充当前请求上下文中的具体原因。
         CommonResult<T> result = new CommonResult<>();
         result.setCode(errorCode.code());
         result.setMessage(message);

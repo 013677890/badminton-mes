@@ -4,7 +4,10 @@ import { request } from './http'
 import { mockAccountLogin, mockBindByCode, mockBindingCode, mockBindingPreview, mockBindingStatus, mockLogin, mockProfile, mockRegisterAccount, mockRegistrationRoles } from './mock'
 import { clearSession } from './session'
 
+/** 使用微信临时登录凭证换取 MES 会话信息，并缓存登录结果。 */
 export async function loginWithWechat(): Promise<MiniAppLoginResponse> {
+  // wx.login 只产生短期 code，真正的会话创建和用户绑定判断交给 MES 后端。
+  // 模拟模式复用相同的会话落盘流程，保证页面层无需区分数据来源。
   if (isMockMode()) {
     const result = await mockLogin()
     saveSession(result)
@@ -16,6 +19,7 @@ export async function loginWithWechat(): Promise<MiniAppLoginResponse> {
   return result
 }
 
+/** 将令牌与用户快照统一写入本地缓存，供后续请求和个人中心读取。 */
 function saveSession(result: MiniAppLoginResponse): void {
   if (result.token) wx.setStorageSync('mes_token', result.token)
   if (result.userId || result.userNo) wx.setStorageSync('mes_user', result)
@@ -80,7 +84,9 @@ export async function unbindAccount(): Promise<void> {
   clearSession()
 }
 
+/** 检查本地会话；无有效会话时发起登录并按绑定状态引导用户。 */
 export async function ensureLogin(): Promise<void> {
+  // 已有本地 token 时不重复登录；首次登录根据后端返回的 bindingRequired 决定落地页面。
   if (wx.getStorageSync('mes_token')) return
   const result = await loginWithWechat()
   if (result.bindingRequired) {
@@ -89,6 +95,7 @@ export async function ensureLogin(): Promise<void> {
   else wx.reLaunch({ url: '/pages/dashboard/dashboard' })
 }
 
+/** 尽力通知后端注销；无论后端是否可达，都清理本地会话并返回登录页。 */
 export async function logout(): Promise<void> {
   if (!isMockMode()) await request<void>({ url: '/api/system/auth/logout', method: 'POST' }).catch(() => undefined)
   clearSession()

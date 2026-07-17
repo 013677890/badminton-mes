@@ -22,6 +22,7 @@ public final class DispatchOrderConvert {
      * @return 响应 VO
      */
     public static DispatchRespVO toRespVO(DispatchOrderEntity entity) {
+        // 这里只转换派工单自身字段；工单号、产品、产线和班次名称由 Service 批量查询后回填。
         DispatchRespVO respVO = new DispatchRespVO();
         respVO.setId(entity.getId());
         respVO.setDispatchNo(entity.getDispatchNo());
@@ -49,6 +50,7 @@ public final class DispatchOrderConvert {
      * @return 响应 VO 列表
      */
     public static List<DispatchAdjustLogRespVO> toAdjustLogRespVOList(List<DispatchAdjustLogEntity> entities) {
+        // 日志按 Repository 的时间顺序原样映射，不在转换层重新排序或改变审计快照。
         return entities.stream().map(entity -> {
             DispatchAdjustLogRespVO respVO = new DispatchAdjustLogRespVO();
             respVO.setId(entity.getId());
@@ -64,5 +66,6 @@ public final class DispatchOrderConvert {
     }
 
     private DispatchOrderConvert() {
+        // 转换器只提供静态方法，不允许实例化。
     }
 }

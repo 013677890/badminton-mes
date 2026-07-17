@@ -1,3 +1,4 @@
+<!-- 批次码输入和扫码共用同一查询状态；只有存在工单时才显示任务摘要。 -->
 <view class="trace-page">
   <view class="page-top">
     <image class="title-icon" src="/assets/icons/factory.svg" mode="aspectFit"/>

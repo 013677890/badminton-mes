@@ -68,6 +68,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createProduct(ProductSaveReqVO reqVO) {
+        // 规范化后的编码才参与查重和入库；单位采用加锁校验，避免产品创建时引用到刚被停用的单位。
         normalize(reqVO);
         validateType(reqVO.getProductType());
         validateStatus(reqVO.getStatus());
@@ -77,6 +78,7 @@ public class ProductServiceImpl implements ProductService {
         ProductEntity product = ProductionMasterDataConvert.toProductEntity(reqVO);
         product.setCreateBy(operatorId);
         product.setUpdateBy(operatorId);
+        // 立即 flush 让产品编码唯一约束在当前事务中生效，底层异常由 save 转成稳定业务错误码。
         save(product);
         return product.getId();
     }
@@ -84,6 +86,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProduct(Long id, ProductUpdateReqVO reqVO) {
+        // 更新使用产品行悲观锁和前端版本号双重保护，引用检查与字段写入均基于最新主档快照。
         normalize(reqVO);
         validateType(reqVO.getProductType());
         validateStatus(reqVO.getStatus());
@@ -93,6 +96,7 @@ public class ProductServiceImpl implements ProductService {
         requireEnabledUnitForUpdate(reqVO.getUnitId());
         if (CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus())
                 && !CommonStatusEnum.DISABLED.getStatus().equals(product.getStatus())) {
+            // 停用前检查活动工单、生效 BOM、有效工艺路线及计件规则，避免后续业务继续使用该产品。
             validateNoActiveReferences(id);
         }
         ProductionMasterDataConvert.copyProduct(reqVO, product);
@@ -103,6 +107,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(Long id, Integer version) {
+        // 产品采用逻辑删除；任何历史引用都会阻止删除，以保证工单、BOM 和工艺路线仍可追溯。
         ProductEntity product = requireForUpdate(id);
         validateVersion(product, version);
         validateNoAnyReferences(id);
@@ -114,6 +119,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProductStatus(Long id, ProductionStatusReqVO reqVO) {
+        // 状态操作独立使用锁版本控制；相同状态重复提交直接幂等返回，不重复更新修改人。
         validateStatus(reqVO.getStatus());
         ProductEntity product = requireForUpdate(id);
         validateVersion(product, reqVO.getVersion());
@@ -121,8 +127,10 @@ public class ProductServiceImpl implements ProductService {
             return;
         }
         if (CommonStatusEnum.ENABLED.getStatus().equals(reqVO.getStatus())) {
+            // 重新启用前重新锁定并确认计量单位可用，保证产品恢复后能够参与业务单据。
             requireEnabledUnitForUpdate(product.getUnitId());
         } else {
+            // 停用只限制当前有效引用，不影响已经产生的历史业务数据。
             validateNoActiveReferences(id);
         }
         product.setStatus(reqVO.getStatus());
@@ -133,12 +141,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductRespVO getProduct(Long id) {
+        // 详情只读取未删除产品并转为 VO，避免直接暴露实体中的审计及持久化字段。
         return ProductionMasterDataConvert.toProductRespVO(require(id));
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResult<ProductRespVO> getProductPage(ProductPageReqVO reqVO) {
+        // 先校验类型筛选并统计总数；空页不再执行列表查询，越界页码收敛到最后一页。
         validateOptionalType(reqVO.getProductType());
         var specification = ProductionMasterDataSpecifications.productPage(reqVO);
         long total = productRepository.count(specification);
@@ -154,7 +164,11 @@ public class ProductServiceImpl implements ProductService {
         return PageResult.of(list, total, pageNo, reqVO.getPageSize());
     }
 
-    /** 校验当前业务引用均已解除。 */
+    /**
+     * 校验当前业务引用均已解除。
+     *
+     * <p>各引用通过 exists 查询判断，不加载完整业务集合；只有工单、有效 BOM、路线或计件规则均不再使用时才可停用。
+     */
     private void validateNoActiveReferences(Long productId) {
         boolean referenced = workOrderRepository.existsByProductIdAndOrderStatusInAndDeletedFalse(
                 productId, WorkOrderStatusEnum.activeStatuses())
@@ -167,7 +181,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 校验不存在任何历史业务引用。 */
+    /** 删除前校验不存在任何历史业务引用，防止主档删除后历史单据无法回填产品信息。 */
     private void validateNoAnyReferences(Long productId) {
         boolean referenced = workOrderRepository.existsByProductIdAndDeletedFalse(productId)
                 || bomRepository.existsByProductIdAndDeletedFalse(productId)
@@ -178,14 +192,14 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 写锁校验单位存在且启用。 */
+    /** 写锁校验单位存在且启用，防止单位状态在产品写入前发生变化。 */
     private void requireEnabledUnitForUpdate(Long unitId) {
         if (!unitService.lockAndCheckEnabled(unitId)) {
             throw new ServiceException(ProductionErrorCodeConstants.UNIT_NOT_AVAILABLE);
         }
     }
 
-    /** 校验产品编码唯一。 */
+    /** 校验产品编码唯一；更新时排除自身，最终仍由数据库唯一索引兜底并发创建。 */
     private void validateCode(String code, Long excludeId) {
         boolean exists = excludeId == null
                 ? productRepository.existsByProductCodeAndDeletedFalse(code)
@@ -195,7 +209,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 校验产品类型。 */
+    /** 校验产品类型，防止未知枚举值进入产品主档。 */
     private void validateType(Integer type) {
         if (!ProductTypeEnum.contains(type)) {
             throw new ServiceException(com.badminton.mes.common.core.GlobalErrorCodeConstants.PARAM_ERROR,
@@ -203,14 +217,14 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 校验可选产品类型。 */
+    /** 校验查询中的可选产品类型；未传值表示不过滤类型。 */
     private void validateOptionalType(Integer type) {
         if (type != null) {
             validateType(type);
         }
     }
 
-    /** 校验产品启停状态。 */
+    /** 校验产品启停状态，只接受系统定义的启用或停用。 */
     private void validateStatus(Integer status) {
         if (!CommonStatusEnum.ENABLED.getStatus().equals(status)
                 && !CommonStatusEnum.DISABLED.getStatus().equals(status)) {
@@ -219,26 +233,26 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 查询未删除产品。 */
+    /** 查询未删除产品，供只读详情使用。 */
     private ProductEntity require(Long id) {
         return productRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.PRODUCT_MASTER_NOT_EXISTS));
     }
 
-    /** 写锁查询未删除产品。 */
+    /** 写锁查询未删除产品，供更新、删除和状态切换建立稳定快照。 */
     private ProductEntity requireForUpdate(Long id) {
         return productRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.PRODUCT_MASTER_NOT_EXISTS));
     }
 
-    /** 校验预期版本。 */
+    /** 校验客户端携带的乐观锁版本，防止旧页面覆盖其他人的修改。 */
     private void validateVersion(ProductEntity product, Integer expectedVersion) {
         if (!Objects.equals(product.getVersion(), expectedVersion)) {
             throw new ServiceException(ProductionErrorCodeConstants.PRODUCT_CONCURRENT_MODIFICATION);
         }
     }
 
-    /** 保存并转换唯一键和乐观锁异常。 */
+    /** 保存并转换唯一键和乐观锁异常；立即 flush 使约束冲突在业务方法内暴露。 */
     private void save(ProductEntity product) {
         try {
             productRepository.saveAndFlush(product);
@@ -250,7 +264,7 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    /** 规范化产品请求。 */
+    /** 规范化产品请求，统一编码大小写、名称空格和可选文本字段。 */
     private void normalize(ProductSaveReqVO reqVO) {
         reqVO.setProductCode(reqVO.getProductCode().trim().toUpperCase(Locale.ROOT));
         reqVO.setProductName(reqVO.getProductName().trim());
@@ -258,12 +272,12 @@ public class ProductServiceImpl implements ProductService {
         reqVO.setGrade(trimToNull(reqVO.getGrade()));
     }
 
-    /** 字符串去空格并将空白值转为 null。 */
+    /** 去除字符串首尾空格，并将空白值转换为数据库中的 null。 */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    /** 规范化页码。 */
+    /** 规范化页码，避免请求页码超过最后一页而产生无效分页偏移。 */
     private int normalizePageNo(int requested, int pageSize, long total) {
         return Math.min(requested, (int) ((total + pageSize - 1) / pageSize));
     }

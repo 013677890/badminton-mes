@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPageReqVO;
-import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
+import com.badminton.mes.module.integration.dal.entity.IntegrationDeviceCountExceptionEntity;
 
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -13,6 +13,9 @@ import jakarta.persistence.criteria.Predicate;
 
 /**
  * 设备计数异常池动态查询条件。
+ *
+ * <p>固定排除逻辑删除异常，再按来源系统、设备编码、异常类型、处理状态和创建时间区间追加
+ * 精确条件。编码类条件与写入命令统一大写，保证异常池查询和接口幂等键使用同一规范。
  *
  * @author 张竹灏
  * @date 2026/07/13
@@ -25,12 +28,14 @@ public final class DeviceCountExceptionSpecifications {
      * @param reqVO 查询参数
      * @return JPA Specification
      */
-    public static Specification<DeviceCountExceptionEntity> page(
+    public static Specification<IntegrationDeviceCountExceptionEntity> page(
             DeviceCountExceptionPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             var predicates = new ArrayList<Predicate>();
+            // 异常池正常列表只展示未逻辑删除数据。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (StringUtils.hasText(reqVO.getSourceSystem())) {
+                // 来源系统按固定 Locale 大写后精确匹配。
                 predicates.add(criteriaBuilder.equal(root.get("sourceSystem"),
                         reqVO.getSourceSystem().trim().toUpperCase(Locale.ROOT)));
             }
@@ -47,6 +52,7 @@ public final class DeviceCountExceptionSpecifications {
                         root.get("handleStatus"), reqVO.getHandleStatus()));
             }
             if (reqVO.getStartTime() != null) {
+                // 异常查询时间基于异常创建时间，起止边界均包含。
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(
                         root.get("createTime"), reqVO.getStartTime()));
             }
@@ -58,6 +64,7 @@ public final class DeviceCountExceptionSpecifications {
         };
     }
 
+    /** 纯静态查询规格构造器，不允许实例化。 */
     private DeviceCountExceptionSpecifications() {
     }
 }

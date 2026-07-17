@@ -12,7 +12,19 @@ npm run dev      # 开发（/api 代理到 http://localhost:8080）
 npm run build    # vue-tsc 类型检查 + 生产构建
 ```
 
-登录页为本地模拟登录（可勾选演示角色，影响菜单与按钮权限），接入认证模块后替换 `stores/user.ts` 的 `login()`。
+登录走真实认证 `POST /api/system/auth/login`（内置管理员 `admin / admin123`），token 以 `Authorization: Bearer` 携带，401 自动清凭证跳登录、403 提示无权限（对齐后端 A0230/A0301）。
+
+## 业务页面
+
+| 菜单 | 页面 | 说明 |
+| --- | --- | --- |
+| 生产管理 / 生产工单 | `views/production/WorkOrderList` | 筛选列表 + 状态机行操作（下达/暂停/恢复/完工/关闭/作废），新建时产品联动生效 BOM 与默认工艺路线 |
+| 生产管理 / 工单详情 | `views/production/WorkOrderDetail` | 数量统计 + 基本信息 + 物料需求 / 齐套分析（触发分析、欠料处理登记）/ 派工单 / 状态日志时间轴 |
+| 生产管理 / 派工管理 | `views/production/DispatchList` | 审核→下发→取消流程、排产建议一键采纳、超派本地提醒（口径同后端 FLOOR(计划×(1+超产%))−已派）、班次预填起止时间（夜班跨天）、产线排程甘特 |
+| 生产管理 / 欠料看板 | `views/production/ShortageBoard` | 按物料聚合欠料汇总 → 下钻影响工单 → 登记处理/跳工单详情 |
+| 基础资料 | `views/basedata/*` | 产品/物料/BOM/车间/产线 CRUD；乐观锁 version 全链路携带，BOM 主从表单 + 草稿→生效→停用 + 复制新版本 |
+
+API 层在 `src/api/`（`auth.ts`、`system.ts`、`production/*.ts`），类型与后端 VO 逐字段对齐；状态字典集中在 `src/constants/production.ts`（与后端枚举同步维护）。菜单 `meta.roles` 与后端 `@RequiresRoles` 对齐，前端权限仅交互降噪，后端是最终防线。
 
 ## 目录结构
 

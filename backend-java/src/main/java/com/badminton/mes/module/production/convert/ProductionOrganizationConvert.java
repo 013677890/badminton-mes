@@ -22,6 +22,7 @@ public final class ProductionOrganizationConvert {
      * @return 车间实体
      */
     public static WorkshopEntity toWorkshopEntity(WorkshopSaveReqVO reqVO) {
+        // 创建只复制请求业务字段，审计字段由 Service 根据当前登录用户补齐。
         WorkshopEntity entity = new WorkshopEntity();
         copyWorkshop(reqVO, entity);
         return entity;
@@ -34,6 +35,7 @@ public final class ProductionOrganizationConvert {
      * @param entity 车间实体
      */
     public static void copyWorkshop(WorkshopSaveReqVO reqVO, WorkshopEntity entity) {
+        // 不触碰主键、锁版本和创建信息，避免更新请求覆盖持久化控制字段。
         entity.setWorkshopCode(reqVO.getWorkshopCode());
         entity.setWorkshopName(reqVO.getWorkshopName());
         entity.setManagerId(reqVO.getManagerId());
@@ -48,6 +50,7 @@ public final class ProductionOrganizationConvert {
      * @return 车间响应
      */
     public static WorkshopRespVO toWorkshopRespVO(WorkshopEntity entity, String managerName) {
+        // 主管姓名由 Service 批量查询后传入，转换器不在字段映射阶段访问数据库。
         WorkshopRespVO result = new WorkshopRespVO();
         result.setId(entity.getId());
         result.setWorkshopCode(entity.getWorkshopCode());
@@ -68,6 +71,7 @@ public final class ProductionOrganizationConvert {
      * @return 产线实体
      */
     public static ProductionLineEntity toProductionLineEntity(ProductionLineSaveReqVO reqVO) {
+        // 创建产线只搬运组织业务字段，主键和版本由 JPA 生成/管理。
         ProductionLineEntity entity = new ProductionLineEntity();
         copyProductionLine(reqVO, entity);
         return entity;
@@ -81,6 +85,7 @@ public final class ProductionOrganizationConvert {
      */
     public static void copyProductionLine(
             ProductionLineSaveReqVO reqVO, ProductionLineEntity entity) {
+        // 产线所属车间是否可变由 Service 校验；转换器仅按请求复制字段。
         entity.setLineCode(reqVO.getLineCode());
         entity.setLineName(reqVO.getLineName());
         entity.setWorkshopId(reqVO.getWorkshopId());
@@ -97,6 +102,7 @@ public final class ProductionOrganizationConvert {
      */
     public static ProductionLineRespVO toProductionLineRespVO(
             ProductionLineEntity entity, WorkshopEntity workshop) {
+        // 产线基础字段来自产线表，车间编码和名称由可选的批量回填实体提供。
         ProductionLineRespVO result = new ProductionLineRespVO();
         result.setId(entity.getId());
         result.setLineCode(entity.getLineCode());
@@ -115,5 +121,6 @@ public final class ProductionOrganizationConvert {
     }
 
     private ProductionOrganizationConvert() {
+        // 工具类只提供静态转换方法。
     }
 }

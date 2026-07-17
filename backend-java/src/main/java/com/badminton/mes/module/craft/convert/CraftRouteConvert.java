@@ -67,6 +67,7 @@ public final class CraftRouteConvert {
             List<CraftRouteDetailEntity> details,
             Map<Long, ProductEntity> productMap,
             Map<Long, CraftProcessEntity> processMap) {
+        // 先复用主表转换，再分别按已稳定排序的关系与明细补充聚合子项。
         CraftRouteRespVO respVO = toSimpleRespVO(route);
         respVO.setProducts(relations.stream()
                 .map(relation -> toProductRespVO(relation, productMap.get(relation.getProductId())))
@@ -124,6 +125,7 @@ public final class CraftRouteConvert {
             CraftRouteEntity route,
             List<CraftRouteProductEntity> relations,
             List<CraftRouteDetailEntity> details) {
+        // 产品 id 排序后写入快照，避免数据库返回顺序变化造成无意义的审计差异。
         List<Long> productIds = relations.stream()
                 .map(CraftRouteProductEntity::getProductId)
                 .sorted()
@@ -193,6 +195,7 @@ public final class CraftRouteConvert {
         respVO.setProductId(relation.getProductId());
         respVO.setDefaultRoute(relation.getDefaultRoute());
         if (product != null) {
+            // 历史产品档案缺失时仍返回关系中的 productId，不阻断旧路线详情查询。
             respVO.setProductCode(product.getProductCode());
             respVO.setProductName(product.getProductName());
         }
@@ -218,6 +221,7 @@ public final class CraftRouteConvert {
         respVO.setSopId(detail.getSopId());
         respVO.setQualityPlanId(detail.getQualityPlanId());
         if (process != null) {
+            // 工序展示字段从当前档案补充；持久化步骤控制字段仍以路线明细为准。
             respVO.setProcessCode(process.getProcessCode());
             respVO.setProcessName(process.getProcessName());
             respVO.setKeyProcess(process.getKeyProcess());

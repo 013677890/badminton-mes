@@ -16,11 +16,13 @@ const props = withDefaults(
   { column: 2, border: true },
 )
 
+// 支持点号路径取值、状态映射、格式化和脱敏显示；组件本身不修改传入数据。
 function rawValue(prop: string): unknown {
   return prop.split('.').reduce<any>((acc, key) => (acc == null ? acc : acc[key]), props.data)
 }
 
 function display(item: DescItem<Row>): string {
+  // 优先使用业务格式化器，再处理空值占位和敏感字段脱敏。
   if (item.formatter) return item.formatter(props.data)
   const value = rawValue(item.prop)
   if (value === undefined || value === null || value === '') return '—'

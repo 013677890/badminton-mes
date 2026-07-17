@@ -31,6 +31,13 @@ public interface CraftProcessRepository extends JpaRepository<CraftProcessEntity
      */
     Optional<CraftProcessEntity> findByIdAndDeletedFalse(Long id);
 
+    /**
+     * 按主键和状态查询未删除工序，供只接受指定状态的跨模块场景使用。
+     *
+     * @param id 工序主键
+     * @param status 目标状态
+     * @return 同时满足状态与软删除条件的工序
+     */
     Optional<CraftProcessEntity> findByIdAndStatusAndDeletedFalse(Long id, Integer status);
 
     /**

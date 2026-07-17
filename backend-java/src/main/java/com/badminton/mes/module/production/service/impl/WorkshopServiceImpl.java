@@ -84,6 +84,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createWorkshop(WorkshopSaveReqVO reqVO) {
+        // 规范化编码后再查重，并在写入前校验主管用户；车间主档是产线和工单的上级组织。
         normalize(reqVO);
         validateStatus(reqVO.getStatus());
         validateCode(reqVO.getWorkshopCode(), null);
@@ -93,6 +94,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         WorkshopEntity workshop = ProductionOrganizationConvert.toWorkshopEntity(reqVO);
         workshop.setCreateBy(operatorId);
         workshop.setUpdateBy(operatorId);
+        // 立即 flush 触发编码唯一约束，统一把数据库竞争转换成业务层可识别的错误。
         save(workshop);
         return workshop.getId();
     }
@@ -100,6 +102,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateWorkshop(Long id, WorkshopUpdateReqVO reqVO) {
+        // 车间行锁和版本号共同保护更新，引用检查与状态写入基于同一份最新数据库快照。
         normalize(reqVO);
         validateStatus(reqVO.getStatus());
         WorkshopEntity workshop = requireForUpdate(id);
@@ -109,6 +112,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         boolean disabling = CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus())
                 && CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus());
         if (disabling) {
+            // 停用前检查启用产线、活动工单和用户归属，避免上级组织停用后仍有现场业务使用。
             validateNoActiveReferences(id);
         }
 
@@ -120,6 +124,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteWorkshop(Long id, Integer version) {
+        // 车间只能逻辑删除；存在产线、工单、日历或用户引用时保留组织主档供历史追溯。
         WorkshopEntity workshop = requireForUpdate(id);
         validateVersion(workshop, version);
         validateNoAnyReferences(id);
@@ -131,6 +136,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateWorkshopStatus(Long id, ProductionStatusReqVO reqVO) {
+        // 状态切换使用锁版本控制；相同状态重复请求直接幂等返回。
         validateStatus(reqVO.getStatus());
         WorkshopEntity workshop = requireForUpdate(id);
         validateVersion(workshop, reqVO.getVersion());
@@ -139,8 +145,10 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
 
         if (CommonStatusEnum.ENABLED.getStatus().equals(reqVO.getStatus())) {
+            // 重新启用前确认主管用户仍然有效；主管为空时按业务允许的未指定处理。
             validateManager(workshop.getManagerId());
         } else {
+            // 停用只阻断当前有效引用，不改变已产生的工单、日历和历史组织关系。
             validateNoActiveReferences(id);
         }
         workshop.setStatus(reqVO.getStatus());
@@ -151,6 +159,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(readOnly = true)
     public WorkshopRespVO getWorkshop(Long id) {
+        // 详情读取未删除车间，并单独查询主管姓名；找不到用户时仍返回车间基础信息。
         WorkshopEntity workshop = require(id);
         String managerName = loadManagerName(workshop.getManagerId());
         return ProductionOrganizationConvert.toWorkshopRespVO(workshop, managerName);
@@ -159,6 +168,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(readOnly = true)
     public WorkshopRespVO getEnabledWorkshop(Long id) {
+        // 该入口专门服务于需要可用组织的业务，因此除存在性外还强制检查启用状态。
         WorkshopEntity workshop = require(id);
         if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORKSHOP_NOT_EXISTS);
@@ -170,6 +180,7 @@ public class WorkshopServiceImpl implements WorkshopService {
     @Override
     @Transactional(readOnly = true)
     public PageResult<WorkshopRespVO> getWorkshopPage(WorkshopPageReqVO reqVO) {
+        // 分页先 count 再查询当前页，主管姓名按页批量加载，避免列表渲染产生 N+1 查询。
         var specification = ProductionOrganizationSpecifications.workshopPage(reqVO);
         long total = workshopRepository.count(specification);
         if (total == 0) {
@@ -190,7 +201,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         return PageResult.of(list, total, pageNo, reqVO.getPageSize());
     }
 
-    /** 校验车间没有阻止停用的当前业务引用。 */
+    /** 校验车间没有阻止停用的当前业务引用；各 Repository 只执行 exists 查询。 */
     private void validateNoActiveReferences(Long workshopId) {
         boolean referenced = productionLineRepository
                 .existsByWorkshopIdAndStatusAndDeletedFalse(
@@ -204,7 +215,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 校验车间没有阻止删除的历史业务引用。 */
+    /** 校验车间没有阻止删除的历史业务引用，确保组织主档仍可支撑历史单据回显。 */
     private void validateNoAnyReferences(Long workshopId) {
         boolean referenced = productionLineRepository.existsByWorkshopIdAndDeletedFalse(workshopId)
                 || workOrderRepository.existsByWorkshopIdAndDeletedFalse(workshopId)
@@ -215,7 +226,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 校验车间主管为空或为启用用户。 */
+    /** 校验车间主管为空或为启用用户，避免保存无效的系统用户关系。 */
     private void validateManager(Long managerId) {
         if (managerId != null && !userReferenceQuery.isEnabledUser(managerId)) {
             throw new ServiceException(
@@ -223,7 +234,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 校验车间编码唯一。 */
+    /** 校验车间编码唯一；应用层预检用于友好提示，数据库唯一索引负责并发兜底。 */
     private void validateCode(String code, Long excludeId) {
         boolean exists = excludeId == null
                 ? workshopRepository.existsByWorkshopCodeAndDeletedFalse(code)
@@ -234,7 +245,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 校验启停状态。 */
+    /** 校验车间启停状态，只接受启用和停用两个业务值。 */
     private void validateStatus(Integer status) {
         if (!CommonStatusEnum.ENABLED.getStatus().equals(status)
                 && !CommonStatusEnum.DISABLED.getStatus().equals(status)) {
@@ -242,21 +253,21 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 查询未删除车间。 */
+    /** 查询未删除车间，供只读详情使用。 */
     private WorkshopEntity require(Long id) {
         return workshopRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ServiceException(
                         ProductionErrorCodeConstants.WORKSHOP_MASTER_NOT_EXISTS));
     }
 
-    /** 写锁查询未删除车间。 */
+    /** 写锁查询未删除车间，供更新、删除和状态操作建立稳定快照。 */
     private WorkshopEntity requireForUpdate(Long id) {
         return workshopRepository.findByIdAndDeletedFalseForUpdate(id)
                 .orElseThrow(() -> new ServiceException(
                         ProductionErrorCodeConstants.WORKSHOP_MASTER_NOT_EXISTS));
     }
 
-    /** 校验客户端预期版本。 */
+    /** 校验客户端预期版本，拒绝旧页面覆盖其他人的组织修改。 */
     private void validateVersion(WorkshopEntity workshop, Integer expectedVersion) {
         if (!Objects.equals(workshop.getVersion(), expectedVersion)) {
             throw new ServiceException(
@@ -264,7 +275,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 保存车间并转换唯一键和乐观锁异常。 */
+    /** 保存车间并转换唯一键和乐观锁异常；flush 让约束冲突在当前事务内尽早暴露。 */
     private void save(WorkshopEntity workshop) {
         try {
             workshopRepository.saveAndFlush(workshop);
@@ -278,18 +289,18 @@ public class WorkshopServiceImpl implements WorkshopService {
         }
     }
 
-    /** 规范化车间请求。 */
+    /** 规范化车间请求，统一编码大小写和名称空格后再查重入库。 */
     private void normalize(WorkshopSaveReqVO reqVO) {
         reqVO.setWorkshopCode(reqVO.getWorkshopCode().trim().toUpperCase(Locale.ROOT));
         reqVO.setWorkshopName(reqVO.getWorkshopName().trim());
     }
 
-    /** 规范化超过总页数的请求页码。 */
+    /** 将越界页码收敛到最后一页，避免生成无效分页偏移。 */
     private int normalizePageNo(int requested, int pageSize, long total) {
         return Math.min(requested, (int)((total + pageSize - 1) / pageSize));
     }
 
-    /** 查询单个车间主管姓名，主管为空时返回 null。 */
+    /** 查询单个车间主管姓名；主管为空或系统用户不存在时保持返回 null。 */
     private String loadManagerName(Long managerId) {
         if (managerId == null) {
             return null;
@@ -297,7 +308,7 @@ public class WorkshopServiceImpl implements WorkshopService {
         return userReferenceQuery.loadUserNames(Set.of(managerId)).get(managerId);
     }
 
-    /** 批量加载分页车间的主管姓名映射，避免 N+1。 */
+    /** 批量加载分页车间的主管姓名映射，避免逐条调用用户查询造成 N+1。 */
     private Map<Long, String> loadManagerNameMap(List<WorkshopEntity> workshops) {
         Set<Long> managerIds = workshops.stream()
                 .map(WorkshopEntity::getManagerId)

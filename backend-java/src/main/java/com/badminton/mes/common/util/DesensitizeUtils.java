@@ -22,12 +22,15 @@ public final class DesensitizeUtils {
      * @return 脱敏后手机号，入参为空时原样返回
      */
     public static String maskMobile(String mobile) {
+        // 空值和纯空白不参与截取，原样返回可保持调用方原有的“未填写”语义。
         if (!StringUtils.hasText(mobile)) {
             return mobile;
         }
+        // 长度不足以同时保留前后片段时全部遮蔽，避免短号码泄露过多有效字符。
         if (mobile.length() <= MOBILE_KEEP_PREFIX + MOBILE_KEEP_SUFFIX) {
             return "****";
         }
+        // 仅拼接允许展示的首尾字符，中间原始内容不会进入响应对象。
         return mobile.substring(0, MOBILE_KEEP_PREFIX) + "****"
                 + mobile.substring(mobile.length() - MOBILE_KEEP_SUFFIX);
     }

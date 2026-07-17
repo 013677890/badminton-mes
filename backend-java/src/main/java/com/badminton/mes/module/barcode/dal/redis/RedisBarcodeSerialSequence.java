@@ -41,12 +41,15 @@ public class RedisBarcodeSerialSequence implements BarcodeSerialSequence {
 
     @Override
     public long next(Long ruleId, String scope, BarcodeSerialResetCycleEnum cycle) {
+        // 规则与作用域共同隔离计数器，避免不同产品、周期或规则互相占用流水号。
         String serialKey = BarcodeRedisKeyConstants.barcodeSerialKey(ruleId, scope);
+        // Redis INCR 是原子操作，可在多实例并发生成时得到互不相同的递增值。
         Long serial = stringRedisTemplate.opsForValue().increment(serialKey);
         if (serial == null) {
             throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR);
         }
         if (serial == 1L) {
+            // 仅新建 Key 时设置 TTL，避免每次取号都续期导致历史周期 Key 无法清理。
             applyCycleTtl(serialKey, cycle);
             // 首次计数时从 MySQL 播种：Key 丢失场景避免从 1 重复发号
             long dbSerial = barcodeSerialRepository
@@ -54,6 +57,7 @@ public class RedisBarcodeSerialSequence implements BarcodeSerialSequence {
                     .map(BarcodeSerialEntity::getCurrentSerial)
                     .orElse(0L);
             if (dbSerial > 0) {
+                // 将数据库已确认的最大流水累加到当前值 1，下一次发号即可从其后继续。
                 Long seeded = stringRedisTemplate.opsForValue().increment(serialKey, dbSerial);
                 if (seeded == null) {
                     throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR);
@@ -71,6 +75,7 @@ public class RedisBarcodeSerialSequence implements BarcodeSerialSequence {
      * @param cycle     重置周期
      */
     private void applyCycleTtl(String serialKey, BarcodeSerialResetCycleEnum cycle) {
+        // TTL 故意覆盖两个周期，既允许跨周期追溯，又能最终回收不再使用的计数 Key。
         switch (cycle) {
             case DAILY -> stringRedisTemplate.expire(serialKey,
                     BarcodeRedisKeyConstants.SERIAL_DAILY_TTL);

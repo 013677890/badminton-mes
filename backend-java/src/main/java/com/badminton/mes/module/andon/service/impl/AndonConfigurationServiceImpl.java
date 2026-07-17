@@ -76,10 +76,13 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createConfiguration(AndonConfigurationSaveReqVO request) {
+        // 先锁定所属类型，使配置唯一性检查与后续插入基于稳定的类型和作用域关系执行。
         lockType(request.getAndonTypeId());
+        // 责任主体及时限属于跨字段业务约束，必须在访问数据库写接口前完整校验。
         validateConfigurationRule(request);
         validateScopeUnique(request, null);
 
+        // 请求对象只负责可编辑字段，审计人、默认启用状态和逻辑删除标记由服务层统一补齐。
         AndonConfigurationEntity configuration = AndonConfigurationConvert.toEntity(request);
         configuration.setEnabledStatus(request.getEnabledStatus() == null ? ENABLED : request.getEnabledStatus());
         configuration.setCreateBy(getCurrentOperatorId());
@@ -94,12 +97,14 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateConfiguration(Long id, AndonConfigurationSaveReqVO request) {
+        // 先用无锁快照确定所属类型，再锁类型和配置，保持各事务采用一致的加锁顺序。
         AndonConfigurationEntity configurationSnapshot = getConfigurationEntity(id);
         if (!configurationSnapshot.getAndonTypeId().equals(request.getAndonTypeId())) {
             throw new ServiceException(AndonErrorCodeConstants.CONFIGURATION_RULE_INVALID);
         }
         lockType(configurationSnapshot.getAndonTypeId());
         AndonConfigurationEntity configuration = getConfigurationForUpdate(id);
+        // 活动事件仍依赖当前责任和时限规则，禁止在处理中改变配置语义。
         if (configurationRepository.countActiveEventsByAndonTypeId(configuration.getAndonTypeId()) > 0) {
             throw new ServiceException(AndonErrorCodeConstants.CONFIGURATION_HAS_ACTIVE_EVENTS);
         }
@@ -107,6 +112,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         validateScopeUnique(request, id);
 
         Integer previousEnabledStatus = configuration.getEnabledStatus();
+        // 转换器只覆盖请求允许编辑的字段；未传启停状态时显式恢复原值，避免被 null 清空。
         AndonConfigurationConvert.copyEditableFields(request, configuration);
         if (request.getEnabledStatus() == null) {
             configuration.setEnabledStatus(previousEnabledStatus);
@@ -127,6 +133,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
         if (configurationRepository.countActiveEventsByAndonTypeId(configuration.getAndonTypeId()) > 0) {
             throw new ServiceException(AndonErrorCodeConstants.CONFIGURATION_HAS_ACTIVE_EVENTS);
         }
+        // 逻辑删除记录仍保留历史审计，因此用负主键改写范围值来释放原唯一索引组合。
         configuration.setScopeLineId(-id);
         configuration.setEnabledStatus(DISABLED);
         configuration.setDeleted(true);
@@ -153,6 +160,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     public PageResult<AndonConfigurationRespVO> getConfigurationPage(
             AndonConfigurationPageReqVO request) {
         var specification = AndonConfigurationSpecifications.page(request);
+        // 无匹配数据时不再执行分页 SQL，直接返回 list=[] 的统一分页结构。
         long total = configurationRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(request.getPageNo(), request.getPageSize());
@@ -166,6 +174,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
                 pageSize,
                 Sort.by(Sort.Direction.DESC, "id"));
         Page<AndonConfigurationEntity> page = configurationRepository.findAll(specification, pageRequest);
+        // 一次查询本页所有不同类型并建立索引，避免每条配置转换时单独访问类型表。
         Map<Long, AndonTypeEntity> typesById = typeRepository.findAllById(
                         page.getContent().stream()
                                 .map(AndonConfigurationEntity::getAndonTypeId)
@@ -185,6 +194,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
      * 校验处理对象、升级对象和响应/升级时限的组合关系，并确认引用的用户与角色处于启用状态。
      */
     private void validateConfigurationRule(AndonConfigurationSaveReqVO request) {
+        // 处理用户和处理角色至少存在一项，也允许两者同时存在形成更精确的联合责任范围。
         boolean hasHandlerUser = request.getHandlerUserId() != null;
         boolean hasHandlerRole = StringUtils.hasText(request.getHandlerRoleCode());
         if (!hasHandlerUser && !hasHandlerRole) {
@@ -197,6 +207,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
             validateEnabledRole(request.getHandlerRoleCode());
         }
 
+        // 升级时限与升级责任主体必须成组出现，并且升级时点必须晚于首次响应时点。
         boolean hasEscalationMinutes = request.getEscalationMinutes() != null;
         boolean hasEscalationUser = request.getEscalationUserId() != null;
         boolean hasEscalationRole = StringUtils.hasText(request.getEscalationRoleCode());
@@ -236,6 +247,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
      * 将空产线规范为全局范围哨兵值，校验同一类型在同一全局或产线范围内只有一条未删除配置。
      */
     private void validateScopeUnique(AndonConfigurationSaveReqVO request, Long excludedId) {
+        // 数据库使用 0 表示全局范围，从而让全局规则和产线规则共享同一组唯一性检查逻辑。
         long scopeLineId = request.getProductionLineId() == null
                 ? GLOBAL_SCOPE_LINE_ID : request.getProductionLineId();
         boolean exists = excludedId == null
@@ -287,6 +299,7 @@ public class AndonConfigurationServiceImpl implements AndonConfigurationService 
     /** 刷新写入并把数据库并发唯一约束冲突转换为范围重复业务异常。 */
     private void saveConfiguration(AndonConfigurationEntity configuration) {
         try {
+            // 立即 flush 触发数据库唯一索引；应用层校验之外仍由数据库兜住并发插入竞态。
             configurationRepository.saveAndFlush(configuration);
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.CONFIGURATION_SCOPE_DUPLICATE);

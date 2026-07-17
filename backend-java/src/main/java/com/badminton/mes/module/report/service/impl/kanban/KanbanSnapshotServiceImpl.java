@@ -49,7 +49,7 @@ public class KanbanSnapshotServiceImpl implements KanbanSnapshotService {
         var request = new RealtimeReportQueryReqVO();
         if ("line".equals(scopeType)) request.setLineId(scopeId);
         if ("workshop".equals(scopeType)) request.setWorkshopId(scopeId);
-        var overview = realtimeService.overview(request);
+        var overview = realtimeService.overviewForKanban(request);
         var result = new LinkedHashMap<String, Object>();
         result.put("snapshotTime", Instant.now()); result.put("lastRefreshTime", Instant.now());
         result.put("dataStatus", "FRESH"); result.put("sourceWarnings", java.util.List.of());

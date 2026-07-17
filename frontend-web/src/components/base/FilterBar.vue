@@ -17,8 +17,9 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  query: [params: Record<string, any>]
-  reset: [params: Record<string, any>]
+  /** 筛选栏仅负责收集原始筛选值，具体页面再转换为各自的请求参数类型。 */
+  query: [params: any]
+  reset: [params: any]
 }>()
 
 function defaultFor(field: FilterField): unknown {

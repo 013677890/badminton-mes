@@ -153,6 +153,15 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         this.bomDetailManager = bomDetailManager;
     }
 
+    /**
+     * 创建工单并补齐产品档案中的冗余信息。
+     *
+     * <p>方法先完成计划时间、产品、工艺路线和车间校验，再落库；工单号冲突由数据库唯一索引兜底，
+     * 并转换为业务异常，避免把持久化异常直接暴露给接口调用方。</p>
+     *
+     * @param reqVO 工单创建请求
+     * @return 新工单主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createWorkOrder(WorkOrderSaveReqVO reqVO) {
@@ -182,11 +191,19 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         return workOrder.getId();
     }
 
+    /**
+     * 按工单当前状态更新计划信息，并在必要时记录计划变更原因。
+     *
+     * @param id 工单主键
+     * @param reqVO 新的计划信息
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateWorkOrder(Long id, WorkOrderSaveReqVO reqVO) {
+        // 计划时间先于状态判断校验，避免无效时间在不同状态分支中产生不一致的错误提示。
         validatePlanTime(reqVO);
         WorkOrderEntity existing = validateWorkOrderExists(id);
+        // “已创建”允许完整修改；“已下达”只能改数量和时间；生产中及后续状态冻结计划。
         if (WorkOrderStatusEnum.CREATED.getStatus().equals(existing.getOrderStatus())) {
             updateCreatedWorkOrder(id, reqVO);
             return;
@@ -212,6 +229,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         validateWorkshop(reqVO.getWorkshopId());
 
         WorkOrderEntity updateEntity = WorkOrderConvert.toEntity(reqVO);
+        // 直接执行带状态条件的 UPDATE，利用数据库返回行数判断更新期间是否发生并发状态变化。
         int rows = workOrderRepository.updatePlan(id, updateEntity.getProductId(), product.getProductName(),
                 product.getSpec(), product.getUnitId(), updateEntity.getBatchNo(), updateEntity.getBomId(),
                 updateEntity.getRoutingId(), updateEntity.getCustomerId(), updateEntity.getWorkshopId(),
@@ -236,11 +254,13 @@ public class WorkOrderServiceImpl implements WorkOrderService {
      * @param reqVO    修改请求
      */
     private void updateReleasedWorkOrder(WorkOrderEntity existing, WorkOrderSaveReqVO reqVO) {
+        // 已下达工单的计划变化会影响现场执行，因此强制要求调用方提供可追溯的变更原因。
         if (!StringUtils.hasText(reqVO.getChangeReason())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_CHANGE_REASON_REQUIRED);
         }
 
         Long id = existing.getId();
+        // Repository 同时检查状态和“计划数不得低于已派工数”，避免先查询再更新的并发窗口。
         int rows = workOrderRepository.updateReleasedPlan(id, reqVO.getPlanQuantity(),
                 reqVO.getPlanStartTime(), reqVO.getPlanEndTime(), WorkOrderStatusEnum.RELEASED.getStatus());
         if (rows == 0) {
@@ -254,8 +274,10 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
         // 计划数量变化才重算物料需求；只改交期不触碰物料数据
         if (!reqVO.getPlanQuantity().equals(existing.getPlanQuantity())) {
+            // 只有数量变化才会改变物料需求；仅调整交期不应重建已生成的物料需求行。
             recalculateWorkOrderMaterials(id, existing.getBomId(), reqVO.getPlanQuantity());
         }
+        // 计划更新与变更日志处于同一事务，任一步失败都会回滚，保证审计记录不丢失。
         insertStatusLog(id, WorkOrderStatusEnum.RELEASED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
                 WorkOrderChangeTypeEnum.PLAN_CHANGE, reqVO.getChangeReason());
         evictCacheAfterCommit(id);
@@ -266,6 +288,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteWorkOrder(Long id) {
+        // 先读取实体用于返回准确状态错误，再用带状态条件的逻辑删除防止并发下达后误删。
         WorkOrderEntity existing = validateWorkOrderExists(id);
         if (!WorkOrderStatusEnum.CREATED.getStatus().equals(existing.getOrderStatus())) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_DELETE);
@@ -284,6 +307,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void releaseWorkOrder(Long id) {
+        // 悲观锁保证下达期间同一工单不会被并发修改 BOM、路线或状态。
         WorkOrderEntity workOrder = workOrderRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_NOT_EXISTS));
         if (!WorkOrderStatusEnum.CREATED.getStatus().equals(workOrder.getOrderStatus())) {
@@ -294,6 +318,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         }
         validateRoutingReference(workOrder.getRoutingId(), workOrder.getProductId(), true);
 
+        // 使用 CAS 再次确认状态，防止锁外调用或事务边界变化导致错误状态被下达。
         int rows = workOrderRepository.updateToReleased(id, WorkOrderStatusEnum.CREATED.getStatus(),
                 WorkOrderStatusEnum.RELEASED.getStatus());
         if (rows != 1) {
@@ -302,6 +327,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
         // BOM 或明细校验失败会抛异常，本事务连同状态更新一起回滚。
         generateWorkOrderMaterials(workOrder);
+        // 只有物料需求生成成功后才记录下达日志，日志本身不代表部分成功。
         insertStatusLog(id, WorkOrderStatusEnum.CREATED.getStatus(), WorkOrderStatusEnum.RELEASED.getStatus(),
                 WorkOrderChangeTypeEnum.STATUS_TRANSITION, null);
         evictCacheAfterCommit(id);
@@ -331,6 +357,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void resumeWorkOrder(Long id) {
         validateWorkOrderExists(id);
+        // 暂停前状态保存在最近一条暂停日志中，确保“已下达”和“生产中”都能恢复到原状态。
         // 恢复到暂停前状态：从最近一条"流转到暂停"的日志取 fromStatus；无日志时回到已下达
         Integer restoreStatus = workOrderStatusLogRepository
                 .findFirstByWorkOrderIdAndToStatusAndDeletedFalseOrderByIdDesc(id,
@@ -339,6 +366,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
                 .orElse(WorkOrderStatusEnum.RELEASED.getStatus());
         int rows = workOrderRepository.updateStatus(id, List.of(WorkOrderStatusEnum.PAUSED.getStatus()),
                 restoreStatus);
+        // 通过影响行数确认当前仍是暂停状态；否则说明并发请求已经完成了恢复或其他流转。
         if (rows == 0) {
             throw new ServiceException(ProductionErrorCodeConstants.WORK_ORDER_STATUS_NOT_ALLOW_RESUME);
         }
@@ -357,6 +385,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         Integer fromStatus = null;
         for (Integer candidate : List.of(WorkOrderStatusEnum.RELEASED.getStatus(),
                 WorkOrderStatusEnum.IN_PRODUCTION.getStatus())) {
+            // 每次只尝试一个前置状态，成功的 candidate 就是实际状态日志的 fromStatus。
             if (workOrderRepository.updateToFinished(id, candidate,
                     WorkOrderStatusEnum.FINISHED.getStatus()) == 1) {
                 fromStatus = candidate;
@@ -412,6 +441,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
 
         // 物料需求随单失效，避免齐套/领料按物料聚合时计入已作废工单
         workOrderMaterialRepository.logicDeleteByWorkOrderId(id);
+        // 先使工单关联物料失效，再写状态日志，保证后续查询不会把作废工单当作有效需求。
         insertStatusLog(id, fromStatus, WorkOrderStatusEnum.CANCELLED.getStatus(),
                 WorkOrderChangeTypeEnum.STATUS_TRANSITION, reason);
         evictCacheAfterCommit(id);
@@ -422,6 +452,7 @@ public class WorkOrderServiceImpl implements WorkOrderService {
     @Transactional(readOnly = true)
     public List<WorkOrderMaterialRespVO> getWorkOrderMaterials(Long id) {
         validateWorkOrderExists(id);
+        // 只读取未逻辑删除的需求行；未下达工单没有物料需求时按 API 约定返回空数组。
         List<WorkOrderMaterialEntity> list = workOrderMaterialRepository.findByWorkOrderIdAndDeletedFalse(id);
         if (list.isEmpty()) {
             return List.of();

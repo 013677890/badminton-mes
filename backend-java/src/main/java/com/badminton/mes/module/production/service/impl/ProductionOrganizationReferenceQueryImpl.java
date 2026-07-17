@@ -40,6 +40,8 @@ public class ProductionOrganizationReferenceQueryImpl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean lockAndCheckAssignment(Long workshopId, Long lineId) {
+        // 先锁车间，再锁产线，和组织写服务保持统一锁序；返回值只表示当前关系是否可用，
+        // 不向调用方泄露实体，也不在这里修改任何组织数据。
         if (workshopId == null) {
             return lineId == null;
         }
@@ -47,6 +49,7 @@ public class ProductionOrganizationReferenceQueryImpl
         WorkshopEntity workshop = workshopRepository
                 .findByIdAndDeletedFalseForUpdate(workshopId)
                 .orElse(null);
+        // 车间不存在、已逻辑删除或已停用，都不能作为用户生产组织归属。
         if (workshop == null
                 || !CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
             return false;
@@ -58,6 +61,7 @@ public class ProductionOrganizationReferenceQueryImpl
         ProductionLineEntity line = productionLineRepository
                 .findByIdAndDeletedFalseForUpdate(lineId)
                 .orElse(null);
+        // 产线必须属于已锁定车间且处于启用状态，防止跨车间或停用产线被分配给用户。
         return line != null
                 && CommonStatusEnum.ENABLED.getStatus().equals(line.getStatus())
                 && workshopId.equals(line.getWorkshopId());

@@ -28,8 +28,10 @@ public final class BarcodeTemplateSpecifications {
     public static Specification<BarcodeTemplateEntity> page(BarcodeTemplatePageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 模板升版本会保留多行历史记录，但已逻辑删除的版本不参与正常分页。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (StringUtils.hasText(reqVO.getTemplateCode())) {
+                // 模板编码使用前缀查询，名称则按用户可见文本执行包含查询。
                 predicates.add(criteriaBuilder.like(root.get("templateCode"),
                         reqVO.getTemplateCode() + "%"));
             }

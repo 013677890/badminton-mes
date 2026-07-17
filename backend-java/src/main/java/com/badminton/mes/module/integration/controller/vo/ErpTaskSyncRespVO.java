@@ -13,22 +13,22 @@ import lombok.Data;
 @Data
 public class ErpTaskSyncRespVO {
 
-    /** 来源系统 */
+    /** 本次批量同步实际使用的来源系统。 */
     private String sourceSystem;
 
-    /** 总数 */
+    /** 经过门面筛选、实际参与处理的任务总数。 */
     private int totalCount;
 
-    /** 成功数 */
+    /** 新建 MES 工单成功的任务数量。 */
     private int successCount;
 
-    /** 失败数 */
+    /** 业务校验或持久化失败的任务数量。 */
     private int failureCount;
 
-    /** 重复数 */
+    /** 已存在 MES 工单、未重复创建的任务数量。 */
     private int duplicateCount;
 
-    /** 逐条处理明细 */
+    /** 每条任务的成功、失败或重复处理结果。 */
     private List<Detail> details;
 
     /**
@@ -37,16 +37,16 @@ public class ErpTaskSyncRespVO {
     @Data
     public static class Detail {
 
-        /** ERP 任务单号 */
+        /** ERP 任务业务编号。 */
         private String erpOrderNo;
 
-        /** 处理状态：SUCCESS / FAILED / DUPLICATE */
+        /** 处理状态：SUCCESS、FAILED 或 DUPLICATE。 */
         private String status;
 
-        /** 生成的 MES 工单主键（成功时） */
+        /** 成功或重复时关联的 MES 工单主键。 */
         private Long workOrderId;
 
-        /** 生成的 MES 工单号（成功时） */
+        /** 成功或重复时关联的 MES 工单号。 */
         private String workOrderNo;
 
         /** 失败错误码（失败时） */

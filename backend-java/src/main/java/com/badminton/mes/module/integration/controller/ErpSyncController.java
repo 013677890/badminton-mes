@@ -38,6 +38,7 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/integration/erp")
 public class ErpSyncController {
 
+    /** ERP 同步门面，负责批量隔离、结果汇总及工艺待确认状态流转。 */
     private final ErpSyncService erpSyncService;
 
     /**
@@ -59,6 +60,7 @@ public class ErpSyncController {
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<ErpTaskSyncRespVO> syncErpTasks(
             @Valid @RequestBody(required = false) ErpTaskSyncReqVO reqVO) {
+        // 请求体可省略；空请求表示使用默认来源并同步数据源返回的全部任务。
         ErpTaskSyncReqVO request = reqVO != null ? reqVO : new ErpTaskSyncReqVO();
         return CommonResult.success(erpSyncService.syncErpTasks(request));
     }
@@ -86,6 +88,7 @@ public class ErpSyncController {
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.CRAFT_ENGINEER})
     public CommonResult<ErpCraftSyncRespVO> syncErpCrafts(
             @Valid @RequestBody(required = false) ErpCraftSyncReqVO reqVO) {
+        // 空请求同样转为空对象，避免 Service 接收 null 并统一采用默认来源系统。
         ErpCraftSyncReqVO request = reqVO != null ? reqVO : new ErpCraftSyncReqVO();
         return CommonResult.success(erpSyncService.syncErpCrafts(request));
     }

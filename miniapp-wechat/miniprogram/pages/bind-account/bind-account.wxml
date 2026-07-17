@@ -1,3 +1,4 @@
+<!-- 绑定页不再收集账号密码，只说明绑定码流程并跳转到账号登录入口。 -->
 <view class="page bind-page">
   <view class="eyebrow">WECHAT BINDING</view>
   <view class="page-title">绑定方式已升级</view>

@@ -1,5 +1,7 @@
 pluginManagement {
     repositories {
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url System.getenv('GRADLE_MAVEN_MIRROR') ?: 'https://maven.aliyun.com/repository/public' }
         gradlePluginPortal()
         mavenCentral()
     }
@@ -8,6 +10,7 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven { url System.getenv('GRADLE_MAVEN_MIRROR') ?: 'https://maven.aliyun.com/repository/public' }
         mavenCentral()
     }
 }
