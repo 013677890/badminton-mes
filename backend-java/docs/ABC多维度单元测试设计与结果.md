@@ -2,9 +2,9 @@
 
 # A/B/C 多维度单元测试设计与结果
 
-> @author 范家权
-> 分支：`main`
-> 测试日期：2026-07-16
+> @author 范家权  
+> 分支：`main`  
+> 测试日期：2026-07-17
 
 ## 1. 范围和约束
 
@@ -69,6 +69,25 @@ backend-java/src/test/java/com/badminton/mes/group/
 覆盖未登录拒绝、管理员范围放行、车间/产线数据范围、ThreadLocal 操作人隔离，以及金额、
 条码组合器和 C 组转换器在并发调用下无共享可变状态污染。
 
+### 2.5 B 组报表、缺陷来源与看板补充测试
+
+本轮为 B 组 `report` 模块增加 8 个独立单元测试文件。各文件只验证一个业务组件或数据契约，
+避免把服务聚合、缓存降级、值对象与缓存键测试混为一个大测试类：
+
+| 测试文件 | 用例数 | 设计与作用 |
+| --- | ---: | --- |
+| `KanbanRedisKeyConstantsTest` | 3 | 验证全局空范围、车间/产线命名空间隔离和 90 秒过期策略 |
+| `ReportExportFileTest` | 3 | 验证文件元数据，以及构造和读取两个方向的字节数组防御性复制 |
+| `DefectSourceDtoContractTest` | 3 | 验证空集合归一化、不可变复制及缺陷净数量的正/零/负边界 |
+| `ReportQueryCriteriaContractTest` | 3 | 验证 11 个查询维度传递、可选条件和值对象相等语义 |
+| `RealtimeProductionServiceImplTest` | 3 | 验证实时总览聚合、任务行映射和空数量兼容 |
+| `RepairDefectSourceProviderTest` | 3 | 验证继续返修、报废、复检通过以及缺失任务和条数上限 |
+| `SceneDefectSourceProviderTest` | 1 | 验证查询条件及上限原样委托，且不虚构降级警告 |
+| `KanbanSnapshotServiceImplTest` | 3 | 验证缓存命中、损坏 JSON 回源、Redis 写失败降级和范围登记 |
+
+另新增 `ReportConcurrencyStressTest`，把缺陷净数量、缺陷批次防御性复制、看板缓存键和报表
+查询条件拆成 4 个独立压力场景，每个场景默认执行 10,000 次操作。
+
 ## 3. 与既有功能测试的关系
 
 既有模块测试继续承担具体 Service/Controller 功能的细粒度验证，例如：
@@ -78,7 +97,8 @@ backend-java/src/test/java/com/badminton/mes/group/
 - C 组已有设备类别/制造商、设备计数、质量方案转换和安灯类型转换测试；本轮进一步补充其余设备、设备接入、质量和安灯转换器，以及关键重复编码服务门禁。
 
 按维度组织的补充套件不替换既有功能测试。`report` 当前已落地追溯、报表、小程序和看板相关
-服务，本轮将看板快照 Key 和并发隔离纳入 B 组压力与缓存契约测试。
+服务，本轮已将实时生产、缺陷来源、看板快照、导出文件、查询条件以及并发隔离纳入 B 组
+功能、边界、降级、不可变性和压力测试。
 
 ## 4. 执行结果
 
@@ -90,16 +110,26 @@ backend-java/src/test/java/com/badminton/mes/group/
 
 结果：`BUILD SUCCESSFUL`；维度测试加压力执行器测试共 74 个用例，0 失败、0 错误、0 跳过。
 
+报表补充测试执行命令：
+
+```powershell
+.\gradlew.bat test --tests "com.badminton.mes.module.report.*" --no-daemon --max-workers=2
+```
+
+结果：`BUILD SUCCESSFUL`；16 个报表测试类、39 个用例，0 失败、0 错误、0 跳过。本轮新增
+8 个测试类、22 个用例。
+
 ### 4.2 压力测试
 
-新增三个独立压力测试文件：
+压力套件按组别和模块使用独立文件：
 
 ```text
 backend-java/src/test/java/com/badminton/mes/stress/
 ├─ ATeamConcurrencyStressTest.java
 ├─ BTeamConcurrencyStressTest.java
 ├─ CTeamConcurrencyStressTest.java
-└─ ConcurrentStressRunnerTest.java
+├─ ModuleConcurrencyStressTest.java
+└─ ReportConcurrencyStressTest.java
 ```
 
 执行命令：
@@ -108,9 +138,9 @@ backend-java/src/test/java/com/badminton/mes/stress/
 .\gradlew.bat stressTest --no-daemon --max-workers=2
 ```
 
-结果：`BUILD SUCCESSFUL`；4 个压力测试类、21 个压力场景，0 失败。新增的 10 个 A/B/C 场景
-默认各执行 10,000 次操作，覆盖无状态业务规则、条码组合、登录上下文隔离、看板快照、缓存
-命名空间与版本 Key。
+结果：`BUILD SUCCESSFUL`；5 个压力测试类、25 个压力场景，0 失败、0 错误、0 跳过。新增的
+4 个报表场景默认各执行 10,000 次操作；完整套件覆盖无状态业务规则、条码组合、登录上下文
+隔离、缺陷批次不可变性、看板缓存键、查询条件以及各模块状态和转换契约。
 
 ### 4.3 全量门禁
 
@@ -118,7 +148,7 @@ backend-java/src/test/java/com/badminton/mes/stress/
 .\gradlew.bat test --no-daemon --max-workers=2
 ```
 
-执行结果：`BUILD SUCCESSFUL`；136 个测试类、783 个用例，0 失败、0 错误、0 跳过。
+执行结果：`BUILD SUCCESSFUL`；144 个测试类、805 个用例，0 失败、0 错误、0 跳过。
 
 全量门禁期间还修正了一个已有安灯权限测试夹具：原用例声称“无指派角色”，但测试事件和
 测试用户都使用 `OPERATOR`，导致服务按指派角色正确放行。现将事件指派角色改为
