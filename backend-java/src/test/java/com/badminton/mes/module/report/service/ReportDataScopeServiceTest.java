@@ -2,7 +2,6 @@ package com.badminton.mes.module.report.service;
 
 import java.util.List;
 
-import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
@@ -10,10 +9,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * M4 报表车间、产线数据权限测试。
+ * M4 报表车间、产线查询范围测试。
  *
  * @author 刘涵
  * @date 2026/07/13
@@ -36,33 +34,34 @@ class ReportDataScopeServiceTest {
     }
 
     @Test
-    void workshopManagerCanQueryAnotherLineInOwnWorkshop() {
-        login(RoleCodeConstants.WORKSHOP_MANAGER, 10L, 20L);
+    void teamLeaderCanQueryAnotherWorkshopAndLine() {
+        login(RoleCodeConstants.TEAM_LEADER, null, null);
 
-        assertThat(service.resolve(10L, 99L))
-                .isEqualTo(new ReportDataScopeService.ReportDataScope(10L, 99L));
+        assertThat(service.resolve(11L, 99L))
+                .isEqualTo(new ReportDataScopeService.ReportDataScope(11L, 99L));
     }
 
     @Test
-    void operatorCannotExpandToAnotherLine() {
+    void operatorCanQueryRequestedScope() {
         login(RoleCodeConstants.OPERATOR, 10L, 20L);
 
-        assertThatThrownBy(() -> service.resolve(10L, 21L)).isInstanceOf(ServiceException.class);
+        assertThat(service.resolve(12L, 21L))
+                .isEqualTo(new ReportDataScopeService.ReportDataScope(12L, 21L));
     }
 
     @Test
-    void nonAdminWithoutWorkshopIsDenied() {
+    void userWithoutOrganizationCanQueryAllData() {
         login(RoleCodeConstants.PMC, null, null);
 
-        assertThatThrownBy(() -> service.resolve(null, null)).isInstanceOf(ServiceException.class);
+        assertThat(service.resolve(null, null))
+                .isEqualTo(new ReportDataScopeService.ReportDataScope(null, null));
     }
 
     @Test
-    void pmcWithoutLineCanQueryWholeOwnWorkshop() {
-        login(RoleCodeConstants.PMC, 10L, null);
+    void authenticatedUserCanQueryTraceObjectOutsideOwnOrganization() {
+        login(RoleCodeConstants.INSPECTOR, 10L, 20L);
 
-        assertThat(service.resolve(null, null))
-                .isEqualTo(new ReportDataScopeService.ReportDataScope(10L, null));
+        service.checkObject(11L, 21L);
     }
 
     private void login(String role, Long workshopId, Long lineId) {

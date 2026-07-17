@@ -16,7 +16,7 @@ import lombok.Data;
 @Data
 public class UserAssignmentReqVO {
 
-    /** 非 ADMIN 角色主键列表。 */
+    /** 目标职位主键列表；ADMIN 是否可修改由当前登录用户权限决定。 */
     @NotNull(message = "职位列表不能为空")
     @Size(max = 10, message = "职位数量不能超过 10 个")
     private List<@Positive(message = "角色 id 必须为正数") Long> roleIds;

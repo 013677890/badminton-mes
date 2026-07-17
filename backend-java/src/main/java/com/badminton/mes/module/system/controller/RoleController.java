@@ -3,8 +3,6 @@ package com.badminton.mes.module.system.controller;
 import java.util.List;
 
 import com.badminton.mes.common.core.CommonResult;
-import com.badminton.mes.common.security.RequiresRoles;
-import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.system.controller.vo.RoleRespVO;
 import com.badminton.mes.module.system.controller.vo.RoleUserRespVO;
 import com.badminton.mes.module.system.service.RoleService;
@@ -38,12 +36,11 @@ public class RoleController {
     }
 
     /**
-     * 查询启用角色列表，用户管理表单下拉使用，仅管理员可见。
+     * 查询启用角色列表，用户管理表单下拉使用。
      *
      * @return 启用角色列表，无数据时为空集合(API-002)
      */
     @GetMapping
-    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<List<RoleRespVO>> getEnabledRoles() {
         return CommonResult.success(roleService.getEnabledRoles());
     }

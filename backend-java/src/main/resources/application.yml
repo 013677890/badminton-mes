@@ -34,6 +34,9 @@ mes:
       unlimited-code-url: ${MES_WECHAT_UNLIMITED_CODE_URL:https://api.weixin.qq.com/wxa/getwxacodeunlimit}
       bind-page: ${MES_WECHAT_BIND_PAGE:pages/wechat-bind-confirm/wechat-bind-confirm}
       code-env-version: ${MES_WECHAT_CODE_ENV_VERSION:release}
+      # 可选 HTTP 代理。Clash Fake-IP 模式下，Docker 开发环境通过主机桥接端口访问微信 API。
+      proxy-host: ${MES_WECHAT_PROXY_HOST:}
+      proxy-port: ${MES_WECHAT_PROXY_PORT:0}
       connect-timeout: ${MES_WECHAT_CONNECT_TIMEOUT:3s}
       read-timeout: ${MES_WECHAT_READ_TIMEOUT:5s}
       bind-ticket-ttl: ${MES_WECHAT_BIND_TICKET_TTL:5m}

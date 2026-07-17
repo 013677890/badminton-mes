@@ -5,9 +5,9 @@
     <view wx:elif="{{state === 'error'}}" class="page-state"><text>{{error}}</text><button bindtap="load">重新加载</button></view>
     <block wx:else>
       <view class="user-card"><view class="avatar">{{userInitial}}</view><view class="user-copy"><text>{{user.userName}}</text><small>工号 {{user.userNo}}</small></view><view class="binding-chip {{user.wechatBound ? 'bound' : ''}}">{{user.wechatBound ? '微信已绑定' : '微信未绑定'}}</view></view>
-      <view wx:if="{{isAdminTarget}}" class="admin-notice"><image src="/assets/icons/lock.svg" mode="aspectFit"/><view><text>管理员身份受保护</text><small>本页不会授予或撤销管理员权限，只调整其他职位和所属组织。</small></view></view>
+      <view wx:if="{{adminLocked}}" class="admin-notice"><image src="/assets/icons/lock.svg" mode="aspectFit"/><view><text>管理员身份受保护</text><small>当前账号不是管理员，只能调整该用户的其他职位和所属组织。</small></view></view>
       <view class="form-card">
-        <view class="section-head"><view><text>职位分配</text><small>可多选，决定用户可访问的业务功能</small></view><image src="/assets/icons/user.svg" mode="aspectFit"/></view>
+        <view class="section-head"><view><text>职位分配</text><small>{{canAssignAdmin ? '可分配管理员及其他职位' : '管理员职位仅管理员可分配'}}</small></view><image src="/assets/icons/user.svg" mode="aspectFit"/></view>
         <checkbox-group class="role-grid" bindchange="chooseRoles"><label wx:for="{{roleChoices}}" wx:key="id" class="role-item {{item.checked ? 'role-item--checked' : ''}}"><checkbox value="{{item.id}}" checked="{{item.checked}}" color="#0f766e"/><view><text>{{item.roleName}}</text><small>{{item.remark || item.roleCode}}</small></view></label></checkbox-group>
       </view>
       <view class="form-card org-card">

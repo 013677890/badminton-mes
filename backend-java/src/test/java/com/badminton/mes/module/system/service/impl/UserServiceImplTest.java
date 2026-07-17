@@ -1,5 +1,6 @@
 package com.badminton.mes.module.system.service.impl;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -9,6 +10,7 @@ import com.badminton.mes.common.core.PageResult;
 import com.badminton.mes.common.enums.CommonStatusEnum;
 import com.badminton.mes.common.exception.ServiceException;
 import com.badminton.mes.common.security.LoginUser;
+import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.production.service.ProductionOrganizationReferenceQuery;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
@@ -43,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -99,7 +102,8 @@ class UserServiceImplTest {
         lenient().when(wechatUserBindingService.findActiveUserIds()).thenReturn(Set.of());
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
-        loginUser.setUserNo("admin");
+        loginUser.setUserNo("operator");
+        loginUser.setRoleCodes(List.of(RoleCodeConstants.OPERATOR));
         SecurityContextHolder.set("test-token", loginUser);
     }
 
@@ -237,7 +241,7 @@ class UserServiceImplTest {
     }
 
     @Test
-    @DisplayName("职位分配：请求中出现 ADMIN 时拒绝")
+    @DisplayName("职位分配：非管理员请求 ADMIN 时拒绝")
     void updateAssignmentRejectsRequestedAdminRole() {
         UserAssignmentReqVO reqVO = new UserAssignmentReqVO();
         reqVO.setRoleIds(List.of(1L));
@@ -250,6 +254,29 @@ class UserServiceImplTest {
                         assertThat(exception.getErrorCode())
                                 .isEqualTo(SystemErrorCodeConstants.USER_ADMIN_ROLE_PROTECTED));
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("职位分配：管理员可以授予 ADMIN")
+    @SuppressWarnings("unchecked")
+    void updateAssignmentAllowsAdminToAssignAdminRole() {
+        LoginUser loginUser = SecurityContextHolder.getRequiredLoginUser();
+        loginUser.setRoleCodes(List.of(RoleCodeConstants.ADMIN));
+        UserAssignmentReqVO reqVO = new UserAssignmentReqVO();
+        reqVO.setRoleIds(List.of(1L));
+        when(userRepository.findByIdAndDeletedFalse(USER_ID)).thenReturn(Optional.of(buildUser(1)));
+        when(roleRepository.findByIdInAndDeletedFalse(Set.of(1L)))
+                .thenReturn(List.of(buildRole(1L, RoleCodeConstants.ADMIN, 1)));
+        when(userRoleRepository.findByUserIdAndDeletedFalse(USER_ID)).thenReturn(List.of());
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of());
+
+        userService.updateUserAssignment(USER_ID, reqVO);
+
+        verify(userRoleRepository).saveAll(argThat(relations -> {
+            List<UserRoleEntity> savedRelations = new ArrayList<>();
+            relations.forEach(savedRelations::add);
+            return savedRelations.size() == 1 && Long.valueOf(1L).equals(savedRelations.getFirst().getRoleId());
+        }));
     }
 
     @Test

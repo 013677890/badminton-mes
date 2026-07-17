@@ -7,7 +7,8 @@ import com.badminton.mes.module.system.controller.vo.UserRespVO;
 import com.badminton.mes.module.system.controller.vo.UserSaveReqVO;
 
 /**
- * 系统用户 Service 接口，仅管理员可用(Controller 层 @RequiresRoles 控制)。
+ * 系统用户 Service 接口。用户查询和职位分配可由登录用户使用，账号管理写操作
+ * 由 Controller 层限制为管理员。
  *
  * @author 张竹灏
  * @date 2026/07/09

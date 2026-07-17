@@ -99,13 +99,27 @@ class KanbanWebSocketConfigTest {
     }
 
     @Test
-    @DisplayName("拒绝订阅其他产线的小程序实时主题")
-    void shouldRejectOtherMiniAppLineSubscription() {
+    @DisplayName("允许用户订阅其他产线的小程序实时主题")
+    void shouldAllowOtherMiniAppLineSubscription() {
         Map<String, Object> sessionAttributes = authenticatedSession();
         Message<?> message = createMessage(
                 StompCommand.SUBSCRIBE,
                 sessionAttributes,
                 "/topic/report/mini_app/realtime/line/21",
+                null);
+
+        assertDoesNotThrow(() -> interceptor.preSend(
+                message, mock(org.springframework.messaging.MessageChannel.class)));
+    }
+
+    @Test
+    @DisplayName("拒绝订阅非法范围主题")
+    void shouldRejectInvalidScopeSubscription() {
+        Map<String, Object> sessionAttributes = authenticatedSession();
+        Message<?> message = createMessage(
+                StompCommand.SUBSCRIBE,
+                sessionAttributes,
+                "/topic/report/mini_app/realtime/team/21",
                 null);
 
         assertThrows(MessagingException.class, () -> interceptor.preSend(

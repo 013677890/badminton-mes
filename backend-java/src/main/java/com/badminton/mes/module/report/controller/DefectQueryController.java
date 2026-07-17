@@ -4,8 +4,6 @@ import java.nio.charset.StandardCharsets;
 
 import com.badminton.mes.common.core.CommonResult;
 import com.badminton.mes.common.core.PageResult;
-import com.badminton.mes.common.security.RequiresRoles;
-import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.report.controller.vo.DefectReportRespVO;
 import com.badminton.mes.module.report.controller.vo.ReportQueryReqVO;
 import com.badminton.mes.module.report.service.DefectReportService;
@@ -55,7 +53,6 @@ public class DefectQueryController {
     }
 
     @GetMapping("/export")
-    @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC, RoleCodeConstants.WORKSHOP_MANAGER})
     public ResponseEntity<byte[]> export(@Valid ReportQueryReqVO reqVO) {
         ReportExportFile file = defectReportService.export(reqVO);
         HttpHeaders headers = new HttpHeaders();

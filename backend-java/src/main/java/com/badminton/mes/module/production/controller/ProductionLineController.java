@@ -35,8 +35,6 @@ import jakarta.validation.constraints.PositiveOrZero;
 @Validated
 @RestController
 @RequestMapping("/api/production/production_lines")
-@RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC,
-        RoleCodeConstants.WORKSHOP_MANAGER, RoleCodeConstants.CRAFT_ENGINEER})
 public class ProductionLineController {
 
     private final ProductionLineService productionLineService;

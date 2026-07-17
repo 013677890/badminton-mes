@@ -1,7 +1,7 @@
 <view class="manage-page">
   <view class="top-bar"><view class="back" bindtap="back"><view></view></view><text>人员与职位</text><view class="placeholder"></view></view>
   <view class="manage-content">
-    <view class="manage-intro"><image src="/assets/icons/assignment.svg" mode="aspectFit"/><view><text>人员权限配置</text><small>分配职位、车间与产线；管理员权限不可在小程序中变更。</small></view></view>
+    <view class="manage-intro"><image src="/assets/icons/assignment.svg" mode="aspectFit"/><view><text>人员权限配置</text><small>所有登录用户可分配普通职位；只有管理员可分配管理员职位。</small></view></view>
     <view class="search-card">
       <view class="search-row"><input value="{{keyword}}" placeholder="搜索工号或真实姓名" bindinput="input" confirm-type="search" bindconfirm="search"/><button bindtap="search">搜索</button></view>
       <view class="filter-row"><picker range="{{roles}}" range-key="roleName" value="{{roleIndex}}" bindchange="chooseRole"><view>{{roleIndex >= 0 ? roles[roleIndex].roleName : '全部职位'}}</view></picker><picker range="{{workshops}}" range-key="workshopName" value="{{workshopIndex}}" bindchange="chooseWorkshop"><view>{{workshopIndex >= 0 ? workshops[workshopIndex].workshopName : '全部车间'}}</view></picker><view class="clear-filter" bindtap="clearFilters">重置</view></view>

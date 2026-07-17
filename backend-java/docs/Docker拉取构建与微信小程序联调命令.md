@@ -142,12 +142,26 @@ ipconfig
 - 只允许 TCP 8080；
 - 只允许 Private、Public 网络配置；
 - 只允许本地子网 `LocalSubnet` 访问；
+- 自动识别 WLAN IPv4；
+- 创建 `WLAN_IP:8080 → 127.0.0.1:8080` 的 Windows `portproxy`，兼容 Docker Desktop 只暴露 localhost 的情况；
 - 可以重复运行，不会累积同名规则。
 
 如果 PowerShell 的脚本执行策略阻止运行，可以执行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-miniapp-firewall.ps1
+```
+
+如果自动识别的 WLAN 地址不正确，可以显式指定：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup-miniapp-firewall.ps1 -WlanAddress 172.25.96.19
+```
+
+检查端口代理：
+
+```powershell
+netsh interface portproxy show v4tov4
 ```
 
 也可以使用不含反引号续行的一行命令手动创建：
@@ -176,11 +190,19 @@ Remove-NetFirewallRule -DisplayName "Badminton MES Backend 8080"
 miniapp-wechat/miniprogram/services/config.ts
 ```
 
-当前默认地址：
+真机当前默认地址：
 
 ```text
-http://172.25.96.19:8080
+http://172.25.96.19:18080
 ```
+
+微信开发者工具自动使用：
+
+```text
+http://127.0.0.1:8080
+```
+
+局域网端口 18080 由 `scripts/start-miniapp-lan-proxy.ps1` 转发到 Docker 的 `127.0.0.1:8080`，不关闭也不修改 Clash。
 
 开发机 IP 变化后，可以在微信开发者工具控制台临时覆盖：
 

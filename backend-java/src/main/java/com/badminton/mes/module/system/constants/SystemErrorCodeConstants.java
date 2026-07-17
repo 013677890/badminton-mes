@@ -49,9 +49,9 @@ public final class SystemErrorCodeConstants {
     public static final ErrorCode USER_ROLE_INVALID =
             new ErrorCode("A0402", "所选角色不存在或已停用", "所选角色不可用，请重新选择");
 
-    /** 小程序管理员不能授予或撤销 ADMIN。 */
+    /** 非管理员不能授予或撤销 ADMIN。 */
     public static final ErrorCode USER_ADMIN_ROLE_PROTECTED =
-            new ErrorCode("A0440", "ADMIN 角色不允许通过职位分配接口修改", "管理员角色受保护，不能在此调整");
+            new ErrorCode("A0440", "非管理员不能修改 ADMIN 角色", "只有管理员可以分配管理员职位");
 
     /** 非 ADMIN 用户至少需要保留一个职位。 */
     public static final ErrorCode USER_ROLE_REQUIRED =

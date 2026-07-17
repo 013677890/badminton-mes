@@ -68,6 +68,10 @@ services:
       MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:?请在 .env 中设置 MES_WECHAT_MINI_APP_ID}
       MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:?请在 .env 中设置 MES_WECHAT_MINI_APP_SECRET}
       MES_WECHAT_CODE_ENV_VERSION: ${MES_WECHAT_CODE_ENV_VERSION:-develop}
+      # Clash Fake-IP/TUN 下让容器经主机 TCP 桥接使用 Clash，不影响 MySQL/Redis 等连接。
+      # 未设置时使用本地默认值；显式设置为空字符串可在生产环境关闭代理并直连微信。
+      MES_WECHAT_PROXY_HOST: ${MES_WECHAT_PROXY_HOST-host.docker.internal}
+      MES_WECHAT_PROXY_PORT: ${MES_WECHAT_PROXY_PORT:-17897}
       # 微信小程序联调必须启用认证，才能从 Bearer token 建立用户和数据范围上下文。
       MES_SECURITY_AUTH_DISABLED: "false"
       # 测试数据仅从开发专用位置加载，生产环境使用默认 db/migration

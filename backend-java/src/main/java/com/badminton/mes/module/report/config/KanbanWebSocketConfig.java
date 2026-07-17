@@ -2,9 +2,7 @@ package com.badminton.mes.module.report.config;
 
 import com.badminton.mes.common.security.LoginSessionReader;
 import com.badminton.mes.common.security.LoginUser;
-import com.badminton.mes.common.security.RoleCodeConstants;
 import java.security.Principal;
-import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
@@ -109,11 +107,6 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
             throw new MessagingException("非法订阅主题");
         }
 
-        List<String> roleCodes = user.getRoleCodes() == null ? List.of() : user.getRoleCodes();
-        if (roleCodes.contains(RoleCodeConstants.ADMIN) || roleCodes.contains(RoleCodeConstants.PMC)) {
-            return;
-        }
-
         String[] parts = destination.split("/");
         int scopeTypeIndex = miniAppTopic ? 5 : 4;
         int scopeIdIndex = miniAppTopic ? 6 : 5;
@@ -122,17 +115,13 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
         }
 
         String scopeType = parts[scopeTypeIndex];
-        Long scopeId;
+        if (!"workshop".equals(scopeType) && !"line".equals(scopeType)) {
+            throw new MessagingException("非法订阅范围");
+        }
         try {
-            scopeId = Long.valueOf(parts[scopeIdIndex]);
+            Long.valueOf(parts[scopeIdIndex]);
         } catch (NumberFormatException exception) {
             throw new MessagingException("非法订阅范围", exception);
-        }
-
-        boolean allowed = "workshop".equals(scopeType) ? scopeId.equals(user.getWorkshopId())
-                : "line".equals(scopeType) && scopeId.equals(user.getLineId());
-        if (!allowed) {
-            throw new MessagingException("无权订阅该看板范围");
         }
     }
 }

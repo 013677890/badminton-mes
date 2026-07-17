@@ -165,8 +165,9 @@ public class UserServiceImpl implements UserService {
     @Transactional(rollbackFor = Exception.class)
     public void updateUserAssignment(Long id, UserAssignmentReqVO reqVO) {
         UserEntity user = validateUserExists(id);
+        boolean canAssignAdmin = currentUserHasRole(RoleCodeConstants.ADMIN);
         Set<Long> requestedRoleIds = new LinkedHashSet<>(reqVO.getRoleIds());
-        validateAssignableRoles(requestedRoleIds);
+        validateAssignableRoles(requestedRoleIds, canAssignAdmin);
         validateOrganization(reqVO.getWorkshopId(), reqVO.getLineId());
 
         Set<Long> targetRoleIds = new LinkedHashSet<>(requestedRoleIds);
@@ -174,7 +175,7 @@ public class UserServiceImpl implements UserService {
         Set<Long> activeRoleIds = activeRelations.stream()
                 .map(UserRoleEntity::getRoleId)
                 .collect(Collectors.toSet());
-        if (!activeRoleIds.isEmpty()) {
+        if (!canAssignAdmin && !activeRoleIds.isEmpty()) {
             roleRepository.findByIdInAndDeletedFalse(activeRoleIds).stream()
                     .filter(role -> RoleCodeConstants.ADMIN.equals(role.getRoleCode()))
                     .map(RoleEntity::getId)
@@ -338,7 +339,13 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    private void validateAssignableRoles(Collection<Long> roleIds) {
+    /**
+     * 校验职位分配请求中的角色均存在且启用，并保护 ADMIN 角色。
+     *
+     * @param roleIds 目标角色主键集合
+     * @param canAssignAdmin 当前用户是否可修改 ADMIN
+     */
+    private void validateAssignableRoles(Collection<Long> roleIds, boolean canAssignAdmin) {
         if (roleIds.isEmpty()) {
             return;
         }
@@ -348,9 +355,22 @@ public class UserServiceImpl implements UserService {
         if (!allEnabled) {
             throw new ServiceException(SystemErrorCodeConstants.USER_ROLE_INVALID);
         }
-        if (roles.stream().anyMatch(role -> RoleCodeConstants.ADMIN.equals(role.getRoleCode()))) {
+        boolean containsAdmin = roles.stream()
+                .anyMatch(role -> RoleCodeConstants.ADMIN.equals(role.getRoleCode()));
+        if (containsAdmin && !canAssignAdmin) {
             throw new ServiceException(SystemErrorCodeConstants.USER_ADMIN_ROLE_PROTECTED);
         }
+    }
+
+    /**
+     * 判断当前登录用户是否拥有指定角色。
+     *
+     * @param roleCode 角色编码
+     * @return 拥有角色时返回 true
+     */
+    private boolean currentUserHasRole(String roleCode) {
+        List<String> roleCodes = SecurityContextHolder.getRequiredLoginUser().getRoleCodes();
+        return roleCodes != null && roleCodes.contains(roleCode);
     }
 
     /**

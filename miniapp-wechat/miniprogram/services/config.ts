@@ -5,11 +5,12 @@ const MODE_KEY = 'miniapp_data_source'
 const SCENARIO_KEY = 'miniapp_mock_scenario'
 const API_BASE_URL_KEY = 'miniapp_api_base_url'
 
-export const DEFAULT_API_BASE_URL = 'http://172.25.96.19:8080'
+export const DEFAULT_API_BASE_URL = 'http://172.25.96.19:18080'
 export const DEVTOOLS_API_BASE_URL = 'http://127.0.0.1:8080'
 const OBSOLETE_API_BASE_URLS = new Set([
   'http://172.25.123.116:8080',
-  'http://192.168.219.117:8080'
+  'http://192.168.219.117:8080',
+  'http://172.25.96.19:8080'
 ])
 
 function isWechatDevtools(): boolean {
@@ -32,6 +33,7 @@ export function getApiBaseUrl(): string {
     wx.removeStorageSync(API_BASE_URL_KEY)
     return isWechatDevtools() ? DEVTOOLS_API_BASE_URL : DEFAULT_API_BASE_URL
   }
+  if (isWechatDevtools() && value === DEFAULT_API_BASE_URL) return DEVTOOLS_API_BASE_URL
   if (/^https?:\/\//.test(value)) return value
   return isWechatDevtools() ? DEVTOOLS_API_BASE_URL : DEFAULT_API_BASE_URL
 }

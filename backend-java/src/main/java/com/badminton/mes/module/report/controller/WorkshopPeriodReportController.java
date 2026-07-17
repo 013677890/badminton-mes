@@ -4,8 +4,6 @@ import java.nio.charset.StandardCharsets;
 
 import com.badminton.mes.common.core.CommonResult;
 import com.badminton.mes.common.core.PageResult;
-import com.badminton.mes.common.security.RequiresRoles;
-import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.report.controller.vo.ProductionReportRespVO;
 import com.badminton.mes.module.report.controller.vo.ReportQueryReqVO;
 import com.badminton.mes.module.report.service.ProductionReportService;
@@ -47,7 +45,6 @@ public class WorkshopPeriodReportController {
     }
 
     @GetMapping("/export")
-    @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC, RoleCodeConstants.WORKSHOP_MANAGER})
     public ResponseEntity<byte[]> export(@Valid ReportQueryReqVO reqVO) {
         ReportExportFile file = reportService.export(reqVO, "workshop_periods");
         HttpHeaders headers = new HttpHeaders();

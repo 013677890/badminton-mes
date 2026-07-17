@@ -233,6 +233,8 @@ volumes/
 *.sql.gz
 *.sql.zip
 database-backups/
+scripts/*.log
+scripts/*.pid
 *.sqlite
 *.sqlite3
 *.db
@@ -296,4 +298,15 @@ test-output/
 
 .agent/
 /design/
-scripts/
+
+# 仅提交项目联调所需脚本；本地日志、PID 和个人辅助脚本继续忽略。
+scripts/*
+!scripts/miniapp-lan-proxy.js
+!scripts/setup-miniapp-firewall.ps1
+!scripts/start-miniapp-lan-proxy.ps1
+!scripts/stop-miniapp-lan-proxy.ps1
+!scripts/start-wechat-clash-relay.ps1
+!scripts/stop-wechat-clash-relay.ps1
+
+.codex_tmp/
+*.docx

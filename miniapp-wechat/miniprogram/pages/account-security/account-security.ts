@@ -31,8 +31,9 @@ Page({
     finally { this.setData({ bindingLoading: false }) }
   },
   writeBindingImage(ticket: string, base64: string): Promise<string> {
-    const path = `${wx.env.USER_DATA_PATH}/wechat-bind-${ticket}.png`
-    const content = base64.replace(/^data:image\/png;base64,/, '')
+    const content = base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '')
+    const extension = content.startsWith('/9j/') ? 'jpg' : 'png'
+    const path = `${wx.env.USER_DATA_PATH}/wechat-bind-${ticket}.${extension}`
     return new Promise((resolve, reject) => wx.getFileSystemManager().writeFile({ filePath: path, data: content, encoding: 'base64', success: () => resolve(path), fail: reject }))
   },
   startCountdown() { this.timer = setInterval(() => { const countdown = this.data.countdown - 1; if (countdown <= 0) { this.stopTimers(); this.setData({ countdown: 0, bindingStatus: 'EXPIRED' }); return } this.setData({ countdown }) }, 1000) as unknown as number },

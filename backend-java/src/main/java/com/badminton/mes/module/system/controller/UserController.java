@@ -25,17 +25,17 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * 系统用户管理 Controller，整体仅管理员可用(类级 @RequiresRoles)。
+ * 系统用户管理 Controller。
  *
  * <p>Web 层职责保持单薄：声明式参数校验、转发 Service、包装统一响应。
- * 角色校验由 AuthInterceptor 在 token 校验通过后执行(SEC-001)。
+ * 用户查询和小程序职位分配对所有登录用户开放；账号管理操作仍由
+ * {@link RequiresRoles} 限制为管理员，ADMIN 职位的授予与撤销在 Service 层二次校验。
  *
  * @author 张竹灏
  * @date 2026/07/09
  */
 @RestController
 @RequestMapping("/api/system/users")
-@RequiresRoles(RoleCodeConstants.ADMIN)
 public class UserController {
 
     private final UserService userService;
@@ -56,6 +56,7 @@ public class UserController {
      * @return 新用户主键 id
      */
     @PostMapping
+    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<Long> createUser(@Valid @RequestBody UserSaveReqVO reqVO) {
         return CommonResult.success(userService.createUser(reqVO));
     }
@@ -69,6 +70,7 @@ public class UserController {
      * @return 空数据成功响应
      */
     @PutMapping("/{id}")
+    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<Void> updateUser(@PathVariable("id") @Positive Long id,
                                          @Valid @RequestBody UserSaveReqVO reqVO) {
         userService.updateUser(id, reqVO);
@@ -78,8 +80,12 @@ public class UserController {
     /**
      * 调整用户职位、车间和产线。
      *
-     * <p>该接口不允许授予或撤销 ADMIN；目标用户已有 ADMIN 关系会被保留。
-     * 修改成功后目标用户全部会话失效，重新登录后新权限生效。
+     * <p>所有登录用户都可调整普通职位和所属组织；只有当前管理员可以授予或撤销
+     * ADMIN。修改成功后目标用户全部会话失效，重新登录后新权限生效。
+     *
+     * @param id 用户主键
+     * @param reqVO 职位与组织分配请求
+     * @return 空数据成功响应
      */
     @PutMapping("/{id}/assignment")
     public CommonResult<Void> updateUserAssignment(
@@ -96,6 +102,7 @@ public class UserController {
      * @return 空数据成功响应
      */
     @DeleteMapping("/{id}")
+    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<Void> deleteUser(@PathVariable("id") @Positive Long id) {
         userService.deleteUser(id);
         return CommonResult.success(null);
@@ -109,6 +116,7 @@ public class UserController {
      * @return 空数据成功响应
      */
     @PutMapping("/{id}/status")
+    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<Void> updateUserStatus(@PathVariable("id") @Positive Long id,
                                                @Valid @RequestBody UserStatusReqVO reqVO) {
         userService.updateUserStatus(id, reqVO.getStatus());
@@ -123,6 +131,7 @@ public class UserController {
      * @return 空数据成功响应
      */
     @PutMapping("/{id}/password/reset")
+    @RequiresRoles(RoleCodeConstants.ADMIN)
     public CommonResult<Void> resetPassword(@PathVariable("id") @Positive Long id,
                                             @Valid @RequestBody UserPasswordResetReqVO reqVO) {
         userService.resetPassword(id, reqVO.getNewPassword());

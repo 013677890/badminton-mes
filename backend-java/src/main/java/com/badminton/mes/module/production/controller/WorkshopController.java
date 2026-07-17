@@ -35,8 +35,6 @@ import jakarta.validation.constraints.PositiveOrZero;
 @Validated
 @RestController
 @RequestMapping("/api/production/workshops")
-@RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC,
-        RoleCodeConstants.WORKSHOP_MANAGER, RoleCodeConstants.CRAFT_ENGINEER})
 public class WorkshopController {
 
     private final WorkshopService workshopService;
