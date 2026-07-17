@@ -1,5 +1,5 @@
 <view class="dashboard-page">
-  <view class="page-top"><image class="title-icon" src="/assets/tabbar/dashboard-selected.png" mode="aspectFit"/><text>实时生产看板</text><view class="refresh-icon" bindtap="retry"></view></view>
+  <view class="page-top"><image class="title-icon" src="/assets/tabbar/dashboard-selected.png" mode="aspectFit"/><text>实时生产看板</text><view class="refresh-touch" bindtap="retry"><image src="/assets/icons/refresh.svg" mode="aspectFit"/></view></view>
   <view class="dashboard-content">
     <view class="meta-row"><view><view class="workshop">{{userWorkshop || '羽毛球一车间'}} · {{userLine || '1 号产线'}}</view><view class="live"><view class="live-dot"></view>{{lastRefreshTime ? '数据实时更新 · ' + lastRefreshTime : connectionText}}</view></view><view class="filter-icon"></view></view>
     <view wx:if="{{state === 'loading' && !tasks.length}}" class="state-card"><app-state state="loading" title="数据加载中..." description="正在获取最新生产现场数据"/></view>

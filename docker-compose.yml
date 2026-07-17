@@ -67,6 +67,7 @@ services:
       MES_CORS_ALLOWED_ORIGINS: ${MES_CORS_ALLOWED_ORIGINS:-http://localhost:5173}
       MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:?请在 .env 中设置 MES_WECHAT_MINI_APP_ID}
       MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:?请在 .env 中设置 MES_WECHAT_MINI_APP_SECRET}
+      MES_WECHAT_CODE_ENV_VERSION: ${MES_WECHAT_CODE_ENV_VERSION:-develop}
       # 微信小程序联调必须启用认证，才能从 Bearer token 建立用户和数据范围上下文。
       MES_SECURITY_AUTH_DISABLED: "false"
       # 测试数据仅从开发专用位置加载，生产环境使用默认 db/migration

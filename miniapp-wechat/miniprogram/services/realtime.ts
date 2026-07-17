@@ -1,6 +1,5 @@
 import { MiniAppLoginResponse, Overview, RealtimeDashboard, Task } from '../types/api'
-import { isMockMode } from './config'
-import { BASE_URL } from './http'
+import { getApiBaseUrl, isMockMode } from './config'
 import { mockDashboard } from './mock'
 import { handleSessionExpired } from './session'
 
@@ -200,7 +199,7 @@ class StompDashboardConnection implements DashboardRealtimeConnection {
 }
 
 function getSocketUrl(): string {
-  const websocketBase = BASE_URL.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
+  const websocketBase = getApiBaseUrl().replace(/^http:/, 'ws:').replace(/^https:/, 'wss:')
   return `${websocketBase}/ws/report/mini_app`
 }
 

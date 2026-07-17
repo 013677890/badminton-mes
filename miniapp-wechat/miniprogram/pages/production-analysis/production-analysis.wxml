@@ -1,5 +1,5 @@
 <view class="analysis-page">
-  <view class="page-top"><image class="title-icon" src="/assets/tabbar/analysis-selected.png" mode="aspectFit"/><text>生产分析</text><view class="refresh-icon" bindtap="retry"></view></view>
+  <view class="page-top"><image class="title-icon" src="/assets/tabbar/analysis-selected.png" mode="aspectFit"/><text>生产分析</text><view class="refresh-touch" bindtap="retry"><image src="/assets/icons/refresh.svg" mode="aspectFit"/></view></view>
   <view class="analysis-content">
     <view class="periods"><view wx:for="{{periods}}" wx:key="*this" class="period {{item === period ? 'period--active' : ''}}" data-period="{{item}}" bindtap="selectPeriod">{{item}}</view></view>
     <view class="time-range"><view class="clock-icon"></view>{{timeRange}}</view>

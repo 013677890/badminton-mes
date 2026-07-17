@@ -232,6 +232,7 @@ volumes/
 *.backup
 *.sql.gz
 *.sql.zip
+database-backups/
 *.sqlite
 *.sqlite3
 *.db
@@ -295,3 +296,4 @@ test-output/
 
 .agent/
 /design/
+scripts/

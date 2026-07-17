@@ -1,13 +1,12 @@
 import { CommonResult } from '../types/api'
+import { getApiBaseUrl } from './config'
 import { handleSessionExpired } from './session'
-
-export const BASE_URL = 'http://127.0.0.1:8080'
 
 export function request<T>(options: WechatMiniprogram.RequestOption): Promise<T> {
   const token = wx.getStorageSync('mes_token') as string
   return new Promise((resolve, reject) => wx.request({
     ...options,
-    url: `${BASE_URL}${options.url}`,
+    url: `${getApiBaseUrl()}${options.url}`,
     header: { 'Content-Type': 'application/json', ...(options.header || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     success: response => {
       const body = response.data as CommonResult<T>
