@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 维修工单页按设备和状态跟踪报修、处理和关闭流程，状态转换由后端 CAS 保证。
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'

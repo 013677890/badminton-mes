@@ -15,5 +15,6 @@ public class ErpCraftRejectReqVO {
 
     @NotBlank(message = "驳回原因不能为空")
     @Size(max = 512, message = "驳回原因长度不能超过 512")
+    /** 工艺驳回原因，写入待确认记录错误说明并供后续审计。 */
     private String reason;
 }

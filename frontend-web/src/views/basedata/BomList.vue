@@ -41,6 +41,7 @@ const filterFields = ref<FilterField[]>([
   { prop: 'bomStatus', label: '状态', type: 'select', options: statusMapToOptions(BOM_STATUS_MAP) },
 ])
 
+// 产品和物料选项并行加载；选项失败不阻断 BOM 列表本身的分页查询。
 onMounted(async () => {
   try {
     const [products, materials] = await Promise.all([loadProductOptions(), loadMaterialOptions()])
@@ -165,15 +166,18 @@ const detailColumns: DetailColumnDef<BomDetailRow>[] = [
 ]
 
 function materialLabel(materialId: unknown): string {
+  // 明细行只保存物料主键，展示时从当前选项映射编码和名称，缺失时回退显示主键。
   const found = materialOptions.value.find((opt) => opt.value === materialId)
   return found ? found.label : String(materialId ?? '-')
 }
 
 function newDetailRow(): BomDetailRow {
+  // 每一行使用独立对象，避免新增行之间共享响应式引用。
   return { materialId: null, quantity: null, lossRate: 0 }
 }
 
 function openCreate() {
+  // 创建模式重置主表和明细，默认带一行空明细方便用户直接录入。
   editorMode.value = 'create'
   editingId.value = undefined
   master.value = { bomCode: '', productId: null, version: 'V1.0' }
@@ -182,6 +186,7 @@ function openCreate() {
 }
 
 async function openExisting(row: Bom, mode: EditorMode) {
+  // 编辑或查看前从后端读取聚合详情，并保存锁版本供提交时做并发校验。
   editorMode.value = mode
   editingId.value = row.id
   editorVisible.value = true
@@ -204,6 +209,7 @@ async function openExisting(row: Bom, mode: EditorMode) {
 }
 
 async function handleEditorSubmit() {
+  // 主从表一次性提交，先校验明细完整性，再按当前编辑模式调用创建、更新或复制版本接口。
   const valid = await mdfRef.value?.validate()
   if (!valid) return
   for (const [index, row] of details.value.entries()) {
@@ -279,6 +285,7 @@ const newVersionRules = {
 // ---------- 行操作 ----------
 
 async function handleRowAction(key: string, row: Bom) {
+  // 行操作根据 BOM 状态调用查看、编辑、生效、停用、新版本或逻辑删除动作。
   try {
     if (key === 'view') {
       await openExisting(row, 'view')

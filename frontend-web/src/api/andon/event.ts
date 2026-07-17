@@ -115,18 +115,22 @@ const BASE_URL = '/andon/events'
 export function getAndonEventPage(
   params: AndonEventPageParams & PageParam,
 ): Promise<PageResult<AndonEvent>> {
+  // 事件列表的状态、严重级别、来源和组织条件交给后端动态过滤。
   return get(`${BASE_URL}/page`, params)
 }
 
 export function getAndonEvent(id: number): Promise<AndonEvent> {
+  // 详情接口同时返回事件当前状态、处理日志和通知发送记录。
   return get(`${BASE_URL}/${id}`)
 }
 
 export function getAndonProcessLogs(id: number): Promise<AndonProcessLog[]> {
+  // 单独读取处理轨迹，适合详情页按需展开，避免列表预加载日志。
   return get(`${BASE_URL}/${id}/process-logs`)
 }
 
 export function createAndonEvent(data: AndonEventCreateReq): Promise<number> {
+  // 发起事件后由后端根据类型配置计算责任人、超时节点和通知策略。
   return post(BASE_URL, data)
 }
 
@@ -135,5 +139,6 @@ export function actionAndonEvent(
   action: 'confirm' | 'start-processing' | 'transfer' | 'complete' | 'close' | 'escalate',
   data: AndonEventActionReq,
 ): Promise<void> {
+  // 动作路径对应后端状态机，动作内容和处理结果由后端按当前状态校验后记录。
   return put(`${BASE_URL}/${id}/${action}`, data)
 }

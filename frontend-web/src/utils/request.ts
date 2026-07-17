@@ -191,19 +191,23 @@ export function get<T>(url: string, params?: object, config?: AxiosRequestConfig
 }
 
 export function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  // POST 请求保留统一响应解包和错误拦截链，业务 API 不直接处理 AxiosResponse。
   return service.post(url, data, config) as Promise<T>
 }
 
 export function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  // PUT 用于状态或资源更新，仍由响应拦截器统一转换业务错误。
   return service.put(url, data, config) as Promise<T>
 }
 
 export function del<T>(url: string, params?: object): Promise<T> {
+  // DELETE 参数通过 query string 传递，适配后端锁版本等请求参数。
   return service.delete(url, { params }) as Promise<T>
 }
 
 /** 从 Content-Disposition 解析下载文件名，解析失败回退 fallback */
 function parseFileName(disposition: string | undefined, fallback: string): string {
+  // 优先解析 RFC 5987 的 filename*，再兼容传统 filename，两个格式都失败时使用默认名。
   if (!disposition) return fallback
   const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
   if (star?.[1]) return decodeURIComponent(star[1])

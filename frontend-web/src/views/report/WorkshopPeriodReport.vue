@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 车间期间报表按时间、车间和产线查询后端聚合结果，不在浏览器重新计算业务指标。
 import { computed } from 'vue'
 import PageHeader from '@/components/base/PageHeader.vue'
 import PermissionButton from '@/components/base/PermissionButton.vue'

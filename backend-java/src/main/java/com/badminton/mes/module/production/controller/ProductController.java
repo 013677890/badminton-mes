@@ -25,7 +25,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
-/** 产品主档 Controller。 */
+/**
+ * 产品主档 Controller。
+ *
+ * <p>本层不执行主档引用检查或数据库写入，只将校验后的请求转交 Service，并统一包装返回结果。
+ */
 @RestController
 @RequestMapping("/api/production/products")
 @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC,
@@ -34,19 +38,19 @@ public class ProductController {
 
     private final ProductService productService;
 
-    /** @param productService 产品主档服务 */
+    /** 构造器注入产品主档 Service。 */
     public ProductController(ProductService productService) {
         this.productService = productService;
     }
 
-    /** @param reqVO 产品创建请求 @return 新产品主键 */
+    /** 创建产品主档并返回数据库生成的主键。 */
     @PostMapping
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Long> createProduct(@Valid @RequestBody ProductSaveReqVO reqVO) {
         return CommonResult.success(productService.createProduct(reqVO));
     }
 
-    /** @param id 产品主键 @param reqVO 产品修改请求 @return 空数据成功响应 */
+    /** 修改产品主档；引用、单位和并发版本校验由 Service 执行。 */
     @PutMapping("/{id}")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> updateProduct(@PathVariable("id") @Positive Long id,
@@ -55,7 +59,7 @@ public class ProductController {
         return CommonResult.success(null);
     }
 
-    /** @param id 产品主键 @param version 预期版本 @return 空数据成功响应 */
+    /** 逻辑删除产品，要求调用方提供当前乐观锁版本。 */
     @DeleteMapping("/{id}")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> deleteProduct(@PathVariable("id") @Positive Long id,
@@ -64,7 +68,7 @@ public class ProductController {
         return CommonResult.success(null);
     }
 
-    /** @param id 产品主键 @param reqVO 状态变更请求 @return 空数据成功响应 */
+    /** 启用或停用产品，Service 负责检查活动业务引用。 */
     @PutMapping("/{id}/status")
     @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
     public CommonResult<Void> updateProductStatus(@PathVariable("id") @Positive Long id,
@@ -73,13 +77,13 @@ public class ProductController {
         return CommonResult.success(null);
     }
 
-    /** @param id 产品主键 @return 产品详情 */
+    /** 查询未删除产品详情并转换为响应 VO。 */
     @GetMapping("/{id}")
     public CommonResult<ProductRespVO> getProduct(@PathVariable("id") @Positive Long id) {
         return CommonResult.success(productService.getProduct(id));
     }
 
-    /** @param reqVO 分页筛选条件 @return 产品分页结果 */
+    /** 按产品编码、名称、类型、单位和状态查询分页结果。 */
     @GetMapping("/page")
     public CommonResult<PageResult<ProductRespVO>> getProductPage(@Valid ProductPageReqVO reqVO) {
         return CommonResult.success(productService.getProductPage(reqVO));

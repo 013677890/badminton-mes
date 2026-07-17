@@ -1,2 +1,3 @@
+/* 登录页增加顶部留白，使登录卡片适配手机竖屏展示。 */
 .login { padding-top: 240rpx; }
 button { margin-top: 48rpx; }

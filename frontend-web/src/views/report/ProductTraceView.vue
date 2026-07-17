@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 产品追溯页以批次码查询工艺、报工、质量和维修链路，缺失数据由后端完整性标记说明。
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/base/PageHeader.vue'

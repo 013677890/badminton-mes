@@ -30,6 +30,7 @@ import type {
 
 defineOptions({ name: 'BarcodeTemplateList' })
 
+// 标签模板主表与字段明细在一个弹窗中维护，提交时由后端保证字段类型和版本状态一致。
 const filterFields: FilterField[] = [
   { prop: 'templateCode', label: '模板编码', type: 'input' },
   { prop: 'templateName', label: '模板名称', type: 'input' },

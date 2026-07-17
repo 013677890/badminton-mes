@@ -34,6 +34,7 @@ import {
 
 defineOptions({ name: 'EquipmentLedgerList' })
 
+// 设备台账页面批量加载类别和制造商选项，编辑/删除请求由后端维护设备引用和状态约束。
 const LEDGER_WRITE_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER]
 
 const categoryOptions = ref<OptionItem[]>([])

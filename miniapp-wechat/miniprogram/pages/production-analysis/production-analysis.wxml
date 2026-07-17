@@ -1,1 +1,2 @@
+<!-- 生产分析指标由后端按时间区间聚合，页面不自行计算百分比。 -->
 <view class="page"><view class="title">生产分析</view><view class="card"><view>统计周期：{{period}}</view><view class="metrics"><view>完成率 {{summary.completionRate}}</view><view>不良率 {{summary.defectRate}}</view><view>完成量 {{summary.finishQuantity}}</view></view></view></view>

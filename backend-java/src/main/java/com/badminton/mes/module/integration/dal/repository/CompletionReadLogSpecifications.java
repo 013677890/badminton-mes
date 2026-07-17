@@ -14,6 +14,9 @@ import jakarta.persistence.criteria.Predicate;
 /**
  * 生产完工单读取日志动态查询条件。
  *
+ * <p>固定排除逻辑删除日志，并按来源系统、完工单号和读取时间闭区间组合可选条件。来源系统与
+ * 写日志时采用相同的大写规范化规则，避免查询因大小写差异漏掉同一消费方的记录。
+ *
  * @author 张竹灏
  * @date 2026/07/13
  */
@@ -29,8 +32,10 @@ public final class CompletionReadLogSpecifications {
             CompletionReadLogPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             var predicates = new ArrayList<Predicate>();
+            // 审计查询默认只展示当前有效日志。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (StringUtils.hasText(reqVO.getSourceSystem())) {
+                // 来源系统统一去空白并大写后精确匹配。
                 predicates.add(criteriaBuilder.equal(root.get("sourceSystem"),
                         reqVO.getSourceSystem().trim().toUpperCase(Locale.ROOT)));
             }
@@ -39,6 +44,7 @@ public final class CompletionReadLogSpecifications {
                         reqVO.getCompletionNo().trim()));
             }
             if (reqVO.getStartTime() != null) {
+                // 起止时间均包含边界，字段使用实际 readTime。
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(
                         root.get("readTime"), reqVO.getStartTime()));
             }
@@ -50,6 +56,7 @@ public final class CompletionReadLogSpecifications {
         };
     }
 
+    /** 纯静态查询条件构造器，不允许实例化。 */
     private CompletionReadLogSpecifications() {
     }
 }

@@ -63,6 +63,7 @@ const order = ref<WorkOrder>()
 const loading = ref(false)
 
 async function loadOrder() {
+  // 工单详情优先由后端缓存读取；页面只维护 loading 和响应式主档引用。
   loading.value = true
   try {
     order.value = await getWorkOrder(orderId)
@@ -113,6 +114,7 @@ const materialColumns: ColumnDef<WorkOrderMaterial>[] = [
 ]
 
 async function loadMaterials() {
+  // 物料需求单独加载，避免主档详情请求失败时阻塞其他标签页内容。
   materialsLoading.value = true
   try {
     materials.value = await getWorkOrderMaterials(orderId)
@@ -139,6 +141,7 @@ const kitColumns: ColumnDef<KitAnalysisRow>[] = [
 ]
 
 async function loadKit() {
+  // 齐套结果是可重新计算的快照，加载时不在前端推导欠料数量。
   kitLoading.value = true
   try {
     kitRows.value = await getKitResult(orderId)
@@ -148,6 +151,7 @@ async function loadKit() {
 }
 
 async function handleAnalyze() {
+  // 分析请求完成后同时刷新齐套行和工单级状态，保持详情页两个区域一致。
   analyzing.value = true
   try {
     await analyzeWorkOrder(orderId)
@@ -188,6 +192,7 @@ const handleRowActions: RowAction<ShortageHandle>[] = [
 ]
 
 async function loadHandles() {
+  // 欠料处理记录按工单加载，新增或完成处理后重新读取后端真实状态。
   handlesLoading.value = true
   try {
     handles.value = await getShortageHandles(orderId)
@@ -197,6 +202,7 @@ async function loadHandles() {
 }
 
 async function handleHandleAction(key: string, row: ShortageHandle) {
+  // 处理记录行操作只负责打开详情或提交完成动作，状态 CAS 由后端保证。
   if (key !== 'resolve') return
   try {
     await resolveShortageHandle(row.id)
@@ -256,6 +262,7 @@ const handleRules = {
 }
 
 async function openHandleDialog() {
+  // 打开登记弹窗前按需加载责任人选项，避免每次进入详情页都请求用户列表。
   if (shortageMaterialOptions.value.length === 0) {
     ElMessage.info('当前分析结果无欠料物料，请先执行齐套分析')
     return
@@ -287,6 +294,7 @@ const dispatchColumns: ColumnDef<DispatchOrder>[] = [
 ]
 
 async function loadDispatches() {
+  // 派工列表仅按当前工单过滤，后端同时回填产线和班次名称供页面展示。
   dispatchesLoading.value = true
   try {
     const page = await getDispatchPage({ workOrderId: orderId, pageNo: 1, pageSize: 100 })
@@ -319,6 +327,7 @@ const logNodes = computed<StatusNode[]>(() =>
 )
 
 async function loadLogs() {
+  // 状态日志单独读取，供时间线按最新变更顺序渲染。
   logsLoading.value = true
   try {
     logs.value = await getWorkOrderStatusLogs(orderId)
@@ -339,6 +348,7 @@ const tabs = [
 const loadedTabs = new Set<string>()
 
 function handleTabChange(name: string) {
+  // 仅在第一次进入对应标签时加载数据，减少详情页初次打开的并发请求数量。
   if (loadedTabs.has(name)) return
   loadedTabs.add(name)
   if (name === 'materials') void loadMaterials()

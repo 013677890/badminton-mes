@@ -1,1 +1,2 @@
+<!-- 绑定页通过 data-key 将两个输入框映射到页面模型，提交按钮触发服务端绑定。 -->
 <view class="page"><view class="card"><view class="title">绑定 MES 工号</view><input placeholder="工号" data-key="userNo" bindinput="input"/><input password placeholder="密码" data-key="password" bindinput="input"/><button class="primary" bindtap="bind">确认绑定</button></view></view>

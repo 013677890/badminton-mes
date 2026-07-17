@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 现场执行页面向操作人员展示当前任务和报工入口，数量校验与状态流转由后端最终处理。
 import { reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/base/PageHeader.vue'

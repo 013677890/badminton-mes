@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 综合看板按固定周期读取生产、设备和异常聚合数据，定时刷新只在页面可见时执行。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import StatCard from '@/components/base/StatCard.vue'
 import BarChartCard from '@/components/base/charts/BarChartCard.vue'

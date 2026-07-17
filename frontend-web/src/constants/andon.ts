@@ -1,11 +1,13 @@
 import type { OptionItem, StatusMap } from '@/types/components'
 import { ROLES } from '@/constants/production'
 
+// 安灯权限按查看、配置和关闭拆分；后端仍会对每个动作重新校验角色和状态。
 export const ANDON_VIEW_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER, ROLES.TEAM_LEADER, ROLES.OPERATOR, ROLES.INSPECTOR]
 export const ANDON_MANAGE_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER]
 export const ANDON_CLOSE_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER, ROLES.TEAM_LEADER]
 
 export const EXCEPTION_CATEGORY_OPTIONS: OptionItem[] = [
+  // 异常分类用于决定安灯类型的业务范围和看板分组。
   { label: '生产异常', value: 'PRODUCTION' },
   { label: '设备异常', value: 'EQUIPMENT' },
   { label: '质量异常', value: 'QUALITY' },
@@ -37,6 +39,7 @@ export const NOTIFICATION_CHANNEL_OPTIONS: OptionItem[] = [
 ]
 
 export const EVENT_STATUS_MAP: StatusMap = {
+  // 事件状态按发起、确认、处理、待关闭和关闭顺序推进。
   PENDING_CONFIRMATION: { type: 'warning', text: '待确认' },
   CONFIRMED: { type: 'primary', text: '已确认' },
   PROCESSING: { type: 'primary', text: '处理中' },
@@ -55,6 +58,7 @@ export const SEVERITY_OPTIONS: OptionItem[] = Object.entries(SEVERITY_MAP).map(
   ([value, meta]) => ({ label: meta.text, value }),
 )
 export const TIMEOUT_STATUS_MAP: StatusMap = {
+  // 超时状态由后端调度器计算，前端不自行根据时间改写事件状态。
   NORMAL: { type: 'success', text: '正常' },
   RESPONSE_OVERDUE: { type: 'warning', text: '响应超时' },
   ESCALATED: { type: 'danger', text: '已升级' },

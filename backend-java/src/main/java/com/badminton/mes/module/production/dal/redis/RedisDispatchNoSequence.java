@@ -39,15 +39,19 @@ public class RedisDispatchNoSequence implements DispatchNoSequence {
 
     @Override
     public String nextNo() {
+        // 日期进入 Key 而不是只进入展示编号，使每天从 1 开始计数且历史日期计数可自动过期。
         String date = LocalDate.now().format(SERIAL_DATE_FORMATTER);
         String serialKey = ProductionRedisKeyConstants.dispatchSerialKey(date);
+        // INCR 在 Redis 内是原子操作，多实例同时取号也不会得到重复流水。
         Long serial = stringRedisTemplate.opsForValue().increment(serialKey);
         if (serial == null) {
             throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR);
         }
         if (serial == 1L) {
+            // 仅首次创建当天 Key 时设置 TTL，避免每次取号都刷新过期时间导致历史 Key 长期滞留。
             stringRedisTemplate.expire(serialKey, ProductionRedisKeyConstants.DISPATCH_SERIAL_TTL);
         }
+        // Redis 只负责生成候选号，派工单表唯一索引仍是最终持久化层防重复保障。
         return String.format("%s%s%04d", DISPATCH_NO_PREFIX, date, serial);
     }
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 保养计划页维护周期和责任配置，计划与设备、类别的有效性由后端统一判断。
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'

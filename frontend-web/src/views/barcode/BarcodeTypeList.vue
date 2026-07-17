@@ -24,6 +24,7 @@ import type { BarcodeType, BarcodeTypePageParams } from '@/api/barcode/type'
 
 defineOptions({ name: 'BarcodeTypeList' })
 
+// 条码类型是规则、模板和应用规则的基础主档，停用/删除是否允许由后端按引用关系判断。
 const filterFields: FilterField[] = [
   { prop: 'typeCode', label: '类型编码', type: 'input' },
   { prop: 'typeName', label: '类型名称', type: 'input' },

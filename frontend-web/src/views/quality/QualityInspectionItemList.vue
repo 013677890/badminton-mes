@@ -32,8 +32,10 @@ import type {
 
 defineOptions({ name: 'QualityInspectionItemList' })
 
+// 检验项目页先加载分类选项，再由 useTable 管理分页；保存和删除均由后端校验引用关系。
 const categoryOptions = ref<OptionItem[]>([])
 onMounted(async () => {
+  // 分类选项用于表单和筛选条件；加载失败时由请求层提示，不改变既有列表状态。
   categoryOptions.value = await loadInspectionCategoryOptions()
 })
 

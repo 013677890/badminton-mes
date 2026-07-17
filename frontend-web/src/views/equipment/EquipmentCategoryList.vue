@@ -26,6 +26,7 @@ import type {
 
 defineOptions({ name: 'EquipmentCategoryList' })
 
+// 设备类别支持父子层级和排序，页面提交原始层级字段，后端负责循环引用及台账引用校验。
 const CATEGORY_WRITE_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER]
 
 const filterFields: FilterField[] = [

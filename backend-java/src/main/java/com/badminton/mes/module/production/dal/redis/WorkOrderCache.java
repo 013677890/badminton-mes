@@ -51,6 +51,7 @@ public class WorkOrderCache {
     public Optional<WorkOrderEntity> get(Long id) {
         String key = ProductionRedisKeyConstants.workOrderDetailKey(id);
         try {
+            // 缓存只作为读优化；Key 不存在代表未命中，调用方随后回源查询数据库。
             String json = stringRedisTemplate.opsForValue().get(key);
             if (!StringUtils.hasText(json)) {
                 return Optional.empty();
@@ -69,6 +70,7 @@ public class WorkOrderCache {
      */
     public void put(WorkOrderEntity entity) {
         try {
+            // 使用独立 DTO 序列化，避免 JPA 实体的代理字段或关联关系被意外写入 Redis。
             String json = objectMapper.writeValueAsString(WorkOrderCacheDTO.fromEntity(entity));
             stringRedisTemplate.opsForValue().set(
                     ProductionRedisKeyConstants.workOrderDetailKey(entity.getId()),
@@ -85,6 +87,7 @@ public class WorkOrderCache {
      */
     public void evict(Long id) {
         try {
+            // 删除失败只记录日志，不回滚主业务；TTL 和下次回源仍能最终修复缓存。
             stringRedisTemplate.delete(ProductionRedisKeyConstants.workOrderDetailKey(id));
         } catch (RuntimeException e) {
             logger.error("[工单缓存删除失败] id: {}, errorMessage: {}", id, e.getMessage(), e);
@@ -98,6 +101,7 @@ public class WorkOrderCache {
      * @param id 工单主键
      */
     public void evictAfterCommit(Long id) {
+        // 事务提交前不能删除，否则并发读可能把旧数据库快照重新填回缓存。
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             evict(id);
             return;
@@ -106,6 +110,7 @@ public class WorkOrderCache {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                // 只有主表真正提交成功后才失效缓存；回滚事务不会误删仍然有效的旧快照。
                 evict(id);
             }
         });

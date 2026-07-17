@@ -42,7 +42,8 @@ import jakarta.validation.Valid;
 /**
  * 外部标准写入接口 Controller。
  *
- * <p>当前复用系统登录令牌和角色鉴权；调用账号由管理员分配，所有写入均记录调用用户。
+ * <p>当前复用系统登录令牌和角色鉴权；调用账号由管理员分配，所有写入均记录调用用户。控制器
+ * 只负责 HTTP 参数绑定、角色边界和统一响应包装；幂等、锁、事务、异常池及读取审计由对应服务完成。
  *
  * @author 张竹灏
  * @date 2026/07/11
@@ -52,14 +53,19 @@ import jakarta.validation.Valid;
 @RequiresRoles({RoleCodeConstants.ADMIN, RoleCodeConstants.PMC})
 public class IntegrationController {
 
+    /** 标准外部写入门面，处理单位、工单、派工和设备计数接口。 */
     private final IntegrationService integrationService;
 
+    /** 设备计数命令服务，额外提供异常池分页、忽略和修正重试能力。 */
     private final DeviceCountWriteCommandService deviceCountWriteCommandService;
 
+    /** 完工单读取服务，负责分页结果与逐条读取日志原子记录。 */
     private final CompletionOrderReadService completionOrderReadService;
 
+    /** 设备报工绑定配置服务。 */
     private final EquipmentBindingService equipmentBindingService;
 
+    /** WMS/ERP 库存与在途快照同步服务。 */
     private final MaterialStockSyncService materialStockSyncService;
 
     /**
@@ -92,6 +98,7 @@ public class IntegrationController {
                 completionOrderReadService, emptyProvider(), emptyProvider());
     }
 
+    /** 构造始终返回空值的依赖提供器，仅供兼容旧版聚焦测试构造入口。 */
     private static <T> ObjectProvider<T> emptyProvider() {
         return new ObjectProvider<>() {
             @Override
@@ -190,6 +197,7 @@ public class IntegrationController {
     public CommonResult<Boolean> ignoreDeviceCountException(
             @PathVariable Long id,
             @Valid @RequestBody(required = false) DeviceExceptionActionReqVO reqVO) {
+        // 忽略备注允许整个请求体缺省，服务层仍会锁定并校验异常处于待处理状态。
         deviceCountWriteCommandService.ignoreException(
                 id, reqVO == null ? null : reqVO.getRemark());
         return CommonResult.success(true);

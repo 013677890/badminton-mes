@@ -40,6 +40,7 @@ import type {
 
 defineOptions({ name: 'BarcodeApplicationRuleList' })
 
+// 应用规则同时关联对象、条码类型、生成规则和模板，页面初始化并行加载三个下拉数据源。
 const typeOptions = ref<OptionItem[]>([])
 const ruleOptions = ref<OptionItem[]>([])
 const templateOptions = ref<OptionItem[]>([])

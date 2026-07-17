@@ -83,6 +83,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createProductionLine(ProductionLineSaveReqVO reqVO) {
+        // 先规范化编码并校验状态、编码和所属车间；车间行锁保证产线不会挂到并发停用的车间上。
         normalize(reqVO);
         validateStatus(reqVO.getStatus());
         validateCode(reqVO.getLineCode(), null);
@@ -93,6 +94,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
                 ProductionOrganizationConvert.toProductionLineEntity(reqVO);
         line.setCreateBy(operatorId);
         line.setUpdateBy(operatorId);
+        // saveAndFlush 及时触发产线编码唯一约束，异常由统一转换器映射为业务错误码。
         save(line);
         return line.getId();
     }
@@ -100,6 +102,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProductionLine(Long id, ProductionLineUpdateReqVO reqVO) {
+        // 更新按“车间→产线”顺序加锁，固定组织层级锁序，避免并发操作造成死锁或脏校验。
         normalize(reqVO);
         validateStatus(reqVO.getStatus());
         LockedProductionLine locked = requireLineWithWorkshopForUpdate(id);
@@ -113,6 +116,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         boolean disabling = CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus())
                 && CommonStatusEnum.ENABLED.getStatus().equals(line.getStatus());
         if (disabling) {
+            // 停用前检查活动派工单和启用用户引用，避免现场仍依赖一条不可用产线。
             validateNoActiveReferences(id);
         }
 
@@ -124,6 +128,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProductionLine(Long id, Integer version) {
+        // 产线只能逻辑删除；历史派工单或用户归属仍存在时保留主档，保证历史数据可回显。
         LockedProductionLine locked = requireLineWithWorkshopForUpdate(id);
         ProductionLineEntity line = locked.line();
         validateVersion(line, version);
@@ -136,6 +141,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProductionLineStatus(Long id, ProductionStatusReqVO reqVO) {
+        // 状态切换以行锁和版本号双重校验；重复提交同一状态直接返回，避免产生无意义写入。
         validateStatus(reqVO.getStatus());
         LockedProductionLine locked = requireLineWithWorkshopForUpdate(id);
         ProductionLineEntity line = locked.line();
@@ -145,8 +151,10 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
 
         if (CommonStatusEnum.ENABLED.getStatus().equals(reqVO.getStatus())) {
+            // 重新启用产线前复用已加锁的车间快照，确保上级组织仍处于启用状态。
             requireEnabledWorkshop(locked.workshop());
         } else {
+            // 停用前必须解除派工和用户引用，防止新任务继续落到停用产线。
             validateNoActiveReferences(id);
         }
         line.setStatus(reqVO.getStatus());
@@ -157,6 +165,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Override
     @Transactional(readOnly = true)
     public ProductionLineRespVO getProductionLine(Long id) {
+        // 详情查询所属车间并由转换层回填名称，不直接暴露 JPA 实体和审计字段。
         ProductionLineEntity line = require(id);
         WorkshopEntity workshop = workshopRepository
                 .findByIdAndDeletedFalse(line.getWorkshopId())
@@ -168,6 +177,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
     @Transactional(readOnly = true)
     public PageResult<ProductionLineRespVO> getProductionLinePage(
             ProductionLinePageReqVO reqVO) {
+        // 分页先统计再查当前页，所属车间一次性回填，避免列表逐行查询车间形成 N+1。
         var specification =
                 ProductionOrganizationSpecifications.productionLinePage(reqVO);
         long total = productionLineRepository.count(specification);
@@ -189,7 +199,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         return PageResult.of(list, total, pageNo, reqVO.getPageSize());
     }
 
-    /** 校验产线没有阻止停用的当前业务引用。 */
+    /** 校验产线没有阻止停用的当前业务引用；只执行 exists 查询，不加载派工和用户明细。 */
     private void validateNoActiveReferences(Long lineId) {
         boolean referenced = dispatchOrderRepository
                 .existsByLineIdAndDispatchStatusInAndDeletedFalse(
@@ -201,7 +211,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 校验产线没有阻止删除的历史业务引用。 */
+    /** 校验产线没有阻止删除的历史业务引用，保留仍被历史数据引用的组织主档。 */
     private void validateNoAnyReferences(Long lineId) {
         boolean referenced = dispatchOrderRepository.existsByLineIdAndDeletedFalse(lineId)
                 || userReferenceQuery.hasAnyProductionLineUser(lineId);
@@ -211,7 +221,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 校验产线编码唯一。 */
+    /** 校验产线编码唯一；应用层提示之外仍由数据库唯一索引处理并发竞争。 */
     private void validateCode(String code, Long excludeId) {
         boolean exists = excludeId == null
                 ? productionLineRepository.existsByLineCodeAndDeletedFalse(code)
@@ -223,7 +233,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 校验产线创建后不修改所属车间。 */
+    /** 校验产线创建后不修改所属车间，避免历史派工的组织归属被重写。 */
     private void validateWorkshopImmutable(
             ProductionLineEntity line, Long requestedWorkshopId) {
         if (!Objects.equals(line.getWorkshopId(), requestedWorkshopId)) {
@@ -232,7 +242,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 校验启停状态。 */
+    /** 校验产线启停状态，只允许启用和停用两个业务值。 */
     private void validateStatus(Integer status) {
         if (!CommonStatusEnum.ENABLED.getStatus().equals(status)
                 && !CommonStatusEnum.DISABLED.getStatus().equals(status)) {
@@ -240,7 +250,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 查询未删除产线。 */
+    /** 查询未删除产线，供只读详情使用。 */
     private ProductionLineEntity require(Long id) {
         return productionLineRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new ServiceException(
@@ -272,7 +282,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         return new LockedProductionLine(line, workshop);
     }
 
-    /** 写锁查询并校验启用车间。 */
+    /** 写锁查询并校验启用车间，保证产线创建或恢复时上级组织仍可用。 */
     private WorkshopEntity requireEnabledWorkshopForUpdate(Long workshopId) {
         WorkshopEntity workshop = workshopRepository
                 .findByIdAndDeletedFalseForUpdate(workshopId)
@@ -282,7 +292,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         return workshop;
     }
 
-    /** 校验车间处于启用状态。 */
+    /** 校验车间处于启用状态；产线不能脱离启用车间单独启用。 */
     private void requireEnabledWorkshop(WorkshopEntity workshop) {
         if (!CommonStatusEnum.ENABLED.getStatus().equals(workshop.getStatus())) {
             throw new ServiceException(
@@ -290,7 +300,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 校验客户端预期版本。 */
+    /** 校验客户端预期版本，阻止旧页面覆盖最新产线修改。 */
     private void validateVersion(ProductionLineEntity line, Integer expectedVersion) {
         if (!Objects.equals(line.getVersion(), expectedVersion)) {
             throw new ServiceException(
@@ -298,7 +308,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 保存产线并转换唯一键和乐观锁异常。 */
+    /** 保存产线并转换唯一键和乐观锁异常；flush 使数据库约束在当前事务中立即生效。 */
     private void save(ProductionLineEntity line) {
         try {
             productionLineRepository.saveAndFlush(line);
@@ -312,7 +322,7 @@ public class ProductionLineServiceImpl implements ProductionLineService {
         }
     }
 
-    /** 批量加载分页产线所属车间，避免 N+1。 */
+    /** 批量加载分页产线所属车间，避免每条产线单独访问车间表。 */
     private Map<Long, WorkshopEntity> loadWorkshopMap(List<ProductionLineEntity> lines) {
         Set<Long> workshopIds = lines.stream()
                 .map(ProductionLineEntity::getWorkshopId)
@@ -321,13 +331,13 @@ public class ProductionLineServiceImpl implements ProductionLineService {
                 .collect(Collectors.toMap(WorkshopEntity::getId, Function.identity()));
     }
 
-    /** 规范化产线请求。 */
+    /** 规范化产线请求，统一编码大小写和名称空格后再查重入库。 */
     private void normalize(ProductionLineSaveReqVO reqVO) {
         reqVO.setLineCode(reqVO.getLineCode().trim().toUpperCase(Locale.ROOT));
         reqVO.setLineName(reqVO.getLineName().trim());
     }
 
-    /** 规范化超过总页数的请求页码。 */
+    /** 将越界页码收敛到最后一页，保证分页 SQL 的偏移有效。 */
     private int normalizePageNo(int requested, int pageSize, long total) {
         return Math.min(requested, (int)((total + pageSize - 1) / pageSize));
     }

@@ -73,6 +73,7 @@ const filterFields = ref<FilterField[]>([
 ])
 
 async function loadDispatchableOrders() {
+  // 分别读取已下达和生产中的工单，再合并成派工表单的可选项。
   const [released, producing] = await Promise.all([
     getWorkOrderPage({ pageNo: 1, pageSize: 100, orderStatus: WO_STATUS.RELEASED }),
     getWorkOrderPage({ pageNo: 1, pageSize: 100, orderStatus: WO_STATUS.IN_PRODUCTION }),
@@ -83,6 +84,7 @@ async function loadDispatchableOrders() {
   }))
 }
 
+// 产线和可派工单选项属于页面级依赖，加载失败时不阻断已有派工列表。
 onMounted(async () => {
   try {
     lineOptions.value = await loadLineOptions()
@@ -155,6 +157,7 @@ const { data, loading, pagination, query, reset, refresh, onPageChange } = useTa
 >({ fetcher: getDispatchPage })
 
 function handleQuery(params: Record<string, any>) {
+  // 将页面日期范围拆成后端的起止日期，保持闭区间排程查询语义。
   const { planDateRange, ...rest } = params
   if (Array.isArray(planDateRange) && planDateRange.length === 2) {
     rest.planDateBegin = planDateRange[0]
@@ -231,6 +234,7 @@ const overDispatch = computed(
 )
 
 async function handleWorkOrderChange(workOrderId: number | null) {
+  // 切换工单时重置旧建议和默认数量，避免把上一个工单的排产数据提交到新工单。
   selectedOrder.value = undefined
   suggests.value = []
   if (!workOrderId) return
@@ -243,6 +247,7 @@ async function handleWorkOrderChange(workOrderId: number | null) {
 
 /** 班次 + 日期变化 → 预填计划起止（夜班跨天） */
 function prefillShiftTime() {
+  // 根据日期和班次种子时间预填计划起止时间；夜班跨天由日期辅助函数处理。
   const { shiftId, planDate } = form.value
   const shift = SHIFT_SEEDS.find((item) => item.id === shiftId)
   if (!shift || !planDate) return
@@ -260,6 +265,7 @@ function addDays(dateStr: string, days: number): string {
 watch(() => [form.value.shiftId, form.value.planDate], prefillShiftTime)
 
 function openCreate() {
+  // 创建弹窗从空模型开始，并清除上一次建议或调整原因残留。
   dialogMode.value = 'create'
   form.value = emptyForm()
   selectedOrder.value = undefined
@@ -268,6 +274,7 @@ function openCreate() {
 }
 
 function openEdit(row: DispatchOrder) {
+  // 编辑回显派工当前排产字段；工单归属只用于展示，后端不允许通过修改接口更换工单。
   dialogMode.value = 'edit'
   editingStatus.value = row.dispatchStatus
   form.value = {
@@ -288,6 +295,7 @@ function openEdit(row: DispatchOrder) {
 }
 
 async function loadSuggests() {
+  // 只读加载后端贪心排产建议，页面采纳后才会调用创建接口占用数量。
   if (!form.value.workOrderId) {
     ElMessage.info('请先选择生产工单')
     return
@@ -307,6 +315,7 @@ async function loadSuggests() {
 
 /** 采纳建议行：整行回填 + 标记 suggest */
 function adoptSuggest(row: DispatchSuggest) {
+  // 采纳建议只更新本地表单并标记 suggest，实际落库等待用户提交确认。
   form.value.lineId = row.lineId
   form.value.shiftId = row.shiftId
   form.value.planDate = row.planDate
@@ -318,6 +327,7 @@ function adoptSuggest(row: DispatchSuggest) {
 }
 
 async function handleSubmit() {
+  // 提交前组装后端字段并区分创建/调整；后端再次校验状态、余量、工作日和产能。
   try {
     await formRef.value?.validate()
   } catch {
@@ -384,6 +394,7 @@ const logColumns: ColumnDef<DispatchAdjustLog>[] = [
 ]
 
 async function openLogs(row: DispatchOrder) {
+  // 日志抽屉按需读取，避免列表请求同时加载每张派工单的审计数据。
   logsDispatchNo.value = row.dispatchNo
   logsVisible.value = true
   logsLoading.value = true
@@ -397,6 +408,7 @@ async function openLogs(row: DispatchOrder) {
 // ---------- 行操作 ----------
 
 async function handleRowAction(key: string, row: DispatchOrder) {
+  // 行操作根据后端状态机调用审核、下发、调整、取消或日志读取动作。
   if (key === 'edit') {
     openEdit(row)
     return
@@ -443,6 +455,7 @@ const ganttRows = computed<GanttRow[]>(() =>
 )
 
 async function loadSchedule() {
+  // 排程标签按当前产线和日期区间请求数据，后端排除取消单后返回甘特图行。
   if (lineOptions.value.length === 0) return
   const [start, end] = scheduleRange.value
   scheduleLoading.value = true
@@ -466,6 +479,7 @@ async function loadSchedule() {
 }
 
 function handleTabChange(name: string | number) {
+  // 切换到排程标签时才加载甘特图数据，列表标签保持独立分页状态。
   if (name === 'schedule' && scheduleTasks.value.length === 0) {
     void loadSchedule()
   }

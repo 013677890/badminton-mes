@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 故障原理主档为维修分析提供分类信息，页面的筛选和主档操作均通过统一 API 层完成。
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'

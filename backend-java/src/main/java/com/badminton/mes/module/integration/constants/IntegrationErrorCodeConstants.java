@@ -5,6 +5,10 @@ import com.badminton.mes.common.core.ErrorCode;
 /**
  * 外部接口模块错误码。
  *
+ * <p>错误码覆盖外部主数据写入、ERP 同步、设备计数异常池和完工读取等边界。错误码对象同时
+ * 提供机器可识别 code、面向日志的简短 message 以及可直接返回调用方的处理提示，Service
+ * 只抛出这里定义的稳定对象，避免把数据库或 HTTP 客户端异常泄漏到 API。
+ *
  * @author 张竹灏
  * @date 2026/07/11
  */
@@ -178,6 +182,7 @@ public final class IntegrationErrorCodeConstants {
     public static final ErrorCode ERP_REMOTE_CALL_FAILED =
             new ErrorCode("C0001", "ERP 接口调用失败", "ERP 暂时不可用，请稍后重试");
 
+    /** 错误码常量容器不允许实例化。 */
     private IntegrationErrorCodeConstants() {
     }
 }

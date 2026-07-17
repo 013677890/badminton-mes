@@ -39,15 +39,19 @@ public class RedisWorkOrderNoSequence implements WorkOrderNoSequence {
 
     @Override
     public String nextNo() {
+        // 日期作为 Redis Key 的一部分，保证每日独立计数，同时让旧日期计数在 TTL 到期后清理。
         String date = LocalDate.now().format(SERIAL_DATE_FORMATTER);
         String serialKey = ProductionRedisKeyConstants.workOrderSerialKey(date);
+        // Redis INCR 提供跨实例原子递增；这里不做本地缓存，避免多节点分配相同流水。
         Long serial = stringRedisTemplate.opsForValue().increment(serialKey);
         if (serial == null) {
             throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR);
         }
         if (serial == 1L) {
+            // 只在第一次创建当天计数 Key 时设置 TTL，后续递增不延长生命周期。
             stringRedisTemplate.expire(serialKey, ProductionRedisKeyConstants.WORK_ORDER_SERIAL_TTL);
         }
+        // 生成号可能因事务回滚出现空洞，这是可接受的；数据库唯一索引负责最终防重复。
         return String.format("%s%s%04d", WORK_ORDER_NO_PREFIX, date, serial);
     }
 }

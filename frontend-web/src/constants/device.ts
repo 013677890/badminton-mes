@@ -1,12 +1,14 @@
 import type { OptionItem, StatusMap } from '@/types/components'
 import { ROLES } from '@/constants/production'
 
+// 设备模块按“查看、配置、报工、异常处理”拆分权限，按钮显隐不替代后端授权。
 export const DEVICE_VIEW_ROLES = [ROLES.ADMIN, ROLES.PMC, ROLES.WORKSHOP_MANAGER, ROLES.TEAM_LEADER, ROLES.OPERATOR]
 export const DEVICE_CONFIG_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER]
 export const DEVICE_REPORT_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER, ROLES.TEAM_LEADER, ROLES.OPERATOR]
 export const DEVICE_EXCEPTION_ROLES = [ROLES.ADMIN, ROLES.WORKSHOP_MANAGER, ROLES.TEAM_LEADER]
 
 export const DEVICE_COMMISSIONING_STATUS_MAP: StatusMap = {
+  // 联调状态由设备接入配置流程写入，页面只负责展示统一文案。
   NOT_TESTED: { type: 'info', text: '未联调' },
   PASSED: { type: 'success', text: '已通过' },
   FAILED: { type: 'danger', text: '未通过' },
@@ -37,6 +39,7 @@ export const REPORT_MODE_OPTIONS: OptionItem[] = [
 ]
 
 export const MATCH_STATUS_MAP: StatusMap = {
+  // 采集记录匹配工单/设备的结果，用于异常池和采集列表筛选。
   PENDING: { type: 'warning', text: '待匹配' },
   MATCHED: { type: 'success', text: '已匹配' },
   EXCEPTION: { type: 'danger', text: '异常' },
@@ -55,6 +58,7 @@ export const RUNTIME_STATUS_OPTIONS: OptionItem[] = [
   { label: '停机', value: 'STOPPED' },
 ]
 export const COUNT_EXCEPTION_STATUS_MAP: StatusMap = {
+  // 异常处理状态与后端 CAS 流程对应，待处理记录才允许人工操作。
   PENDING: { type: 'warning', text: '待处理' },
   RESOLVED: { type: 'success', text: '已解决' },
   IGNORED: { type: 'info', text: '已忽略' },

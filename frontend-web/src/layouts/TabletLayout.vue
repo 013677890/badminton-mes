@@ -15,12 +15,14 @@ const now = ref(formatDateTime(new Date()))
 let timer: number | undefined
 
 onMounted(() => {
+  // 车间终端需要持续显示本地当前时间，组件销毁时在 onBeforeUnmount 中释放定时器。
   timer = window.setInterval(() => {
     now.value = formatDateTime(new Date())
   }, 1000)
 })
 
 onBeforeUnmount(() => {
+  // 避免离开平板页面后定时器仍更新已卸载组件的响应式状态。
   if (timer !== undefined) window.clearInterval(timer)
 })
 </script>

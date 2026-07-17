@@ -19,6 +19,7 @@ export interface UseTableOptions<Row, Params extends Record<string, any>> {
 export function useTable<Row, Params extends Record<string, any> = Record<string, any>>(
   options: UseTableOptions<Row, Params>,
 ) {
+  // 将请求函数、筛选条件和分页状态集中在一个组合式函数中，页面只负责呈现状态和触发事件。
   const { fetcher, defaultParams, defaultPageSize = 10, immediate = true } = options
 
   const data = ref<Row[]>([]) as Ref<Row[]>
@@ -34,6 +35,7 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
    * 按当前筛选条件和分页状态加载列表，并同步 loading、数据和总条数。
    */
   async function load() {
+    // 每次请求都携带当前条件和分页快照，避免翻页时遗留上一页的页码或过滤条件。
     loading.value = true
     try {
       const result = await fetcher({
@@ -53,6 +55,7 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
    * 使用新筛选条件查询；查询条件变化时必须回到第一页。
    */
   function query(params?: Params) {
+    // 条件更新后重置到第一页，避免新筛选条件下请求一个不存在的高页码。
     if (params) activeParams = { ...params }
     pagination.value.pageNo = 1
     return load()
@@ -63,6 +66,7 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
    * 恢复初始化筛选条件，并重新加载第一页数据。
    */
   function reset() {
+    // 重新创建默认参数对象，避免调用方后续修改引用时污染内部查询状态。
     activeParams = { ...defaultParams }
     pagination.value.pageNo = 1
     return load()
@@ -73,6 +77,7 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
    * 保留当前条件和页码刷新列表，适用于增删改操作完成后更新页面。
    */
   function refresh() {
+    // 保留当前页和条件，适合保存、删除等操作后原地刷新。
     return load()
   }
 
@@ -80,6 +85,7 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
    * 接收表格分页事件，更新分页状态后重新请求列表。
    */
   function onPageChange(page: { pageNo: number; pageSize: number }) {
+    // 分页组件只改变状态，实际请求仍统一走 load，保持 loading 和异常处理一致。
     pagination.value.pageNo = page.pageNo
     pagination.value.pageSize = page.pageSize
     return load()

@@ -1,1 +1,2 @@
+<!-- 个人页展示本地会话快照，退出按钮执行服务端注销和本地缓存清理。 -->
 <view class="page"><view class="card"><view class="title">{{user.userName}}</view><view class="muted">工号：{{user.userNo}}</view><view class="muted">角色：{{user.roleCodes}}</view></view><button class="danger" bindtap="logout">退出登录</button></view>

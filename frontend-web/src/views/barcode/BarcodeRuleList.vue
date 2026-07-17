@@ -36,6 +36,7 @@ import type {
 
 defineOptions({ name: 'BarcodeRuleList' })
 
+// 条码规则依赖条码类型选项；页面只展示和提交规则，启停及已使用引用限制由后端执行。
 const typeOptions = ref<OptionItem[]>([])
 const typeNameMap = ref<Map<number, string>>(new Map())
 

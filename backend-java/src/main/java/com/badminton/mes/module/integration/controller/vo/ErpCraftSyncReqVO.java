@@ -12,7 +12,7 @@ import lombok.Data;
 @Data
 public class ErpCraftSyncReqVO {
 
-    /** 来源系统，默认 ERP */
+    /** ERP 来源系统，未填写时门面使用 ERP 默认标识。 */
     @Size(max = 32, message = "来源系统长度不能超过 32")
     private String sourceSystem;
 }

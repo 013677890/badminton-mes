@@ -56,6 +56,7 @@ public class WorkOrderCacheDTO {
      * @return 缓存 DTO
      */
     public static WorkOrderCacheDTO fromEntity(WorkOrderEntity entity) {
+        // 显式复制字段，保证缓存结构随实体变化可控，并且不依赖 Bean 序列化对 JPA 代理的处理。
         WorkOrderCacheDTO dto = new WorkOrderCacheDTO();
         dto.setId(entity.getId());
         dto.setWorkOrderNo(entity.getWorkOrderNo());
@@ -96,6 +97,7 @@ public class WorkOrderCacheDTO {
      * @return 工单实体
      */
     public WorkOrderEntity toEntity() {
+        // 回源命中缓存时重建普通实体；该对象只用于读取和 VO 转换，不应直接作为更新实体提交。
         WorkOrderEntity entity = new WorkOrderEntity();
         entity.setId(id);
         entity.setWorkOrderNo(workOrderNo);

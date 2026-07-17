@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 不良报表只读后端聚合结果，筛选条件变化时重新请求并保持图表与表格使用同一份数据。
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/base/PageHeader.vue'

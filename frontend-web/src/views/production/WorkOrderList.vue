@@ -51,6 +51,7 @@ const filterFields = ref<FilterField[]>([
   { prop: 'planEndRange', label: '计划完成', type: 'dateRange' },
 ])
 
+// 页面初始化并行加载车间、产品和生效路线选项；列表本身由 useTable 独立加载。
 onMounted(async () => {
   try {
     const [workshops, products, routes] = await Promise.all([
@@ -128,6 +129,7 @@ const { data, loading, pagination, query, reset, refresh, onPageChange } = useTa
  * 将页面日期范围拆成后端要求的起止时间，并触发工单分页查询。
  */
 function handleQuery(params: Record<string, any>) {
+  // FilterTable 的日期数组转换为后端需要的闭区间时间字符串，再交给 useTable 重置分页查询。
   const { planEndRange, ...rest } = params
   if (Array.isArray(planEndRange) && planEndRange.length === 2) {
     rest.planEndTimeBegin = `${planEndRange[0]} 00:00:00`
@@ -213,6 +215,7 @@ const rules = {
 
 /** 产品切换：联动生效 BOM 列表，并尝试预选默认工艺路线 */
 async function handleProductChange(productId: number | null) {
+  // 产品变更会影响默认 BOM 和工艺路线选项，先清理旧关联，再按当前产品重新加载可用选项。
   // 先清空旧产品的 BOM，避免异步请求期间用户误提交上一个产品的物料结构。
   dialog.model.value.bomId = null
   bomOptions.value = []
@@ -236,6 +239,7 @@ async function handleProductChange(productId: number | null) {
 }
 
 function openEdit(row: WorkOrder) {
+  // 编辑回显只允许已创建工单进入，表单初始值由当前行与可选字段的空值兜底组成。
   // 将列表行转换为弹窗模型，空值转为空字符串以适配输入控件。
   dialog.open('edit', {
     id: row.id,
@@ -266,6 +270,7 @@ function openEdit(row: WorkOrder) {
 const actions = useWorkOrderActions(refresh)
 
 function handleRowAction(key: string, row: WorkOrder) {
+  // 行操作按状态和权限配置决定可见性；这里仅路由或调用状态操作组合式函数。
   // 行操作由 key 分发到统一 action；每个分支只负责导航或触发对应业务动作。
   switch (key) {
     case 'detail':

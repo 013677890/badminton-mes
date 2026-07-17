@@ -14,6 +14,9 @@ import jakarta.persistence.LockModeType;
 /**
  * 设备计数异常池 Repository。
  *
+ * <p>异常池是可人工处理的待办事实。处理动作必须先锁定未删除记录，再由 Service 判断处理状态，
+ * 防止忽略和修正重试并发操作同一条异常。
+ *
  * @author 张竹灏
  * @date 2026/07/13
  */
@@ -27,5 +30,10 @@ public interface IntegrationDeviceCountExceptionRepository
             SELECT exception FROM IntegrationDeviceCountExceptionEntity exception
             WHERE exception.id = :id AND exception.deleted = false
             """)
+    /**
+     * 锁定未逻辑删除的异常池记录。
+     *
+     * <p>查询不在 SQL 中限定待处理状态，由业务层在锁内判断状态并返回稳定业务错误。
+     */
     java.util.Optional<IntegrationDeviceCountExceptionEntity> findByIdForUpdate(@Param("id") Long id);
 }

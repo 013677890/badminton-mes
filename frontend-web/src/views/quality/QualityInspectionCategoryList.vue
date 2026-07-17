@@ -26,6 +26,7 @@ import type {
 
 defineOptions({ name: 'QualityInspectionCategoryList' })
 
+// 检验分类是检验项目的上级主档，页面只维护表单和分页状态，引用约束由后端处理。
 const filterFields: FilterField[] = [
   { prop: 'keyword', label: '关键词', type: 'input', placeholder: '编码或名称' },
   {

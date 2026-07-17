@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 设备制造商主档供设备台账回填选项使用，删除时后端检查历史设备引用。
 import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, RowAction } from '@/types/components'
 import FilterTable from '@/components/business/FilterTable.vue'

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 设备保养记录页展示历史执行结果，新增和查询接口由后端校验计划、设备及执行状态。
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ColumnDef, FilterField, OptionItem, RowAction } from '@/types/components'

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 实时生产报表展示后端快照并周期刷新，页面不修改任何生产数据。
 import { onMounted, reactive, ref } from 'vue'
 import PageHeader from '@/components/base/PageHeader.vue'
 import {

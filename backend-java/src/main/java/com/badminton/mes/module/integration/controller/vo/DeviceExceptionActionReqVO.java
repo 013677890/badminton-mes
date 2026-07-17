@@ -12,6 +12,7 @@ import lombok.Data;
 @Data
 public class DeviceExceptionActionReqVO {
 
+    /** 人工忽略或修正处理时留下的审计说明，可为空。 */
     @Size(max = 255, message = "处理说明长度不能超过 255")
     private String remark;
 }

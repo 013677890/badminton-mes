@@ -18,19 +18,19 @@ import lombok.Data;
 @Data
 public class ErpTaskSyncReqVO {
 
-    /** 来源系统，默认 ERP */
+    /** 来源系统，未填写时由门面回退为 ERP 默认标识并参与幂等分区。 */
     @Size(max = 32, message = "来源系统长度不能超过 32")
     private String sourceSystem;
 
-    /** 指定同步的 ERP 任务单号，为空时同步全部 */
+    /** 指定同步的 ERP 任务单号，为空时同步全部数据源任务。 */
     @Size(max = 64, message = "ERP 任务单号长度不能超过 64")
     private String erpOrderNo;
 
-    /** 同步起始时间 */
+    /** 按任务计划开始时间筛选的闭区间起点，可空。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime startTime;
 
-    /** 同步截止时间 */
+    /** 按任务计划开始时间筛选的闭区间终点，可空。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime endTime;
 }

@@ -47,6 +47,7 @@ const boardColumns: ColumnDef<ShortageBoardRow>[] = [
 const boardActions: RowAction<ShortageBoardRow>[] = [{ key: 'drill', label: '影响工单' }]
 
 async function loadBoard() {
+  // 看板读取数据库聚合结果；刷新按钮和处理登记成功后都复用该入口。
   boardLoading.value = true
   try {
     boardRows.value = await getShortageBoard()
@@ -78,6 +79,7 @@ const orderActions: RowAction<ShortageOrderRow>[] = [
 ]
 
 async function handleBoardAction(key: string, row: ShortageBoardRow) {
+  // 下钻先保存当前物料并打开抽屉，再请求受影响工单，避免抽屉内容与标题错位。
   if (key !== 'drill') return
   drillMaterial.value = row
   drawerVisible.value = true
@@ -127,6 +129,7 @@ const handleRules = {
 }
 
 async function handleOrderAction(key: string, row: ShortageOrderRow) {
+  // 工单行可跳转详情或打开欠料处理登记，处理责任人选项按需加载。
   if (key === 'detail') {
     router.push(`/production/work-orders/${row.workOrderId}`)
     return

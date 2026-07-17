@@ -13,21 +13,21 @@ import lombok.Data;
 @Data
 public class ErpCraftSyncRespVO {
 
-    /** 来源系统 */
+    /** 本次工艺同步实际使用的来源系统。 */
     private String sourceSystem;
 
-    /** 总数 */
+    /** 数据源返回并参与处理的工艺路线总数。 */
     private int totalCount;
 
-    /** 成功数（进入待确认区且校验通过） */
+    /** 校验通过并进入待确认区的工艺数量。 */
     private int successCount;
 
-    /** 失败数（校验未通过，进入待确认区异常状态） */
+    /** 校验失败并保留为异常暂存状态的工艺数量。 */
     private int failureCount;
 
-    /** 重复数 */
+    /** 已有待确认或已确认记录、未重复覆盖的工艺数量。 */
     private int duplicateCount;
 
-    /** 待确认数据列表 */
+    /** 本次处理产生或命中的待确认记录响应列表。 */
     private List<ErpCraftPendingRespVO> pendingItems;
 }

@@ -33,6 +33,7 @@ public final class WorkOrderConvert {
      * @return 工单实体
      */
     public static WorkOrderEntity toEntity(WorkOrderSaveReqVO reqVO) {
+        // 只复制计划字段；工单号、来源、状态和产品冗余信息必须由 Service 按业务来源设置。
         WorkOrderEntity workOrder = new WorkOrderEntity();
         workOrder.setProductId(reqVO.getProductId());
         workOrder.setBatchNo(reqVO.getBatchNo());
@@ -55,6 +56,7 @@ public final class WorkOrderConvert {
      * @return 响应 VO
      */
     public static WorkOrderRespVO toRespVO(WorkOrderEntity workOrder) {
+        // 显式映射工单主档和执行汇总字段，避免把 JPA 实体直接作为接口响应。
         WorkOrderRespVO respVO = new WorkOrderRespVO();
         respVO.setId(workOrder.getId());
         respVO.setWorkOrderNo(workOrder.getWorkOrderNo());
@@ -94,6 +96,7 @@ public final class WorkOrderConvert {
      * @return 响应 VO 列表；入参为空集合时返回空集合
      */
     public static List<WorkOrderRespVO> toRespVOList(List<WorkOrderEntity> list) {
+        // 列表转换保持数据库返回顺序；批量关联信息应在 Service 层提前准备。
         return list.stream().map(WorkOrderConvert::toRespVO).toList();
     }
 
@@ -106,6 +109,7 @@ public final class WorkOrderConvert {
      */
     public static List<WorkOrderMaterialRespVO> toMaterialRespVOList(List<WorkOrderMaterialEntity> list,
                                                                      Map<Long, MaterialEntity> materialMap) {
+        // 需求数量来自工单物料表，物料名称来自批量 Map；档案缺失时仍返回需求行本身。
         return list.stream().map(entity -> {
             WorkOrderMaterialRespVO respVO = new WorkOrderMaterialRespVO();
             respVO.setId(entity.getId());
@@ -129,6 +133,7 @@ public final class WorkOrderConvert {
      * @return 响应 VO 列表；入参为空集合时返回空集合
      */
     public static List<WorkOrderStatusLogRespVO> toStatusLogRespVOList(List<WorkOrderStatusLogEntity> list) {
+        // 状态日志按查询顺序转换，保留来源状态、目标状态、原因和操作时间等审计字段。
         return list.stream().map(entity -> {
             WorkOrderStatusLogRespVO respVO = new WorkOrderStatusLogRespVO();
             respVO.setId(entity.getId());
@@ -144,5 +149,6 @@ public final class WorkOrderConvert {
     }
 
     private WorkOrderConvert() {
+        // 工具类不允许实例化。
     }
 }

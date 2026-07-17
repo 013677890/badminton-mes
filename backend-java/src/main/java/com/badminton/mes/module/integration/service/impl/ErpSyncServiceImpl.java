@@ -55,18 +55,25 @@ import org.springframework.util.StringUtils;
 @Service
 public class ErpSyncServiceImpl implements ErpSyncService {
 
+    /** 来源数据缺少可用业务键时写入审计日志的稳定占位值。 */
     private static final String INVALID_BUSINESS_KEY = "INVALID_SOURCE_DATA";
 
+    /** ERP 数据源抽象，负责提供待同步任务和工艺数据。 */
     private final ErpDataSource erpDataSource;
 
+    /** 单条任务事务命令服务，使批次内每条任务可独立成功或失败。 */
     private final ErpTaskSyncCommandService taskSyncCommandService;
 
+    /** 单条工艺事务命令服务，负责暂存、校验和确认状态处理。 */
     private final ErpCraftSyncCommandService craftSyncCommandService;
 
+    /** 审计服务，用于命令回滚后独立记录失败及并发重复请求。 */
     private final IntegrationAuditService auditService;
 
+    /** 接口日志仓储，用于 ERP 任务同步历史分页。 */
     private final IntegrationWriteLogRepository writeLogRepository;
 
+    /** ERP 工艺待确认仓储，用于人工确认列表的动态分页查询。 */
     private final ErpCraftPendingRepository pendingRepository;
 
     /**
@@ -105,8 +112,10 @@ public class ErpSyncServiceImpl implements ErpSyncService {
 
     @Override
     public ErpTaskSyncRespVO syncErpTasks(ErpTaskSyncReqVO reqVO) {
+        // 来源系统缺省时取数据源默认值，显式值统一规范化用于工单幂等和日志分区。
         String sourceSystem = resolveSourceSystem(reqVO.getSourceSystem());
         validateTaskTimeRange(reqVO);
+        // 先从数据源取得快照，再按可选单号和计划开始时间范围筛选本次同步集合。
         List<ErpTaskDTO> tasks = filterTasks(
                 erpDataSource.fetchTasks(), reqVO.getErpOrderNo(),
                 reqVO.getStartTime(), reqVO.getEndTime());
@@ -117,6 +126,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
         List<ErpTaskSyncRespVO.Detail> details = new ArrayList<>(tasks.size());
 
         for (ErpTaskDTO task : tasks) {
+            // 每条任务独立序列化和执行，单条业务异常只计入明细，不中断后续任务。
             String snapshot = auditService.serializeRequest(task);
             syncTaskItem(task, sourceSystem, snapshot, response, details);
         }
@@ -126,6 +136,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
 
     @Override
     public PageResult<IntegrationWriteLogRespVO> getErpTaskSyncLogPage(ErpSyncLogPageReqVO reqVO) {
+        // 规格固定限定 ERP_TASK_SYNC 类型，再叠加来源、状态和时间等请求条件。
         Specification<IntegrationWriteLogEntity> specification =
                 ErpSyncLogSpecifications.erpTaskSyncLogPage(reqVO);
         long total = writeLogRepository.count(specification);
@@ -148,6 +159,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
     @Override
     public ErpCraftSyncRespVO syncErpCrafts(ErpCraftSyncReqVO reqVO) {
         String sourceSystem = resolveSourceSystem(reqVO.getSourceSystem());
+        // 工艺数据不在门面层过滤，每条均由命令服务校验并进入待确认或异常状态。
         List<ErpCraftDTO> crafts = erpDataSource.fetchCrafts();
 
         ErpCraftSyncRespVO response = new ErpCraftSyncRespVO();
@@ -156,6 +168,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
         List<ErpCraftPendingRespVO> pendingItems = new ArrayList<>(crafts.size());
 
         for (ErpCraftDTO craft : crafts) {
+            // 单条命令负责保存异常暂存，门面只负责隔离异常和汇总批次计数。
             String snapshot = auditService.serializeRequest(craft);
             syncCraftItem(craft, sourceSystem, snapshot, response, pendingItems);
         }
@@ -171,6 +184,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
     @Override
     public PageResult<ErpCraftPendingRespVO> getPendingCraftPage(
             ErpCraftPendingPageReqVO reqVO) {
+        // 动态规格在数据库层组合来源、路线关键字、产品和处理状态。
         Specification<ErpCraftPendingEntity> specification =
                 ErpCraftPendingSpecifications.page(reqVO);
         long total = pendingRepository.count(specification);
@@ -207,16 +221,19 @@ public class ErpSyncServiceImpl implements ErpSyncService {
                               List<ErpTaskSyncRespVO.Detail> details) {
         String businessKey = resolveTaskBusinessKey(task);
         try {
+            // 命令服务开启单条事务，因此这里捕获异常不会让已成功的其他条目回滚。
             IntegrationCommandResult result = taskSyncCommandService
                     .syncTask(task, snapshot, sourceSystem);
             collectTaskResult(businessKey, result, response, details);
         } catch (ServiceException exception) {
+            // 先判断是否为并发唯一键竞争；若能回查获胜数据则按重复成功汇总。
             Optional<IntegrationCommandResult> concurrentResult =
                     findConcurrentTaskResult(task, sourceSystem, snapshot, exception);
             if (concurrentResult.isPresent()) {
                 collectTaskResult(businessKey, concurrentResult.get(), response, details);
                 return;
             }
+            // 普通业务失败使用独立事务记录审计，然后继续处理批次下一条任务。
             auditService.recordFailure(
                     IntegrationInterfaceTypeEnum.ERP_TASK_SYNC,
                     sourceSystem, businessKey, snapshot,
@@ -253,6 +270,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
             return Optional.empty();
         }
         WorkOrderEntity workOrder = existing.get();
+        // 获胜事务的工单已可见后，为本次落败请求单独记录 DUPLICATE 审计。
         Long logId = auditService.recordDuplicate(
                 IntegrationInterfaceTypeEnum.ERP_TASK_SYNC,
                 sourceSystem, erpOrderNo, snapshot,
@@ -297,16 +315,19 @@ public class ErpSyncServiceImpl implements ErpSyncService {
                                List<ErpCraftPendingRespVO> pendingItems) {
         String businessKey = resolveCraftBusinessKey(craft);
         try {
+            // 工艺命令会把可诊断业务异常保存为 FAILED 暂存数据并返回，不直接抛出。
             ErpCraftSyncResult result = craftSyncCommandService
                     .syncCraft(craft, snapshot, sourceSystem);
             collectCraftResult(result, response, pendingItems);
         } catch (ServiceException exception) {
+            // 数据库唯一键竞争等事务级异常仍由门面回查获胜暂存记录。
             Optional<ErpCraftSyncResult> concurrentResult =
                     findConcurrentCraftResult(craft, sourceSystem, snapshot, exception);
             if (concurrentResult.isPresent()) {
                 collectCraftResult(concurrentResult.get(), response, pendingItems);
                 return;
             }
+            // 无法恢复为并发重复时，以独立失败日志结束当前条目并继续整个批次。
             auditService.recordFailure(
                     IntegrationInterfaceTypeEnum.ERP_CRAFT_SYNC,
                     sourceSystem, businessKey, snapshot,
@@ -344,6 +365,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
             return Optional.empty();
         }
         ErpCraftPendingEntity pending = existing.get();
+        // 回查成功后沿用既有暂存主键和业务键，记录本次重复调用。
         Long logId = auditService.recordDuplicate(
                 IntegrationInterfaceTypeEnum.ERP_CRAFT_SYNC,
                 sourceSystem, businessKey, snapshot,
@@ -389,12 +411,14 @@ public class ErpSyncServiceImpl implements ErpSyncService {
                 && errorCode.code().equals(exception.getErrorCode().code());
     }
 
+    /** 从可能不完整的任务数据中安全提取审计业务键。 */
     private String resolveTaskBusinessKey(ErpTaskDTO task) {
         return task != null && StringUtils.hasText(task.erpOrderNo())
                 ? task.erpOrderNo().trim()
                 : INVALID_BUSINESS_KEY;
     }
 
+    /** 以路线编码和版本拼接 ERP 工艺审计业务键，结构无效时使用占位值。 */
     private String resolveCraftBusinessKey(ErpCraftDTO craft) {
         if (craft == null
                 || !StringUtils.hasText(craft.erpRoutingCode())
@@ -404,6 +428,11 @@ public class ErpSyncServiceImpl implements ErpSyncService {
         return craft.erpRoutingCode().trim() + ":" + craft.erpRoutingVersion().trim();
     }
 
+    /**
+     * 按可选 ERP 单号和计划开始时间闭区间筛选数据源任务快照。
+     *
+     * <p>空任务在进入同步命令前剔除；缺少计划时间的任务在指定时间范围时自然不匹配。
+     */
     private List<ErpTaskDTO> filterTasks(
             List<ErpTaskDTO> tasks,
             String erpOrderNo,
@@ -420,6 +449,7 @@ public class ErpSyncServiceImpl implements ErpSyncService {
                 .toList();
     }
 
+    /** 校验任务同步截止时间不得早于起始时间。 */
     private void validateTaskTimeRange(ErpTaskSyncReqVO reqVO) {
         if (reqVO.getStartTime() != null && reqVO.getEndTime() != null
                 && reqVO.getEndTime().isBefore(reqVO.getStartTime())) {
@@ -428,11 +458,13 @@ public class ErpSyncServiceImpl implements ErpSyncService {
         }
     }
 
+    /** 将越界分页请求收敛到最后一页。 */
     private int normalizePageNo(int requestedPageNo, int pageSize, long total) {
         int totalPages = (int) ((total + pageSize - 1) / pageSize);
         return Math.min(requestedPageNo, totalPages);
     }
 
+    /** 解析并规范化来源系统，空值回退为当前 ERP 数据源默认标识。 */
     private String resolveSourceSystem(String sourceSystem) {
         return StringUtils.hasText(sourceSystem)
                 ? sourceSystem.trim().toUpperCase(Locale.ROOT)
