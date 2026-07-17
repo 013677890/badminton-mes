@@ -28,8 +28,10 @@ public final class BarcodeRuleSpecifications {
     public static Specification<BarcodeRuleEntity> page(BarcodeRulePageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 所有动态条件最终均以 AND 连接，并始终排除逻辑删除数据。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (StringUtils.hasText(reqVO.getRuleCode())) {
+                // 编码采用右模糊匹配，保留数据库利用编码索引前缀过滤的可能性。
                 predicates.add(criteriaBuilder.like(root.get("ruleCode"), reqVO.getRuleCode() + "%"));
             }
             if (StringUtils.hasText(reqVO.getRuleName())) {

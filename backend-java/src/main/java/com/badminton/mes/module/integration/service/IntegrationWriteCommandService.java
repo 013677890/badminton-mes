@@ -42,34 +42,50 @@ import org.springframework.util.StringUtils;
 /**
  * 外部写入命令事务服务，保证主数据与成功/重复日志原子提交。
  *
+ * <p>该服务是 ERP 等外部系统写入 MES 的事务边界：计量单位采用“按编码加锁后新增或更新”，
+ * 生产工单采用“来源系统 + 外部单号”作为永久幂等键。业务数据和接口审计日志在同一事务中落库，
+ * 任一步失败都会整体回滚，避免外部系统收到成功结果却查不到对应主数据或审计记录。
+ *
  * @author 张竹灏
  * @date 2026/07/11
  */
 @Service
 public class IntegrationWriteCommandService {
 
+    /** 记录无法准确翻译的数据库完整性冲突，便于定位约束或并发问题。 */
     private static final Logger logger = LoggerFactory.getLogger(IntegrationWriteCommandService.class);
 
+    /** 有效计量单位编码唯一索引名称，用于将并发冲突转换为明确业务异常。 */
     private static final String UNIT_CODE_CONSTRAINT = "uk_active_unit_code";
 
+    /** 外部工单幂等唯一索引名称，约束来源系统与外部单号的组合只能落库一次。 */
     private static final String EXTERNAL_WORK_ORDER_CONSTRAINT = "uk_external_source_order";
 
+    /** 计量单位仓储，提供编码锁定查询、有效数据读取和唯一约束落库。 */
     private final UnitRepository unitRepository;
 
+    /** 产品仓储，用于校验单位是否已被产品使用，以及解析外部工单产品主档。 */
     private final ProductRepository productRepository;
 
+    /** 车间仓储，用于按编码锁定并校验外部工单的目标车间。 */
     private final WorkshopRepository workshopRepository;
 
+    /** BOM 仓储，用于确认请求引用的是当前产品的生效 BOM。 */
     private final BomRepository bomRepository;
 
+    /** 工艺路线仓储，用于读取外部工单指定的路线版本及其生效状态。 */
     private final CraftRouteRepository routeRepository;
 
+    /** 路线产品关系仓储，用于验证工艺路线确实绑定当前产品。 */
     private final CraftRouteProductRepository routeProductRepository;
 
+    /** 生产工单仓储，负责幂等查询和外部工单持久化。 */
     private final WorkOrderRepository workOrderRepository;
 
+    /** 分配 MES 内部工单号的流水组件，与外部单号分别承担展示和幂等职责。 */
     private final WorkOrderNoSequence workOrderNoSequence;
 
+    /** 接口审计服务，与业务写入共同参与当前数据库事务。 */
     private final IntegrationAuditService auditService;
 
     /**
@@ -114,16 +130,20 @@ public class IntegrationWriteCommandService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IntegrationCommandResult writeUnit(UnitWriteReqVO reqVO, String snapshot) {
+        // 来源系统和单位编码统一去除首尾空白并转大写，避免大小写差异拆分同一业务键。
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String unitCode = normalizeCode(reqVO.getUnitCode());
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
+        // 按单位编码申请悲观写锁，使同一编码的更新以及“查询后新增”尽量串行执行。
         UnitEntity unit = unitRepository.findByUnitCodeForUpdate(unitCode).orElse(null);
         if (unit == null) {
+            // 不存在时创建新主档；数据库唯一索引继续兜底“空结果无法锁行”的并发创建窗口。
             unit = new UnitEntity();
             unit.setUnitCode(unitCode);
             unit.setCreateBy(operatorId);
         } else if (!Objects.equals(unit.getDecimalPrecision(), reqVO.getDecimalPrecision())
                 && productRepository.existsByUnitIdAndDeletedFalse(unit.getId())) {
+            // 已被产品引用的单位不得改变精度，否则历史数量的展示和换算语义会被重解释。
             throw new ServiceException(IntegrationErrorCodeConstants.UNIT_PRECISION_IN_USE);
         }
 
@@ -131,7 +151,9 @@ public class IntegrationWriteCommandService {
         unit.setDecimalPrecision(reqVO.getDecimalPrecision());
         unit.setStatus(reqVO.getStatus());
         unit.setUpdateBy(operatorId);
+        // saveAndFlush 让唯一约束在记录成功审计前立即触发，保证业务数据与日志结果一致。
         saveUnit(unit);
+        // 审计日志与单位主档共用当前事务，日志写入失败时单位写入也会回滚。
         Long logId = auditService.recordResult(
                 IntegrationInterfaceTypeEnum.UNIT_WRITE,
                 sourceSystem,
@@ -153,11 +175,14 @@ public class IntegrationWriteCommandService {
     @Transactional(rollbackFor = Exception.class)
     public IntegrationCommandResult writeWorkOrder(ExternalWorkOrderWriteReqVO reqVO,
                                                     String snapshot) {
+        // 规范化来源系统，并保留外部单号的原始大小写，仅清除无意义的首尾空白。
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String externalNo = reqVO.getExternalWorkOrderNo().trim();
+        // 幂等键查询故意包含逻辑删除历史：外部同一请求不能因 MES 逻辑删除而再次生成新工单。
         Optional<WorkOrderEntity> existing = findExternalWorkOrder(sourceSystem, externalNo);
         if (existing.isPresent()) {
             WorkOrderEntity workOrder = existing.get();
+            // 重复请求不改写既有工单，只追加 DUPLICATE 审计并返回第一次生成的内部单号。
             Long logId = auditService.recordResult(
                     IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
                     sourceSystem,
@@ -170,6 +195,7 @@ public class IntegrationWriteCommandService {
                     workOrder.getId(), workOrder.getWorkOrderNo(), true, logId);
         }
 
+        // 先完成全部跨表主档校验，再构造并落库工单，避免生成半完整的生产任务。
         validatePlanTime(reqVO);
         ProductEntity product = requireProduct(reqVO.getProductCode());
         validateProductUnit(product.getUnitId());
@@ -177,9 +203,12 @@ public class IntegrationWriteCommandService {
         validateBom(reqVO.getBomId(), product.getId());
         validateRoute(reqVO.getRoutingId(), product.getId());
 
+        // 产品名称、规格和单位以 MES 主档为准形成工单快照，不信任外部请求冗余字段。
         WorkOrderEntity workOrder = buildWorkOrder(reqVO, sourceSystem, externalNo,
                 product, workshop);
+        // 立即刷新以捕获并发写入相同幂等键产生的数据库唯一约束冲突。
         saveWorkOrder(workOrder);
+        // 仅在工单成功持久化后记录 SUCCESS；两者仍处于同一事务并原子提交。
         Long logId = auditService.recordResult(
                 IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
                 sourceSystem,
@@ -289,6 +318,7 @@ public class IntegrationWriteCommandService {
      * @param unitId 产品计量单位主键
      */
     private void validateProductUnit(Long unitId) {
+        // 产品虽然有效，其引用的单位仍可能被停用或删除，因此必须独立验证关联主档。
         UnitEntity unit = unitRepository.findByIdAndDeletedFalse(unitId)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.UNIT_NOT_EXISTS));
@@ -304,6 +334,7 @@ public class IntegrationWriteCommandService {
      * @return 车间实体
      */
     private WorkshopEntity requireWorkshop(String workshopCode) {
+        // 加写锁稳定车间的启停状态，避免校验通过后并发停用而工单仍落到不可用车间。
         WorkshopEntity workshop = workshopRepository
                 .findByWorkshopCodeAndDeletedFalseForUpdate(normalizeCode(workshopCode))
                 .orElseThrow(() -> new ServiceException(
@@ -321,6 +352,7 @@ public class IntegrationWriteCommandService {
      * @param productId 产品主键
      */
     private void validateBom(Long bomId, Long productId) {
+        // BOM 必须同时满足“未删除、已生效、属于当前产品”，仅主键存在不足以用于生产。
         BomEntity bom = bomRepository.findByIdAndDeletedFalse(bomId)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.EXTERNAL_BOM_NOT_AVAILABLE));
@@ -338,6 +370,7 @@ public class IntegrationWriteCommandService {
      * @param productId 产品主键
      */
     private void validateRoute(Long routeId, Long productId) {
+        // 路线主档状态和路线-产品关系分表保存，因此需要两次查询共同确认可用性。
         CraftRouteEntity route = routeRepository.findByIdAndDeletedFalse(routeId)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.EXTERNAL_ROUTE_NOT_AVAILABLE));
@@ -366,10 +399,12 @@ public class IntegrationWriteCommandService {
                                            ProductEntity product,
                                            WorkshopEntity workshop) {
         WorkOrderEntity workOrder = new WorkOrderEntity();
+        // 内部单号用于 MES 作业流转；外部来源三元组独立保存并承担跨系统幂等识别。
         workOrder.setWorkOrderNo(workOrderNoSequence.nextNo());
         workOrder.setSourceType(WorkOrderSourceTypeEnum.API_WRITE.getType());
         workOrder.setSourceSystem(sourceSystem);
         workOrder.setSourceOrderNo(externalNo);
+        // 冗余产品名称、规格和单位，固定工单创建时的主档快照，避免后续主档修改影响历史工单。
         workOrder.setProductId(product.getId());
         workOrder.setProductName(product.getProductName());
         workOrder.setSpec(product.getSpec());

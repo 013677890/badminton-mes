@@ -25,6 +25,7 @@ public final class CraftPersistenceExceptionTranslator {
     public static void translateUniqueConstraint(DataIntegrityViolationException exception,
                                                  String constraintName, ErrorCode errorCode) {
         Throwable cause = exception;
+        // 数据库驱动可能在多层 cause 中包装约束名称，统一转小写后逐层查找。
         String expectedName = constraintName.toLowerCase(Locale.ROOT);
         while (cause != null) {
             String message = cause.getMessage();
@@ -33,6 +34,7 @@ public final class CraftPersistenceExceptionTranslator {
             }
             cause = cause.getCause();
         }
+        // 无法确认是目标唯一约束时保留原异常，避免把外键或非空错误误报成重复编码。
         throw exception;
     }
 

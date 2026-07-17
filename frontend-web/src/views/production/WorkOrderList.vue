@@ -170,11 +170,13 @@ const dialog = useFormDialog<WorkOrderForm>(
   {
     titles: { create: '新建工单', edit: '编辑工单（仅已创建可改）' },
     submit: async (model, mode) => {
+      // 前端先阻止明显的时间倒置，后端仍会再次校验，避免绕过页面直接调用接口。
       if (model.planEndTime <= model.planStartTime) {
         ElMessage.warning('计划完成时间必须晚于计划开始时间')
         throw new Error('invalid plan time')
       }
       const payload = {
+        // 表单模型允许 null 便于控件清空；接口 payload 将可选字段转换为 undefined，避免提交无意义的 null。
         productId: model.productId!,
         workshopId: model.workshopId!,
         batchNo: model.batchNo || undefined,
@@ -188,9 +190,11 @@ const dialog = useFormDialog<WorkOrderForm>(
         changeReason: model.changeReason || undefined,
       }
       if (mode === 'create') {
+        // 新建只提交一次创建请求，成功后由 useFormDialog 的 onSuccess 触发列表刷新。
         await createWorkOrder(payload)
         ElMessage.success('工单已创建')
       } else {
+        // 编辑复用同一 payload；工单当前状态能否修改由后端状态机最终判断。
         await updateWorkOrder(model.id!, payload)
         ElMessage.success('工单已更新')
       }
@@ -209,10 +213,12 @@ const rules = {
 
 /** 产品切换：联动生效 BOM 列表，并尝试预选默认工艺路线 */
 async function handleProductChange(productId: number | null) {
+  // 先清空旧产品的 BOM，避免异步请求期间用户误提交上一个产品的物料结构。
   dialog.model.value.bomId = null
   bomOptions.value = []
   if (!productId) return
   try {
+    // 生效 BOM 列表是产品维度数据；只有唯一候选时才自动回填，多个候选交给用户选择。
     bomOptions.value = await loadEffectiveBomOptions(productId)
     if (bomOptions.value.length === 1) {
       dialog.model.value.bomId = bomOptions.value[0].value as number
@@ -221,6 +227,7 @@ async function handleProductChange(productId: number | null) {
     // BOM 未配置时留空
   }
   try {
+    // 默认工艺路线是便利性回填，查询失败不阻塞工单创建，用户仍可手工选择路线。
     const route = await getDefaultRoute(productId)
     dialog.model.value.routingId = route.id
   } catch {
@@ -229,6 +236,7 @@ async function handleProductChange(productId: number | null) {
 }
 
 function openEdit(row: WorkOrder) {
+  // 将列表行转换为弹窗模型，空值转为空字符串以适配输入控件。
   dialog.open('edit', {
     id: row.id,
     productId: row.productId,
@@ -258,8 +266,10 @@ function openEdit(row: WorkOrder) {
 const actions = useWorkOrderActions(refresh)
 
 function handleRowAction(key: string, row: WorkOrder) {
+  // 行操作由 key 分发到统一 action；每个分支只负责导航或触发对应业务动作。
   switch (key) {
     case 'detail':
+      // 详情页使用路由传递主键，详情页再按主键读取最新数据，避免依赖列表快照。
       router.push(`/production/work-orders/${row.id}`)
       break
     case 'edit':

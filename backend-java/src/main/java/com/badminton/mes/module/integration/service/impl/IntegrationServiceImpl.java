@@ -45,14 +45,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class IntegrationServiceImpl implements IntegrationService {
 
+    /** 单位和外部工单事务命令服务，负责业务写入与成功日志原子提交。 */
     private final IntegrationWriteCommandService commandService;
 
+    /** 外部派工事务命令服务，通过生产模块领域服务创建任务单。 */
     private final IntegrationDispatchWriteCommandService dispatchCommandService;
 
+    /** 设备累计计数命令服务，负责异常池、增量计算和自动报工。 */
     private final DeviceCountWriteCommandService deviceCountCommandService;
 
+    /** 审计服务，用于在命令事务回滚后以独立事务记录失败或并发重复结果。 */
     private final IntegrationAuditService auditService;
 
+    /** 写入日志仓储，用于接口日志分页和幂等结果补充查询。 */
     private final IntegrationWriteLogRepository writeLogRepository;
 
     /**
@@ -78,6 +83,7 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     @Override
     public IntegrationWriteResultRespVO writeUnit(UnitWriteReqVO reqVO) {
+        // 在进入事务命令前固定请求快照和规范化业务键，失败审计仍可复用同一份内容。
         String snapshot = auditService.serializeRequest(reqVO);
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String unitCode = normalizeCode(reqVO.getUnitCode());
@@ -87,6 +93,7 @@ public class IntegrationServiceImpl implements IntegrationService {
             boolean duplicate = IntegrationErrorCodeConstants.UNIT_CODE_DUPLICATE
                     .equals(exception.getErrorCode());
             if (duplicate) {
+                // 单位契约是 upsert；并发首次新增的落败事务应重试更新，而不是返回普通重复。
                 return retryConcurrentUnitUpsert(reqVO, snapshot, sourceSystem, unitCode);
             }
             return recordFailure(
@@ -102,6 +109,7 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     @Override
     public IntegrationWriteResultRespVO writeWorkOrder(ExternalWorkOrderWriteReqVO reqVO) {
+        // 来源系统与外部工单号是后续成功、失败和并发回查共同使用的审计业务键。
         String snapshot = auditService.serializeRequest(reqVO);
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String externalNo = reqVO.getExternalWorkOrderNo().trim();
@@ -110,11 +118,13 @@ public class IntegrationServiceImpl implements IntegrationService {
         } catch (ServiceException exception) {
             boolean duplicate = IntegrationErrorCodeConstants.EXTERNAL_WORK_ORDER_DUPLICATE
                     .equals(exception.getErrorCode());
+            // 唯一键竞争说明另一事务可能已提交，回查其工单即可恢复稳定的幂等响应。
             Optional<WorkOrderEntity> existing = duplicate
                     ? commandService.findExternalWorkOrder(sourceSystem, externalNo)
                     : Optional.empty();
             if (duplicate) {
                 if (existing.isEmpty()) {
+                    // 约束冲突却无法回查获胜记录时，不伪造重复结果，按数据库写冲突留痕。
                     return recordFailure(
                             IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
                             sourceSystem,
@@ -124,6 +134,7 @@ public class IntegrationServiceImpl implements IntegrationService {
                             null,
                             null);
                 }
+                // 获胜工单可见后，以独立事务记录本次并发重复请求。
                 return recordDuplicate(
                         IntegrationInterfaceTypeEnum.WORK_ORDER_WRITE,
                         sourceSystem,
@@ -145,6 +156,7 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     @Override
     public IntegrationWriteResultRespVO writeDispatchOrder(ExternalDispatchOrderWriteReqVO reqVO) {
+        // 派工单没有外部来源字段，因此失败时从审计日志回查可能已存在的业务结果。
         String snapshot = auditService.serializeRequest(reqVO);
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String externalNo = reqVO.getExternalDispatchOrderNo().trim();
@@ -166,12 +178,14 @@ public class IntegrationServiceImpl implements IntegrationService {
 
     @Override
     public IntegrationWriteResultRespVO writeDeviceCount(DeviceCountWriteReqVO reqVO) {
+        // 先查日志可在进入加锁和累计校验前快速返回已经完成的幂等结果。
         String snapshot = auditService.serializeRequest(reqVO);
         String sourceSystem = normalizeCode(reqVO.getSourceSystem());
         String externalKey = normalizeCode(reqVO.getExternalKey());
         Optional<IntegrationWriteLogEntity> processedLog =
                 deviceCountCommandService.findProcessedLog(sourceSystem, externalKey);
         if (processedLog.isPresent()) {
+            // 原结果即使是 FAILED 也必须沿用其错误码，防止相同幂等键绕过异常池重复落库。
             return toDeviceCountDuplicate(processedLog.get());
         }
         try {
@@ -183,6 +197,7 @@ public class IntegrationServiceImpl implements IntegrationService {
                     ? deviceCountCommandService.findProcessedLog(sourceSystem, externalKey)
                     : Optional.empty();
             if (existing.isPresent()) {
+                // 并发唯一键落败后回查获胜日志，将数据库竞争转换为稳定 DUPLICATE 响应。
                 return toDeviceCountDuplicate(existing.get());
             }
             return recordFailure(
@@ -202,8 +217,10 @@ public class IntegrationServiceImpl implements IntegrationService {
     @Transactional(readOnly = true)
     public PageResult<IntegrationWriteLogRespVO> getWriteLogPage(
             IntegrationWriteLogPageReqVO reqVO) {
+        // 动态规格统一拼装接口类型、来源、状态和时间等可选数据库条件。
         Specification<IntegrationWriteLogEntity> specification =
                 IntegrationWriteLogSpecifications.page(reqVO);
+        // 空结果跳过列表查询，避免无意义的第二次数据库往返。
         long total = writeLogRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
@@ -237,6 +254,7 @@ public class IntegrationServiceImpl implements IntegrationService {
             String sourceSystem,
             String unitCode) {
         try {
+            // 原事务已经回滚，再次进入代理事务后可锁定获胜事务插入的单位行并完成真正 upsert。
             return toSuccess(commandService.writeUnit(reqVO, snapshot));
         } catch (ServiceException retryException) {
             return recordFailure(
@@ -291,6 +309,7 @@ public class IntegrationServiceImpl implements IntegrationService {
             ServiceException exception,
             Long resultId,
             String resultNo) {
+        // 命令事务已经退出，recordFailure 使用 REQUIRES_NEW 保证失败日志独立提交。
         Long logId = auditService.recordFailure(
                 interfaceType, sourceSystem, businessKey, snapshot,
                 resultId, resultNo, exception.getErrorCode(), exception.getMessage());
@@ -322,6 +341,7 @@ public class IntegrationServiceImpl implements IntegrationService {
             String snapshot,
             Long resultId,
             String resultNo) {
+        // 并发竞争事务已回滚，重复日志同样使用独立事务保存。
         Long logId = auditService.recordDuplicate(
                 interfaceType, sourceSystem, businessKey, snapshot, resultId, resultNo);
         IntegrationWriteResultRespVO response = new IntegrationWriteResultRespVO();

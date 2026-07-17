@@ -29,8 +29,10 @@ public final class BarcodeSpecifications {
     public static Specification<BarcodeEntity> page(BarcodeInstancePageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 主表采用软删除，任何列表检索都只允许返回当前有效条码。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
             if (StringUtils.hasText(reqVO.getBarcodeValue())) {
+                // 条码值只做前缀搜索，既符合扫码输入习惯，也避免前置通配符破坏索引利用。
                 predicates.add(criteriaBuilder.like(root.get("barcodeValue"),
                         reqVO.getBarcodeValue() + "%"));
             }

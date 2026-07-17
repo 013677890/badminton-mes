@@ -37,6 +37,7 @@ export const USER_STORAGE_KEY = 'mes_user'
 export const MOCK_TOKEN = 'mock-demo-session'
 
 export function isMockSession(): boolean {
+  // 演示 token 只存在浏览器本地，用于让页面在没有后端服务时保持可浏览状态。
   return localStorage.getItem(TOKEN_STORAGE_KEY) === MOCK_TOKEN
 }
 
@@ -59,6 +60,7 @@ function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse>
   const method = (config.method ?? 'get').toLowerCase()
   let body: ApiResult
   if (method === 'get') {
+    // GET 请求在演示模式下返回空数据；页面可以正常渲染，但不会误显示伪造的业务记录。
     const params = (config.params ?? {}) as Record<string, unknown>
     const isPage = (config.url ?? '').includes('/page') || params.pageNo !== undefined
     body = {
@@ -70,6 +72,7 @@ function mockAdapter(config: InternalAxiosRequestConfig): Promise<AxiosResponse>
         : [],
     }
   } else {
+    // 写操作不修改本地演示数据，统一返回业务错误，避免用户误以为数据已经保存到后端。
     body = {
       code: 'B0001',
       message: 'demo mode',
@@ -104,11 +107,13 @@ const service = axios.create({
 
 service.interceptors.request.use((config) => {
   if (isMockSession()) {
+    // 将 adapter 替换为本地适配器，axios 仍保持相同调用方式，页面无需分支判断演示环境。
     config.adapter = mockAdapter
     return config
   }
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   if (token) {
+    // 仅在存在 token 时添加 Authorization，未登录请求仍可访问公开接口或由后端返回 401。
     config.headers.Authorization = `Bearer ${token}`
   }
   return config
@@ -123,12 +128,14 @@ let redirectingToLogin = false
  * 且整页刷新可一并重置 Pinia 内存态。
  */
 function redirectToLogin() {
+  // 并发请求可能同时收到 401；标志位确保只执行一次清理和跳转，避免重复导航。
   if (redirectingToLogin) return
   redirectingToLogin = true
   localStorage.removeItem(TOKEN_STORAGE_KEY)
   localStorage.removeItem(USER_STORAGE_KEY)
   const { pathname, search } = window.location
   const redirect = pathname === '/login' ? '' : `?redirect=${encodeURIComponent(pathname + search)}`
+  // 保留原始访问地址，登录成功后可由登录页恢复用户之前打开的业务页面。
   window.location.href = `/login${redirect}`
 }
 
@@ -143,6 +150,7 @@ service.interceptors.response.use(
       return response as never
     }
     const body = response.data as ApiResult
+    // 后端即使返回 HTTP 200，也可能通过业务 code 表示失败，因此不能只判断 HTTP 状态。
     if (body.code !== SUCCESS_CODE) {
       ElMessage.error(body.userTip || body.message || '请求失败')
       return Promise.reject(new ApiError(body))
@@ -156,6 +164,7 @@ service.interceptors.response.use(
 
     // 后端 GlobalExceptionHandler 对 4xx/5xx 也返回 CommonResult 四要素
     if (isApiResult(body)) {
+      // 优先使用后端统一错误结构，保证用户提示、错误码和异常对象来自同一份响应。
       if (status === 401 || body.code === UNAUTHORIZED_CODE) {
         ElMessage.error(body.userTip || '登录状态已失效，请重新登录')
         redirectToLogin()
@@ -177,6 +186,7 @@ service.interceptors.response.use(
 
 /** params 接受任意对象（接口层的具名参数类型无索引签名，交给 axios 序列化） */
 export function get<T>(url: string, params?: object, config?: AxiosRequestConfig): Promise<T> {
+  // GET 参数交给 axios 序列化，接口文件只负责提供具名参数类型和资源路径。
   return service.get(url, { params, ...config }) as Promise<T>
 }
 
@@ -212,6 +222,7 @@ export async function download(
 ): Promise<void> {
   const response = await service.get(url, { params, responseType: 'blob' })
   const blob = response.data as Blob
+  // 导出接口成功时是文件流，失败时仍可能返回 JSON；先检查 MIME 类型再决定解析方式。
   // 业务异常（鉴权/校验失败）以 JSON 返回，需解析为 ApiError
   if (blob.type.includes('application/json')) {
     const result = JSON.parse(await blob.text()) as ApiResult
@@ -223,6 +234,7 @@ export async function download(
     fallbackFileName,
   )
   const href = URL.createObjectURL(blob)
+  // 使用临时 a 元素触发浏览器下载，完成后立即释放 DOM 节点和对象 URL。
   const link = document.createElement('a')
   link.href = href
   link.download = fileName

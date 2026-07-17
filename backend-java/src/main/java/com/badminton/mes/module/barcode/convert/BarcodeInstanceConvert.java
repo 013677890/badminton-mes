@@ -94,6 +94,7 @@ public final class BarcodeInstanceConvert {
         respVO.setBarcodeValue(barcode.getBarcodeValue());
         respVO.setBarcodeTypeId(barcode.getBarcodeTypeId());
         if (barcodeType != null) {
+            // 关联档案允许缺失；缺失时仍保留条码主表中的类型 id，保证历史事实可返回。
             respVO.setBarcodeTypeCode(barcodeType.getTypeCode());
             respVO.setBarcodeTypeName(barcodeType.getTypeName());
         }
@@ -108,6 +109,7 @@ public final class BarcodeInstanceConvert {
             respVO.setProductName(product.getProductName());
         }
         respVO.setMaterialId(barcode.getMaterialId());
+        // 材料码与产品码互为可选业务对象，按实际存在的外键补充展示字段。
         MaterialRefEntity material = barcode.getMaterialId() == null
                 ? null : materialMap.get(barcode.getMaterialId());
         if (material != null) {

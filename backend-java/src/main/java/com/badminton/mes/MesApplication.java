@@ -18,6 +18,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class MesApplication {
 
     public static void main(String[] args) {
+        // 将命令行参数交给 Spring Boot，完成组件扫描、自动配置以及定时任务基础设施初始化。
         SpringApplication.run(MesApplication.class, args);
     }
 }

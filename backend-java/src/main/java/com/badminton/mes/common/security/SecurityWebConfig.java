@@ -53,20 +53,25 @@ public class SecurityWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        // 只对后端 API 开放跨域，并把来源限制在配置项中，避免使用通配符放大浏览器访问范围。
         registry.addMapping("/api/**")
                 .allowedOrigins(allowedOrigins.toArray(String[]::new))
+                // 显式列出系统实际使用的请求方法和请求头，预检请求可据此快速完成权限判断。
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders(HttpHeaders.AUTHORIZATION, HttpHeaders.CONTENT_TYPE)
+                // 系统通过 Authorization Bearer token 鉴权，不依赖跨域 Cookie，因此禁止携带凭据。
                 .allowCredentials(false)
                 .maxAge(3600);
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 本地联调可通过配置关闭鉴权；生产配置保持 false，继续执行默认登录保护。
         if (authDisabled) {
             return;
         }
 
+        // 采用“全部 API 先拦截、仅显式白名单放行”的方式，新增接口会自动继承登录校验。
         registry.addInterceptor(authInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(LOGIN_PATH)

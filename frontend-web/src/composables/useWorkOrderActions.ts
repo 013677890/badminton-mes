@@ -16,17 +16,20 @@ import {
  */
 export function useWorkOrderActions(onDone: () => void | Promise<void>) {
   async function confirmThen(message: string, action: () => Promise<void>, successTip: string) {
+    // 用户取消确认时直接结束，不调用后端，也不刷新列表。
     try {
       await ElMessageBox.confirm(message, '操作确认', { type: 'warning' })
     } catch {
       return
     }
     try {
+      // action 内部调用具体 API；成功提示只在请求完成后展示。
       await action()
       ElMessage.success(successTip)
     } catch {
       // 失败提示由 request 拦截器弹出
     } finally {
+      // 无论成功、失败或后端拒绝，都刷新一次列表以同步状态和按钮可见性。
       await onDone()
     }
   }
@@ -49,11 +52,13 @@ export function useWorkOrderActions(onDone: () => void | Promise<void>) {
       return
     }
     try {
+      // 原因经过 trim 后再提交，确保后端记录的是有效文字而不是空白字符。
       await action(reason)
       ElMessage.success(successTip)
     } catch {
       // 同上
     } finally {
+      // 刷新动作放在 finally，保证失败后页面也能恢复后端真实状态。
       await onDone()
     }
   }

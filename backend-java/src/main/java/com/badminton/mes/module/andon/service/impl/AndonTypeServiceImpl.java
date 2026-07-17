@@ -69,9 +69,12 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createType(AndonTypeSaveReqVO request) {
+        // 业务编码先做友好校验，数据库唯一索引随后继续防护并发创建竞态。
         validateTypeCodeUnique(request.getTypeCode(), null);
+        // 处理模式决定必填规则，跨字段完整性由服务层而不是单字段 Bean Validation 负责。
         validateHandlingRule(request);
         AndonTypeEntity type = AndonTypeConvert.toEntity(request);
+        // 可空布尔值和启停状态在创建时归一化，确保实体首次落库就具备确定值。
         type.setLightControlEnabled(Boolean.TRUE.equals(request.getLightControlEnabled()));
         type.setEnabledStatus(request.getEnabledStatus() == null ? ENABLED : request.getEnabledStatus());
         type.setCreateBy(getCurrentOperatorId());
@@ -84,11 +87,13 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateType(Long id, AndonTypeSaveReqVO request) {
+        // 行锁串行化同一类型的修改与删除，避免后写事务覆盖先写事务的状态。
         AndonTypeEntity type = getTypeForUpdate(id);
         validateTypeCodeUnique(request.getTypeCode(), id);
         validateHandlingRule(request);
         Integer previousEnabledStatus = type.getEnabledStatus();
         Boolean previousLightControlEnabled = type.getLightControlEnabled();
+        // 转换器覆盖可编辑字段后，对请求未提供的可选状态恢复数据库原值。
         AndonTypeConvert.copyEditableFields(request, type);
         if (request.getEnabledStatus() == null) {
             type.setEnabledStatus(previousEnabledStatus);
@@ -107,12 +112,14 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     @Transactional(rollbackFor = Exception.class)
     public void deleteType(Long id) {
         AndonTypeEntity type = getTypeForUpdate(id);
+        // 三类关联分别覆盖配置规则、原因档案和历史事件，任一存在都必须保留类型。
         boolean hasReferences = typeRepository.countConfigurationsByTypeId(id) > 0
                 || typeRepository.countReasonsByTypeId(id) > 0
                 || typeRepository.countEventsByTypeId(id) > 0;
         if (hasReferences) {
             throw new ServiceException(AndonErrorCodeConstants.TYPE_HAS_REFERENCES);
         }
+        // 改写编码释放原唯一值，再禁用并逻辑删除；历史主键和审计字段仍然保留。
         String deletedCode = DELETED_CODE_PREFIX + Long.toString(id, 36).toUpperCase();
         if (typeRepository.existsByTypeCode(deletedCode)) {
             throw new ServiceException(AndonErrorCodeConstants.TYPE_CODE_DUPLICATE);
@@ -140,6 +147,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     @Transactional(readOnly = true)
     public PageResult<AndonTypeRespVO> getTypePage(AndonTypePageReqVO request) {
         var specification = AndonTypeSpecifications.page(request);
+        // 先统计总数，空结果直接返回，避免额外执行排序分页查询。
         long total = typeRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(request.getPageNo(), request.getPageSize());
@@ -187,6 +195,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
     /** 立即刷新以捕获并发写入触发的唯一约束异常，并转换为稳定业务错误。 */
     private void saveType(AndonTypeEntity type) {
         try {
+            // saveAndFlush 立即验证类型编码唯一索引，使并发冲突在服务方法内转换为业务异常。
             typeRepository.saveAndFlush(type);
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.TYPE_CODE_DUPLICATE);
@@ -202,6 +211,7 @@ public class AndonTypeServiceImpl implements AndonTypeService {
      * 类型展示字段变化会影响多个聚合响应，因此级联失效类型及其原因、配置、事件详情缓存。
      */
     private void evictTypeAggregateCacheAfterCommit(Long typeId) {
+        // 类型详情自身先失效，随后根据关联表只查询主键并批量失效各聚合详情。
         evictTypeCacheAfterCommit(typeId);
         andonCache.evictDetailsAfterCommit(AndonRedisKeyConstants.REASON_RESOURCE,
                 reasonRepository.findIdsByAndonTypeIdAndDeletedFalse(typeId));

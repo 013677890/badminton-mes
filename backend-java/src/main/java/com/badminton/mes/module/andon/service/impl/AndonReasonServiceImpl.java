@@ -64,9 +64,11 @@ public class AndonReasonServiceImpl implements AndonReasonService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createReason(AndonReasonSaveReqVO request) {
+        // 锁定所属类型后再检查原因编码并插入，防止原因写入期间类型被并发删除或改变状态。
         lockType(request.getAndonTypeId());
         validateReasonCodeUnique(request.getReasonCode(), null);
 
+        // 审计字段和逻辑删除标记由服务层控制，避免客户端伪造数据库管理字段。
         AndonReasonEntity reason = AndonReasonConvert.toEntity(request);
         reason.setEnabledStatus(request.getEnabledStatus() == null ? ENABLED : request.getEnabledStatus());
         reason.setCreateBy(getCurrentOperatorId());
@@ -82,11 +84,13 @@ public class AndonReasonServiceImpl implements AndonReasonService {
     @Transactional(rollbackFor = Exception.class)
     public void updateReason(Long id, AndonReasonSaveReqVO request) {
         AndonReasonEntity reasonSnapshot = getReasonEntity(id);
+        // 类型迁移时按固定主键顺序锁定新旧类型，避免两个反向迁移事务互相等待。
         lockTypes(reasonSnapshot.getAndonTypeId(), request.getAndonTypeId());
         AndonReasonEntity reason = getReasonForUpdate(id);
         validateReasonCodeUnique(request.getReasonCode(), id);
         boolean changesReferencedReasonType = !reason.getAndonTypeId().equals(request.getAndonTypeId())
                 && reasonRepository.countEventReferences(id) > 0;
+        // 已被事件引用的原因可以改名称等展示字段，但不能改变其历史类型归属。
         if (changesReferencedReasonType) {
             throw new ServiceException(AndonErrorCodeConstants.REASON_HAS_EVENTS);
         }
@@ -111,6 +115,7 @@ public class AndonReasonServiceImpl implements AndonReasonService {
             throw new ServiceException(AndonErrorCodeConstants.REASON_HAS_EVENTS);
         }
 
+        // 改写业务编码后再逻辑删除，使原编码可重新使用，同时保留历史记录的唯一标识。
         String deletedCode = DELETED_CODE_PREFIX + Long.toString(id, 36).toUpperCase();
         if (reasonRepository.existsByReasonCode(deletedCode)) {
             throw new ServiceException(AndonErrorCodeConstants.REASON_CODE_DUPLICATE);
@@ -140,6 +145,7 @@ public class AndonReasonServiceImpl implements AndonReasonService {
     @Transactional(readOnly = true)
     public PageResult<AndonReasonRespVO> getReasonPage(AndonReasonPageReqVO request) {
         var specification = AndonReasonSpecifications.page(request);
+        // 先 count 再分页；总数为零时避免执行无意义的内容查询。
         long total = reasonRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(request.getPageNo(), request.getPageSize());
@@ -153,6 +159,7 @@ public class AndonReasonServiceImpl implements AndonReasonService {
                 pageSize,
                 Sort.by(Sort.Direction.DESC, "id"));
         Page<AndonReasonEntity> page = reasonRepository.findAll(specification, pageRequest);
+        // 批量加载本页关联类型，避免原因列表产生逐行查询类型表的 N+1 问题。
         Map<Long, AndonTypeEntity> typesById = typeRepository.findAllById(
                         page.getContent().stream()
                                 .map(AndonReasonEntity::getAndonTypeId)
@@ -231,6 +238,7 @@ public class AndonReasonServiceImpl implements AndonReasonService {
     /** 刷新写入并将数据库并发唯一约束冲突转换为原因编码重复业务异常。 */
     private void saveReason(AndonReasonEntity reason) {
         try {
+            // flush 让数据库唯一约束在当前调用点暴露，便于转换成前端可识别的业务错误码。
             reasonRepository.saveAndFlush(reason);
         } catch (DataIntegrityViolationException exception) {
             throw new ServiceException(AndonErrorCodeConstants.REASON_CODE_DUPLICATE);

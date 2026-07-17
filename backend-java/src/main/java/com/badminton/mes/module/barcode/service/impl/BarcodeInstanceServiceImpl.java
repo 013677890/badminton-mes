@@ -182,6 +182,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BarcodeGenerateRespVO generateBarcode(BarcodeGenerateReqVO reqVO) {
+        // 前置校验与上下文装配只执行一次，实际取号、组合和落库由 generateOne 保持单一入口。
         GenerationContext context = prepareGeneration(reqVO);
         BarcodeEntity barcode = generateOne(context);
         logger.info("[生成条码] id: {}, barcodeValue: {}, applyRuleId: {}", barcode.getId(),
@@ -198,6 +199,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_BATCH_NOT_SUPPORT_INPUT_VALUE);
         }
 
+        // 预分配结果容量，批量生成仍逐个取流水并写库，确保每个条码都经过唯一性校验。
         List<BarcodeGenerateRespVO> results = new java.util.ArrayList<>(reqVO.getQuantity());
         for (int i = 0; i < reqVO.getQuantity(); i++) {
             results.add(BarcodeInstanceConvert.toGenerateRespVO(generateOne(context)));
@@ -210,9 +212,11 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Override
     @Transactional(readOnly = true)
     public BarcodeParseRespVO parseBarcode(BarcodeParseReqVO reqVO) {
+        // 条码值是数据库唯一业务键，解析时先从事实表定位唯一条码实体。
         BarcodeEntity barcode = barcodeRepository.findByBarcodeValueAndDeletedFalse(reqVO.getBarcodeValue())
                 .orElseThrow(() -> new ServiceException(BarcodeErrorCodeConstants.BARCODE_NOT_EXISTS));
 
+        // 类型及产品、物料档案只用于丰富解析结果；关联档案缺失时保留条码主数据而不伪造展示值。
         BarcodeTypeEntity barcodeType = barcodeTypeRepository
                 .findByIdAndDeletedFalse(barcode.getBarcodeTypeId()).orElse(null);
         Map<Long, ProductRefEntity> productMap = barcode.getProductId() == null ? Map.of()
@@ -228,9 +232,11 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Transactional(rollbackFor = Exception.class)
     public void cancelBarcode(Long id, BarcodeCancelReqVO reqVO) {
         // "已使用不可作废"由 CAS 前置状态=未使用 原子保证
+        // 条件更新把“检查未使用”和“改为已作废”合并为一条 SQL，避免并发使用请求穿透先查后改窗口。
         int rows = barcodeRepository.updateStatus(id, BarcodeStatusEnum.UNUSED.getStatus(),
                 BarcodeStatusEnum.CANCELLED.getStatus());
         if (rows == 0) {
+            // 更新行数为零后回查实体，用不同业务错误区分已作废、已使用和记录不存在。
             BarcodeEntity barcode = validateBarcodeExists(id);
             if (BarcodeStatusEnum.CANCELLED.getStatus().equals(barcode.getBarcodeStatus())) {
                 throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_ALREADY_CANCELLED);
@@ -246,6 +252,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BarcodePrintRespVO printBarcode(Long id, BarcodePrintReqVO reqVO) {
+        // 作废条码不允许继续打印，模板必须从条码原应用规则解析，不能由客户端任意替换。
         BarcodeEntity barcode = validateBarcodeExists(id);
         if (BarcodeStatusEnum.CANCELLED.getStatus().equals(barcode.getBarcodeStatus())) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_CANCELLED_NOT_PRINT);
@@ -261,6 +268,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_REPRINT_REASON_REQUIRED);
         }
 
+        // 预览数据与模板版本共同形成打印快照，使后续模板修改不影响历史打印记录复现。
         BarcodeTemplatePreviewRespVO preview = BarcodeTemplateConvert.toPreviewRespVO(template,
                 barcodeTemplateFieldRepository.findByTemplateIdAndDeletedFalseOrderByIdAsc(template.getId()),
                 barcode.getBarcodeValue(), buildPrintData(barcode));
@@ -275,6 +283,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         record.setReprintReason(reqVO.getReason());
         record.setPrintTime(java.time.LocalDateTime.now());
         try {
+            // 立即 flush 触发 barcode_id + print_count 唯一约束，防止两个并发重打得到相同序号。
             barcodePrintRecordRepository.saveAndFlush(record);
         } catch (DataIntegrityViolationException e) {
             // 并发重打撞唯一键 (barcode_id, print_count)，转业务错误由调用方重试
@@ -305,6 +314,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Transactional(readOnly = true)
     public PageResult<BarcodeInstanceRespVO> getBarcodeInstancePage(BarcodeInstancePageReqVO reqVO) {
         Specification<BarcodeEntity> specification = BarcodeSpecifications.page(reqVO);
+        // 先统计匹配总数，无结果时直接返回空列表，避免执行后续分页查询。
         long total = barcodeRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
@@ -312,6 +322,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
 
         int pageSize = reqVO.getPageSize();
         int totalPages = (int) ((total + pageSize - 1) / pageSize);
+        // 超出末页的请求收敛到最后一页，避免返回空内容却携带不一致的分页元数据。
         int pageNo = Math.min(reqVO.getPageNo(), totalPages);
         PageRequest pageRequest = PageRequest.of(pageNo - 1, pageSize, Sort.by(Sort.Direction.DESC, "id"));
         Page<BarcodeEntity> page = barcodeRepository.findAll(specification, pageRequest);
@@ -342,6 +353,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
      * @return 生成上下文
      */
     private GenerationContext prepareGeneration(BarcodeGenerateReqVO reqVO) {
+        // 应用规则是生成入口的聚合配置，必须存在、启用且来源类型允许在线生成。
         BarcodeApplyRuleEntity applyRule = barcodeApplyRuleRepository
                 .findByIdAndDeletedFalse(reqVO.getApplyRuleId())
                 .orElseThrow(() -> new ServiceException(
@@ -353,14 +365,17 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_APPLY_RULE_SOURCE_NOT_GENERATE);
         }
 
+        // 类型、模板和对象档案分别校验，防止停用主数据继续产生新条码。
         validateBarcodeTypeAvailable(applyRule.getBarcodeTypeId());
         validateBarcodeTemplateAvailable(applyRule.getTemplateId());
         String objectCode = resolveObjectCode(applyRule);
         if (reqVO.getWorkOrderId() != null) {
+            // 工单范围由当前登录用户和规则产品共同约束，不能只信任客户端提交的工单主键。
             validateWorkOrderInScope(reqVO.getWorkOrderId(), applyRule);
         }
 
         if (BarcodeSourceTypeEnum.INPUT_VALUE.getType().equals(applyRule.getSourceType())) {
+            // 手工传值不需要规则段、重置周期和流水作用域，返回精简生成上下文。
             if (!StringUtils.hasText(reqVO.getInputBarcodeValue())) {
                 throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_INPUT_VALUE_REQUIRED);
             }
@@ -368,6 +383,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         }
 
         // 规则生成来源：装配规则、组成段与流水作用域
+        // 规则及其组成段来自 MySQL，组合前再次验证段顺序、变量和流水长度的整体合法性。
         BarcodeRuleEntity rule = barcodeRuleRepository.findByIdAndDeletedFalse(applyRule.getRuleId())
                 .orElseThrow(() -> new ServiceException(BarcodeErrorCodeConstants.BARCODE_RULE_NOT_AVAILABLE));
         if (!CommonStatusEnum.ENABLED.getStatus().equals(rule.getStatus())) {
@@ -387,6 +403,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_RULE_CONFIG_INVALID,
                     "流水号重置周期取值不支持");
         }
+        // 周期片段与对象编码共同隔离流水，确保不同产品/物料和不同重置周期互不抢占序号。
         String scope = cycle.scopeSegment(LocalDate.now()) + SCOPE_SEPARATOR + objectCode;
         if (scope.length() > SERIAL_SCOPE_MAX_LENGTH) {
             throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_SERIAL_SCOPE_TOO_LONG);
@@ -409,6 +426,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         BarcodeGenerateReqVO reqVO = context.reqVO();
 
         if (BarcodeSourceTypeEnum.INPUT_VALUE.getType().equals(applyRule.getSourceType())) {
+            // 手工值先做友好重复检查，最终仍由数据库唯一索引处理并发窗口。
             String inputValue = reqVO.getInputBarcodeValue();
             if (barcodeRepository.existsByBarcodeValueAndDeletedFalse(inputValue)) {
                 throw new ServiceException(BarcodeErrorCodeConstants.BARCODE_VALUE_DUPLICATE);
@@ -418,6 +436,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
 
         BarcodeRuleEntity rule = context.rule();
         for (int attempt = 0; attempt < GENERATE_MAX_RETRY; attempt++) {
+            // Redis 只承担高并发取号；返回的流水必须组合成完整条码并通过 MySQL 唯一性验证。
             long serial = barcodeSerialSequence.next(rule.getId(), context.scope(), context.cycle());
             String barcodeValue = BarcodeValueComposer.compose(context.segments(),
                     new ComposeContext(LocalDate.now(), productCodeOf(context), reqVO.getLineCode(),
@@ -429,6 +448,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
                 continue;
             }
             BarcodeEntity barcode = insertBarcode(barcodeValue, context);
+            // 只有条码主表成功落库后才推进 MySQL 流水事实，失败事务不会记录未实际使用的事实序号。
             advanceSerialRecord(rule.getId(), context.scope(), serial);
             return barcode;
         }
@@ -446,6 +466,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         BarcodeApplyRuleEntity applyRule = context.applyRule();
         BarcodeGenerateReqVO reqVO = context.reqVO();
 
+        // 应用规则决定类型、模式及产品/物料归属，请求只补充工单、任务和显式批次等运行时上下文。
         BarcodeEntity barcode = new BarcodeEntity();
         barcode.setBarcodeValue(barcodeValue);
         barcode.setBarcodeTypeId(applyRule.getBarcodeTypeId());
@@ -460,6 +481,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         barcode.setBarcodeStatus(BarcodeStatusEnum.UNUSED.getStatus());
         barcode.setCreateBy(SecurityContextHolder.getRequiredLoginUserId());
         try {
+            // saveAndFlush 立即触发条码值唯一索引，确保冲突在当前服务调用内转换成业务异常。
             return barcodeRepository.saveAndFlush(barcode);
         } catch (DataIntegrityViolationException e) {
             // 预检与落库间隙的并发撞码：事务已污染，转业务错误由调用方重试
@@ -491,11 +513,13 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
      * @param serial 本次流水号
      */
     private void advanceSerialRecord(Long ruleId, String scope, long serial) {
+        // 优先执行单条条件更新，仅当新流水更大时推进已有事实记录，避免并发请求把值回退。
         int rows = barcodeSerialRepository.advanceSerial(ruleId, scope, serial);
         if (rows > 0) {
             return;
         }
 
+        // 首次使用该“规则 + 作用域”时插入事实行；并发首插冲突由唯一索引统一兜底。
         BarcodeSerialEntity serialRecord = new BarcodeSerialEntity();
         serialRecord.setRuleId(ruleId);
         serialRecord.setSerialScope(scope);
@@ -603,6 +627,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public BarcodeImportRespVO importBarcodes(BarcodeImportReqVO reqVO) {
+        // 导入只接受明确标记为 EXTERNAL_IMPORT 的启用应用规则，避免绕过在线生成规则。
         BarcodeApplyRuleEntity applyRule = barcodeApplyRuleRepository
                 .findByIdAndDeletedFalse(reqVO.getApplyRuleId())
                 .orElseThrow(() -> new ServiceException(
@@ -617,6 +642,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         validateBarcodeTemplateAvailable(applyRule.getTemplateId());
 
         // 逐条校验重复性与工单范围：失败条目跳过并记录原因，不中断整批(部分成功)
+        // Set 负责本批去重，失败列表保留原索引，便于客户端准确定位并修正原始数据。
         java.util.Set<String> batchValues = new java.util.HashSet<>();
         List<BarcodeImportRespVO.Failure> failures = new java.util.ArrayList<>();
         int successCount = 0;
@@ -627,6 +653,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
                 successCount++;
                 continue;
             }
+            // 失败条目不写条码表，只把可读原因汇总到响应；其余合法条目继续导入。
             BarcodeImportRespVO.Failure failure = new BarcodeImportRespVO.Failure();
             failure.setIndex(index);
             failure.setBarcodeValue(item.getBarcodeValue());
@@ -665,6 +692,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
      */
     private String importOne(BarcodeImportReqVO.Item item, BarcodeApplyRuleEntity applyRule,
                              java.util.Set<String> batchValues) {
+        // 先检查批内重复，再访问数据库检查历史条码，减少无意义的数据库查询。
         if (!batchValues.add(item.getBarcodeValue())) {
             return "与本批前序条目条码值重复";
         }
@@ -674,6 +702,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
         }
         if (item.getWorkOrderId() != null) {
             try {
+                // 工单不存在、越权或产品不一致均作为该明细失败，不影响同批其他条目。
                 validateWorkOrderInScope(item.getWorkOrderId(), applyRule);
             } catch (ServiceException e) {
                 batchValues.remove(item.getBarcodeValue());
@@ -681,6 +710,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
             }
         }
 
+        // 导入条码沿用规则绑定的类型、模式和对象归属，但来源固定记录为外部导入。
         BarcodeEntity barcode = new BarcodeEntity();
         barcode.setBarcodeValue(item.getBarcodeValue());
         barcode.setBarcodeTypeId(applyRule.getBarcodeTypeId());
@@ -736,6 +766,7 @@ public class BarcodeInstanceServiceImpl implements BarcodeInstanceService {
      * @return 数据来源 -> 展示内容
      */
     private Map<String, String> buildPrintData(BarcodeEntity barcode) {
+        // 条码值始终存在，其余展示字段按关联档案是否可读逐项补充，缺失档案不会阻断打印。
         Map<String, String> data = new java.util.HashMap<>();
         data.put("barcodeValue", barcode.getBarcodeValue());
         if (barcode.getBatchNo() != null) {

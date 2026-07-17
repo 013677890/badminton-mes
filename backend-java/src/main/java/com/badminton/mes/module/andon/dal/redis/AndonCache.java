@@ -79,18 +79,22 @@ public class AndonCache {
      * @return 缓存值或数据库加载结果
      */
     public <T> T getOrLoadDetail(String resourceName, Long id, Class<T> valueType, Supplier<T> loader) {
+        // 详情 Key 保存业务数据，版本 Key 只用于判断查询期间是否发生过数据库提交后的缓存失效。
         String detailKey = AndonRedisKeyConstants.detailKey(resourceName, id);
         String versionKey = AndonRedisKeyConstants.detailVersionKey(resourceName, id);
         String observedVersion = readVersion(versionKey, resourceName, id);
         try {
+            // 命中时直接反序列化响应对象，避免再次访问 MySQL 及其关联表。
             String json = stringRedisTemplate.opsForValue().get(detailKey);
             if (StringUtils.hasText(json)) {
                 return objectMapper.readValue(json, valueType);
             }
         } catch (RuntimeException exception) {
+            // Redis 或 JSON 读取异常按弱依赖降级，后续仍会继续执行数据库加载器。
             logger.warn("[安灯详情缓存读取失败] resourceName: {}, id: {}, errorMessage: {}",
                     resourceName, id, exception.getMessage());
         }
+        // loader 的数据库异常必须向上传播；只有成功获得事实数据后才尝试回填缓存。
         T loadedValue = loader.get();
         writeIfVersionUnchanged(detailKey, versionKey, observedVersion, loadedValue, resourceName, id);
         return loadedValue;
@@ -116,6 +120,7 @@ public class AndonCache {
      * @param ids 需要失效的业务主键集合
      */
     public void evictDetailsAfterCommit(String resourceName, Collection<Long> ids) {
+        // 先过滤空主键并去重，避免在同一事务提交回调中重复执行相同 Lua 失效脚本。
         List<CacheKeyPair> cacheKeys = ids.stream()
                 .filter(id -> id != null)
                 .distinct()
@@ -130,6 +135,7 @@ public class AndonCache {
     private String readVersion(String versionKey, String resourceName, Long id) {
         try {
             String version = stringRedisTemplate.opsForValue().get(versionKey);
+            // 尚未创建版本 Key 的详情按初始版本 0 处理，使第一次查询可以正常写入缓存。
             return StringUtils.hasText(version) ? version : "0";
         } catch (RuntimeException exception) {
             logger.warn("[安灯详情缓存版本读取失败] resourceName: {}, id: {}, errorMessage: {}",
@@ -145,10 +151,12 @@ public class AndonCache {
      */
     private void writeIfVersionUnchanged(String detailKey, String versionKey, String observedVersion,
                                          Object value, String resourceName, Long id) {
+        // 版本读取失败时无法证明回源结果仍然新鲜，因此宁可不缓存，也不冒险写入旧快照。
         if (observedVersion == null) {
             return;
         }
         try {
+            // 序列化在调用 Lua 前完成；脚本在 Redis 内原子完成版本比较、写值和设置 TTL。
             String json = objectMapper.writeValueAsString(value);
             stringRedisTemplate.execute(WRITE_IF_VERSION_UNCHANGED_SCRIPT,
                     List.of(detailKey, versionKey), observedVersion,
@@ -163,14 +171,17 @@ public class AndonCache {
      * 将失效动作绑定到事务提交回调；复制集合以避免调用方后续修改集合改变回调内容。
      */
     private void evictAfterCommit(Collection<CacheKeyPair> keys) {
+        // 拷贝为不可变集合，防止事务提交前调用方修改原集合导致实际失效对象发生变化。
         List<CacheKeyPair> immutableKeys = List.copyOf(keys);
         if (immutableKeys.isEmpty()) {
             return;
         }
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 查询外或无事务写入场景没有提交回调可注册，直接执行失效即可。
             evict(immutableKeys);
             return;
         }
+        // 数据库事务成功提交后再递增版本并删除详情，回滚事务不会触碰已有缓存。
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -183,6 +194,7 @@ public class AndonCache {
     private void evict(Collection<CacheKeyPair> keys) {
         try {
             for (CacheKeyPair key : keys) {
+                // 每组详情 Key 与版本 Key 必须交给同一 Lua 脚本处理，避免出现先删值后增版本的竞态窗口。
                 stringRedisTemplate.execute(INVALIDATE_SCRIPT, List.of(key.detailKey(), key.versionKey()));
             }
         } catch (RuntimeException exception) {

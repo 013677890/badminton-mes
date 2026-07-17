@@ -77,6 +77,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createProcessSop(Long processId, CraftProcessSopSaveReqVO reqVO) {
+        // SOP 是工序子资源，必须先校验父工序有效，再检查同工序编码唯一性。
         requireProcess(processId);
         normalizeRequest(reqVO);
         validateNormalizedCodeLength(reqVO.getSopCode());
@@ -88,6 +89,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         copyToEntity(reqVO, sop);
         sop.setCreateBy(operatorId);
         sop.setUpdateBy(operatorId);
+        // 主记录立即 flush 后再写审计，确保唯一性冲突不会留下孤立审计日志。
         saveSop(sop);
         auditService.record(processId, CraftProcessChangeTypeEnum.SOP_BINDING,
                 null, CraftProcessConvert.toSopRespVO(sop),
@@ -100,6 +102,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     @Transactional(rollbackFor = Exception.class)
     public void updateProcessSop(Long processId, Long sopId, CraftProcessSopUpdateReqVO reqVO) {
         requireProcess(processId);
+        // 写锁与路线审核读取 SOP 的锁策略配合，避免校验通过后 SOP 被并发停用。
         CraftProcessSopEntity sop = requireSopForUpdate(processId, sopId);
         CraftVersionValidator.validate(sop.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_SOP_CONCURRENT_MODIFICATION);
@@ -109,9 +112,11 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         boolean disabling = CommonStatusEnum.ENABLED.getStatus().equals(sop.getStatus())
                 && CommonStatusEnum.DISABLED.getStatus().equals(reqVO.getStatus());
         if (disabling) {
+            // 生效路线依赖的 SOP 不允许原地停用，应先演进路线版本解除引用。
             validateNoEffectiveRouteReferences(sopId);
         }
 
+        // 快照在字段覆盖之前生成，保证审计日志保存真实旧版本。
         CraftProcessSopRespVO beforeSnapshot = CraftProcessConvert.toSopRespVO(sop);
         copyToEntity(reqVO, sop);
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
@@ -130,6 +135,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
         CraftProcessSopEntity sop = requireSopForUpdate(processId, sopId);
         CraftVersionValidator.validate(sop.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.PROCESS_SOP_CONCURRENT_MODIFICATION);
+        // 删除同样可能破坏生效路线执行，必须复用引用校验而不能只检查 SOP 状态。
         validateNoEffectiveRouteReferences(sopId);
 
         CraftProcessSopRespVO beforeSnapshot = CraftProcessConvert.toSopRespVO(sop);
@@ -145,6 +151,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
     @Override
     @Transactional(readOnly = true)
     public List<CraftProcessSopRespVO> getProcessSops(Long processId) {
+        // 详情列表优先读取 Redis；空集合也作为有效缓存值，减少无配置工序的数据库访问。
         List<CraftProcessSopRespVO> cached = craftCache.getProcessSops(processId).orElse(null);
         if (cached != null) {
             return cached;
@@ -198,6 +205,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
      * @param sopId SOP 主键
      */
     private void validateNoEffectiveRouteReferences(Long sopId) {
+        // exists 查询只判断是否存在生效路线引用，不加载路线和明细实体。
         boolean referenced = routeDetailRepository.existsEffectiveRouteBySopId(
                 sopId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
         if (referenced) {
@@ -213,6 +221,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
      * @param excludeId 排除的关联主键，创建时为 null
      */
     private void validateSopCode(Long processId, String sopCode, Long excludeId) {
+        // 修改时排除当前行；数据库活动编码唯一索引继续兜底并发写入窗口。
         boolean exists = excludeId == null
                 ? sopRepository.existsByProcessIdAndSopCodeAndDeletedFalse(processId, sopCode)
                 : sopRepository.existsByProcessIdAndSopCodeAndIdNotAndDeletedFalse(
@@ -229,6 +238,7 @@ public class CraftProcessSopServiceImpl implements CraftProcessSopService {
      */
     private void saveSop(CraftProcessSopEntity sop) {
         try {
+            // 立即 flush，将数据库约束与乐观锁异常转换为明确的 SOP 业务错误。
             sopRepository.saveAndFlush(sop);
         } catch (DataIntegrityViolationException exception) {
             CraftPersistenceExceptionTranslator.translateUniqueConstraint(exception,

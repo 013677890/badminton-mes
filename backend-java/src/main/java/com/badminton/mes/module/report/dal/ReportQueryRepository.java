@@ -52,6 +52,7 @@ public class ReportQueryRepository {
 
     /** 查询产量净额、发生额和冲销额汇总。 */
     public Aggregate aggregate(ReportQueryCriteria criteria) {
+        // 先复用统一筛选片段，保证汇总、明细和导出使用完全一致的授权及时间范围条件。
         QueryParts parts = reportFilters(criteria);
         String quantitySql = """
                 SELECT
@@ -66,6 +67,7 @@ public class ReportQueryRepository {
                   COALESCE(SUM(CASE WHEN r.record_type = 1 THEN r.defect_quantity ELSE 0 END), 0) AS occurrence_defect,
                   COALESCE(SUM(CASE WHEN r.record_type = 2 THEN r.defect_quantity ELSE 0 END), 0) AS reversal_defect
                 """ + REPORT_FROM + parts.where();
+        // record_type=1 表示发生，record_type=2 表示冲销；净额通过发生额减冲销额计算。
         Aggregate quantity = jdbcTemplate.queryForObject(quantitySql, parts.parameters(), (rs, rowNum) ->
                 new Aggregate(0L, rs.getLong("input_quantity"), rs.getLong("good_quantity"),
                         rs.getLong("defect_quantity"), rs.getLong("rework_quantity"), 0L,
@@ -78,6 +80,7 @@ public class ReportQueryRepository {
                 FROM (
                   SELECT DISTINCT t.id, t.plan_quantity, t.finish_quantity
                 """ + REPORT_FROM + parts.where() + ") AS x";
+        // 任务表先 DISTINCT，避免一条任务关联多条报工记录时计划数被重复累加。
         long[] taskTotals = jdbcTemplate.queryForObject(taskSql, parts.parameters(), (rs, rowNum) ->
                 new long[]{rs.getLong("plan_quantity"), rs.getLong("finish_quantity")});
         return new Aggregate(taskTotals[0], quantity.inputQuantity(), quantity.goodQuantity(),
@@ -89,6 +92,7 @@ public class ReportQueryRepository {
 
     /** 分页查询报工审计明细。 */
     public PageResult<ReportDetail> pageReports(ReportQueryCriteria criteria, int pageNo, int pageSize) {
+        // 分页前先 count，空结果直接返回空页，避免无意义的明细查询和越界分页计算。
         QueryParts parts = reportFilters(criteria);
         String countSql = "SELECT COUNT(*) " + REPORT_FROM + parts.where();
         long total = jdbcTemplate.queryForObject(countSql, parts.parameters(), Long.class);
@@ -96,12 +100,14 @@ public class ReportQueryRepository {
             return PageResult.empty(pageNo, pageSize);
         }
         int pages = (int) ((total + pageSize - 1) / pageSize);
+        // 后端将超出总页数的请求收敛到最后一页，保持分页接口返回稳定数据。
         int effectivePageNo = Math.min(pageNo, pages);
         MapSqlParameterSource parameters = copy(parts.parameters())
                 .addValue("limit", pageSize)
                 .addValue("offset", (effectivePageNo - 1) * pageSize);
         String sql = reportDetailSelect() + REPORT_FROM + parts.where()
                 + " ORDER BY r.report_time DESC, r.id DESC LIMIT :limit OFFSET :offset";
+        // 所有业务筛选值仍通过命名参数绑定，只有服务端固定的排序和分页片段拼接进 SQL。
         List<ReportDetail> rows = jdbcTemplate.query(sql, parameters, this::mapReportDetail);
         return PageResult.of(rows, total, effectivePageNo, pageSize);
     }
@@ -117,6 +123,7 @@ public class ReportQueryRepository {
 
     /** 查询当前授权范围内在制任务。 */
     public List<RealtimeTask> listRealtimeTasks(Long workshopId, Long lineId, Long productId) {
+        // 实时看板只读取在制状态任务，并通过可选车间/产线/产品条件缩小扫描范围。
         StringBuilder sql = new StringBuilder("""
                 SELECT t.id AS task_id, t.task_no, t.work_order_no, t.product_id, t.product_name,
                        t.batch_no, t.workshop_id, t.workshop_name, t.line_id, t.line_name,
@@ -130,6 +137,7 @@ public class ReportQueryRepository {
                 WHERE t.is_deleted = 0 AND t.task_status IN (2, 3, 4)
                 """);
         MapSqlParameterSource parameters = new MapSqlParameterSource();
+        // appendEquals 只在筛选值非空时追加等值条件，避免把 null 错误转换为 SQL 字符串。
         appendEquals(sql, parameters, "t.workshop_id", "workshopId", workshopId);
         appendEquals(sql, parameters, "t.line_id", "lineId", lineId);
         appendEquals(sql, parameters, "t.product_id", "productId", productId);

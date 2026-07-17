@@ -41,6 +41,7 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const userStore = useUserStore()
+  // 登录页不需要会话；其余页面必须先完成登录，否则保存目标地址后跳转登录。
   if (to.path !== '/login' && !userStore.isLoggedIn) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }
@@ -51,6 +52,7 @@ router.beforeEach((to) => {
   const required = to.meta.roles
   if (required && required.length > 0) {
     const owned = userStore.roleCodes
+    // 管理员拥有全量权限，普通用户只要命中页面声明的任一角色即可进入。
     const allowed = owned.includes(ADMIN_ROLE) || required.some((role) => owned.includes(role))
     if (!allowed) {
       ElMessage.warning('当前账号没有访问该页面的权限')

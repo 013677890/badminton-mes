@@ -48,20 +48,28 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ErpCraftSyncCommandService {
 
+    /** ERP 待确认数据转为 MES 草稿时写入版本变更记录的固定原因。 */
     private static final String CONFIRM_REASON = "ERP 工艺数据确认";
 
+    /** 来源系统、ERP 路线编码和版本的组合唯一索引，用于兜底并发同步。 */
     private static final String ERP_CRAFT_UNIQUE_CONSTRAINT = "uk_source_code_version";
 
+    /** ERP 工艺暂存仓储，负责幂等查询、确认锁定以及异常数据保留。 */
     private final ErpCraftPendingRepository pendingRepository;
 
+    /** 产品仓储，用于同步校验并在确认时将产品编码解析为 MES 主键。 */
     private final ProductRepository productRepository;
 
+    /** 工序仓储，用于验证每个 ERP 工序编码并构造路线步骤主键。 */
     private final CraftProcessRepository processRepository;
 
+    /** 工艺路线领域服务，确认时通过其创建草稿以复用版本和子项校验规则。 */
     private final CraftRouteService craftRouteService;
 
+    /** 接口审计服务，记录同步成功、重复及保留异常数据的处理结果。 */
     private final IntegrationAuditService auditService;
 
+    /** 工序步骤 JSON 序列化器，用于暂存原始步骤并在确认时恢复。 */
     private final ObjectMapper objectMapper;
 
     /**
@@ -100,17 +108,20 @@ public class ErpCraftSyncCommandService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ErpCraftSyncResult syncCraft(ErpCraftDTO craft, String snapshot, String sourceSystem) {
+        // 先检查头部必填结构，避免后续 trim 或业务键拼接因空值中断整个批次。
         validateCraftStructure(craft);
         String routingCode = craft.erpRoutingCode().trim();
         String routingVersion = craft.erpRoutingVersion().trim();
         String businessKey = routingCode + ":" + routingVersion;
 
+        // 来源系统、路线编码和版本共同构成 ERP 工艺在 MES 侧的永久幂等身份。
         Optional<ErpCraftPendingEntity> existing = pendingRepository
                 .findBySourceSystemAndErpRoutingCodeAndErpRoutingVersion(
                         sourceSystem, routingCode, routingVersion);
         if (existing.isPresent()
                 && !ErpCraftPendingStatusEnum.FAILED.getStatus().equals(existing.get().getStatus())
                 && !ErpCraftPendingStatusEnum.REJECTED.getStatus().equals(existing.get().getStatus())) {
+            // 待确认或已确认数据不可被同步覆盖，只记录重复调用并保留首次暂存内容。
             Long logId = auditService.recordResult(
                     IntegrationInterfaceTypeEnum.ERP_CRAFT_SYNC,
                     sourceSystem, businessKey, snapshot,
@@ -119,15 +130,18 @@ public class ErpCraftSyncCommandService {
             return new ErpCraftSyncResult(null, true, logId, null, null);
         }
 
+        // 失败或已驳回数据允许上游修正后原位覆盖，避免唯一键阻止再次同步。
         ErpCraftPendingEntity pending = existing.orElseGet(ErpCraftPendingEntity::new);
         fillPendingFields(pending, craft, sourceSystem);
         if (pending.getId() == null) {
             pending.setCreateBy(SecurityContextHolder.getRequiredLoginUserId());
         }
+        // 重试前清除上一次失败或确认痕迹，后续按本次校验结果重新写入状态。
         clearErrorFields(pending);
 
         ServiceException validationFailure = null;
         try {
+            // 排序后的步骤同时用于暂存和校验，保证确认创建时遵循同一顺序契约。
             List<ErpCraftStepDTO> sortedSteps = sortAndValidateSteps(craft.steps());
             pending.setProcessSteps(serializeSteps(sortedSteps));
             validateCraft(craft, sortedSteps);
@@ -135,10 +149,12 @@ public class ErpCraftSyncCommandService {
             validationFailure = exception;
         }
         if (validationFailure != null) {
+            // 业务校验失败不回滚暂存数据：保留异常快照供人工查看和上游修正。
             return saveFailedPending(
                     pending, craft.steps(), sourceSystem, businessKey, snapshot, validationFailure);
         }
 
+        // 全部主档与顺序校验通过后进入待确认区，但不会直接发布为生效路线。
         pending.setStatus(ErpCraftPendingStatusEnum.PENDING.getStatus());
         savePending(pending);
         Long logId = auditService.recordResult(
@@ -174,6 +190,7 @@ public class ErpCraftSyncCommandService {
      */
     @Transactional(rollbackFor = Exception.class)
     public Long confirmCraft(Long id) {
+        // 悲观锁定待确认记录，阻止两名审核人同时确认并各自生成一条路线草稿。
         ErpCraftPendingEntity pending = pendingRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.ERP_CRAFT_PENDING_NOT_EXISTS));
@@ -182,11 +199,14 @@ public class ErpCraftSyncCommandService {
                     IntegrationErrorCodeConstants.ERP_CRAFT_PENDING_STATUS_INVALID);
         }
 
+        // 从暂存快照恢复步骤，再重新解析当前 MES 主档主键，避免持久化跨模块实体引用。
         List<ErpCraftStepDTO> steps = deserializeSteps(pending.getProcessSteps());
         CraftRouteSaveReqVO routeReqVO = buildRouteSaveReqVO(pending, steps);
+        // 必须调用工艺模块服务创建草稿，不能直接写路线表绕过其版本与子项规则。
         Long routeId = craftRouteService.createRoute(routeReqVO);
 
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
+        // 路线草稿与确认状态在同一事务提交，任一保存失败都不会留下单边结果。
         pending.setStatus(ErpCraftPendingStatusEnum.CONFIRMED.getStatus());
         pending.setConfirmedRouteId(routeId);
         pending.setConfirmedBy(operatorId);
@@ -214,6 +234,7 @@ public class ErpCraftSyncCommandService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void rejectCraft(Long id, String reason) {
+        // 与确认使用相同写锁，保证驳回和确认不能基于同一个 PENDING 状态并发成功。
         ErpCraftPendingEntity pending = pendingRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new ServiceException(
                         IntegrationErrorCodeConstants.ERP_CRAFT_PENDING_NOT_EXISTS));
@@ -272,6 +293,7 @@ public class ErpCraftSyncCommandService {
         List<ErpCraftStepDTO> sortedSteps = steps.stream()
                 .sorted(Comparator.comparing(ErpCraftStepDTO::sequenceNo))
                 .toList();
+        // 排序后再校验从 1 连续递增，可同时识别缺号、重复号和非 1 起始。
         validateSequence(sortedSteps);
         return sortedSteps;
     }
@@ -295,12 +317,14 @@ public class ErpCraftSyncCommandService {
             String snapshot,
             ServiceException validationFailure) {
         if (pending.getProcessSteps() == null) {
+            // 结构校验在排序前失败时仍保存可序列化的原始步骤，便于定位 ERP 数据问题。
             List<ErpCraftStepDTO> storableSteps = originalSteps == null ? List.of() : originalSteps;
             pending.setProcessSteps(serializeSteps(storableSteps));
         }
         pending.setStatus(ErpCraftPendingStatusEnum.FAILED.getStatus());
         pending.setErrorCode(validationFailure.getErrorCode().code());
         pending.setErrorMessage(validationFailure.getMessage());
+        // 异常暂存记录和 FAILED 审计共同加入当前事务，确保排障数据完整。
         savePending(pending);
         Long logId = auditService.recordFailureInCurrentTransaction(
                 IntegrationInterfaceTypeEnum.ERP_CRAFT_SYNC,
@@ -369,6 +393,7 @@ public class ErpCraftSyncCommandService {
      */
     private void validateProcessCodes(List<ErpCraftStepDTO> steps) {
         for (ErpCraftStepDTO step : steps) {
+            // 每个步骤均以规范化编码解析当前有效工序，停用工序也不能进入新路线草稿。
             CraftProcessEntity process = processRepository
                     .findByProcessCodeAndDeletedFalse(normalizeCode(step.processCode()))
                     .orElseThrow(() -> new ServiceException(
@@ -418,6 +443,7 @@ public class ErpCraftSyncCommandService {
      * @param pending 待确认实体
      */
     private void clearErrorFields(ErpCraftPendingEntity pending) {
+        // 原位重试必须同时清理错误和历史确认字段，防止新状态携带旧处理结果。
         pending.setErrorCode(null);
         pending.setErrorMessage(null);
         pending.setConfirmedRouteId(null);
@@ -457,9 +483,11 @@ public class ErpCraftSyncCommandService {
                                                      List<ErpCraftStepDTO> steps) {
         Long productId = resolveProductId(pending.getProductCode());
         CraftRouteSaveReqVO reqVO = new CraftRouteSaveReqVO();
+        // ERP 编码和版本原样成为 MES 草稿身份，产品编码则转换为内部主键关系。
         reqVO.setRoutingCode(pending.getErpRoutingCode());
         reqVO.setRoutingName(pending.getErpRoutingName());
         reqVO.setRoutingVersion(pending.getErpRoutingVersion());
+        // 来源类型 2 明确标识该草稿由 ERP 读取确认产生，便于后续追溯来源。
         reqVO.setSourceType(2);
         reqVO.setProductIds(List.of(productId));
         reqVO.setSteps(buildRouteSteps(steps));
@@ -476,6 +504,7 @@ public class ErpCraftSyncCommandService {
     private List<CraftRouteStepSaveReqVO> buildRouteSteps(List<ErpCraftStepDTO> steps) {
         List<CraftRouteStepSaveReqVO> routeSteps = new ArrayList<>(steps.size());
         for (ErpCraftStepDTO step : steps) {
+            // 确认时重新查询工序，防止同步后至确认前工序被删除或失效而继续生成路线。
             CraftProcessEntity process = processRepository
                     .findByProcessCodeAndDeletedFalse(normalizeCode(step.processCode()))
                     .orElseThrow(() -> new ServiceException(
@@ -483,6 +512,7 @@ public class ErpCraftSyncCommandService {
             CraftRouteStepSaveReqVO routeStep = new CraftRouteStepSaveReqVO();
             routeStep.setSequenceNo(step.sequenceNo());
             routeStep.setProcessId(process.getId());
+            // 工序的质量必检配置映射为路线检验节点，不接受 ERP 数据自行指定。
             routeStep.setInspectNode(Boolean.TRUE.equals(process.getQualityRequired()));
             routeSteps.add(routeStep);
         }
