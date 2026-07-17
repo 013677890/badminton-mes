@@ -105,16 +105,34 @@ export interface WorkOrderProgress {
   progressPercent: number
 }
 
+/**
+ * 分页查询生产工单，并将筛选条件与分页参数一起提交给后端。
+ *
+ * @param params 工单筛选条件和页码、页大小
+ * @return 工单分页结果
+ */
 export function getWorkOrderPage(
   params: WorkOrderPageParams & PageParam,
 ): Promise<PageResult<WorkOrder>> {
   return get('/production/work_orders/page', params)
 }
 
+/**
+ * 查询单个工单详情，用于详情页和编辑页回显。
+ *
+ * @param id 工单主键
+ * @return 工单详情
+ */
 export function getWorkOrder(id: number): Promise<WorkOrder> {
   return get(`/production/work_orders/${id}`)
 }
 
+/**
+ * 创建生产工单。
+ *
+ * @param data 工单计划信息
+ * @return 新建工单主键
+ */
 export function createWorkOrder(data: WorkOrderSaveParams): Promise<number> {
   return post('/production/work_orders', data)
 }

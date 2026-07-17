@@ -153,6 +153,15 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         this.bomDetailManager = bomDetailManager;
     }
 
+    /**
+     * 创建工单并补齐产品档案中的冗余信息。
+     *
+     * <p>方法先完成计划时间、产品、工艺路线和车间校验，再落库；工单号冲突由数据库唯一索引兜底，
+     * 并转换为业务异常，避免把持久化异常直接暴露给接口调用方。</p>
+     *
+     * @param reqVO 工单创建请求
+     * @return 新工单主键
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createWorkOrder(WorkOrderSaveReqVO reqVO) {
@@ -182,6 +191,12 @@ public class WorkOrderServiceImpl implements WorkOrderService {
         return workOrder.getId();
     }
 
+    /**
+     * 按工单当前状态更新计划信息，并在必要时记录计划变更原因。
+     *
+     * @param id 工单主键
+     * @param reqVO 新的计划信息
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateWorkOrder(Long id, WorkOrderSaveReqVO reqVO) {

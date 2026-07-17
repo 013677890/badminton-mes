@@ -68,6 +68,7 @@ onMounted(async () => {
   }
 })
 
+/** 根据车间主键转换为页面展示名称，找不到档案时回退显示主键。 */
 function workshopLabel(workshopId: number): string {
   return String(workshopOptions.value.find((opt) => opt.value === workshopId)?.label ?? workshopId)
 }
@@ -123,6 +124,9 @@ const { data, loading, pagination, query, reset, refresh, onPageChange } = useTa
 >({ fetcher: getWorkOrderPage })
 
 /** dateRange 拆为后端的 begin/end 字段（补齐时分秒覆盖整天） */
+/**
+ * 将页面日期范围拆成后端要求的起止时间，并触发工单分页查询。
+ */
 function handleQuery(params: Record<string, any>) {
   const { planEndRange, ...rest } = params
   if (Array.isArray(planEndRange) && planEndRange.length === 2) {
