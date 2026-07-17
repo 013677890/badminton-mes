@@ -70,6 +70,69 @@ interface DemoEntry {
   path: string
 }
 
+const businessEntries: DemoEntry[] = [
+  {
+    title: '生产工单',
+    description: '工单全生命周期：创建 → 下达 → 生产 → 完工 → 关闭，进度与齐套一目了然',
+    path: '/production/work-orders',
+  },
+  {
+    title: '派工管理',
+    description: '排产建议采纳、审核下发、超派校验与产线排程甘特',
+    path: '/production/dispatch-orders',
+  },
+  {
+    title: '欠料看板',
+    description: '按物料聚合欠料汇总，下钻影响工单并登记处理',
+    path: '/production/shortage-board',
+  },
+  {
+    title: '工艺管理',
+    description: '工序主档与 SOP / 不良原因维护，工艺路线主从编辑与审核生效',
+    path: '/craft/processes',
+  },
+  {
+    title: '计件工资',
+    description: '单价规则 → 作业记录 → 结算计算 → 审核，明细可调整并全程留痕',
+    path: '/wage/settlements',
+  },
+  {
+    title: '基础资料',
+    description: '产品 / 物料 / BOM / 车间 / 产线主档维护，乐观锁与引用校验',
+    path: '/basedata/products',
+  },
+  {
+    title: '系统管理',
+    description: '用户账号、角色分配与密码重置（仅管理员），停用即强制下线',
+    path: '/system/users',
+  },
+  {
+    title: '接口管理',
+    description: 'ERP 同步、外部写入日志、设备计数异常池与完工单读取的统一运维入口',
+    path: '/integration/write-logs',
+  },
+  {
+    title: '设备数据接入',
+    description: '设备接入配置、联调验证、计数采集与异常处理闭环',
+    path: '/device/access',
+  },
+  {
+    title: '安灯管理',
+    description: '安灯类型和响应规则配置，现场异常发起、转派、升级与关闭',
+    path: '/andon/management',
+  },
+  {
+    title: '现场执行',
+    description: '报工审核与生产完工单创建、审核、作废操作台',
+    path: '/scene/execution',
+  },
+  {
+    title: '电子看板',
+    description: '产线、车间与中控实时指标，集中展示生产进度、质量、设备及安灯异常',
+    path: '/kanban/central',
+  },
+]
+
 const demoEntries: DemoEntry[] = [
   {
     title: '筛选列表页',
@@ -133,6 +196,21 @@ function openEntry(entry: DemoEntry) {
         />
       </el-col>
     </el-row>
+
+    <el-card shadow="never">
+      <template #header>业务功能入口</template>
+      <div class="dashboard__entries">
+        <div
+          v-for="entry in businessEntries"
+          :key="entry.path"
+          class="dashboard__entry"
+          @click="openEntry(entry)"
+        >
+          <div class="dashboard__entry-title">{{ entry.title }}</div>
+          <div class="dashboard__entry-desc">{{ entry.description }}</div>
+        </div>
+      </div>
+    </el-card>
 
     <el-card shadow="never">
       <template #header>组件示例导航</template>

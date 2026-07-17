@@ -38,16 +38,22 @@ import org.springframework.util.StringUtils;
 @Service
 public class ErpTaskSyncCommandService {
 
+    /** ERP 来源系统与任务单号组合唯一索引名称，用于翻译并发幂等竞争。 */
     private static final String EXTERNAL_WORK_ORDER_CONSTRAINT = "uk_external_source_order";
 
+    /** 工单仓储，负责永久幂等查询和 ERP 工单落库。 */
     private final WorkOrderRepository workOrderRepository;
 
+    /** 产品仓储，用于按 ERP 产品编码解析当前启用的 MES 产品主档。 */
     private final ProductRepository productRepository;
 
+    /** 车间仓储，用于按 ERP 车间编码解析当前启用的 MES 车间。 */
     private final WorkshopRepository workshopRepository;
 
+    /** MES 内部工单号流水，与 ERP 任务单号分别承担作业标识和来源幂等职责。 */
     private final WorkOrderNoSequence workOrderNoSequence;
 
+    /** 接口审计服务，记录每条 ERP 任务的成功或重复处理结果。 */
     private final IntegrationAuditService auditService;
 
     /**
@@ -81,13 +87,16 @@ public class ErpTaskSyncCommandService {
      */
     @Transactional(rollbackFor = Exception.class)
     public IntegrationCommandResult syncTask(ErpTaskDTO task, String snapshot, String sourceSystem) {
+        // 先校验必要结构，保证单条脏数据以业务异常结束而不会用空指针中断整个同步批次。
         validateTaskStructure(task);
         String erpOrderNo = task.erpOrderNo().trim();
+        // 来源类型、来源系统和 ERP 单号共同组成永久幂等键，查询有意包含逻辑删除历史。
         Optional<WorkOrderEntity> existing = workOrderRepository
                 .findBySourceTypeAndSourceSystemAndSourceOrderNo(
                         WorkOrderSourceTypeEnum.ERP_SYNC.getType(), sourceSystem, erpOrderNo);
         if (existing.isPresent()) {
             WorkOrderEntity workOrder = existing.get();
+            // 已处理任务不覆盖工单，只记录 DUPLICATE 并返回第一次生成的 MES 工单标识。
             Long logId = auditService.recordResult(
                     IntegrationInterfaceTypeEnum.ERP_TASK_SYNC,
                     sourceSystem, erpOrderNo, snapshot,
@@ -97,12 +106,16 @@ public class ErpTaskSyncCommandService {
                     workOrder.getId(), workOrder.getWorkOrderNo(), true, logId);
         }
 
+        // 数量与时间通过后再解析跨表主档，避免无效任务产生任何业务写入。
         validateTask(task);
         ProductEntity product = requireProduct(task.productCode());
         WorkshopEntity workshop = requireWorkshop(task.workshopCode());
 
+        // 产品展示字段取 MES 主档快照，ERP 仅提供业务键、数量、批次和计划时间。
         WorkOrderEntity workOrder = buildWorkOrder(task, sourceSystem, erpOrderNo, product, workshop);
+        // 立即刷新以捕获两个并发同步请求同时通过前置幂等查询的唯一索引竞争。
         saveWorkOrder(workOrder);
+        // 成功审计与工单处于同一事务，保证接口结果和业务记录原子可见。
         Long logId = auditService.recordResult(
                 IntegrationInterfaceTypeEnum.ERP_TASK_SYNC,
                 sourceSystem, erpOrderNo, snapshot,
@@ -164,6 +177,7 @@ public class ErpTaskSyncCommandService {
      * @return 产品实体
      */
     private ProductEntity requireProduct(String productCode) {
+        // 编码统一大写后查询，存在但已停用的产品同样不能生成新的生产工单。
         ProductEntity product = productRepository
                 .findByProductCodeAndDeletedFalse(normalizeCode(productCode))
                 .orElseThrow(() -> new ServiceException(
@@ -181,6 +195,7 @@ public class ErpTaskSyncCommandService {
      * @return 车间实体
      */
     private WorkshopEntity requireWorkshop(String workshopCode) {
+        // 车间必须同时满足编码命中、未逻辑删除和启用三个条件。
         WorkshopEntity workshop = workshopRepository
                 .findByWorkshopCodeAndDeletedFalse(normalizeCode(workshopCode))
                 .orElseThrow(() -> new ServiceException(
@@ -204,10 +219,12 @@ public class ErpTaskSyncCommandService {
     private WorkOrderEntity buildWorkOrder(ErpTaskDTO task, String sourceSystem, String erpOrderNo,
                                            ProductEntity product, WorkshopEntity workshop) {
         WorkOrderEntity workOrder = new WorkOrderEntity();
+        // MES 内部流水号用于后续生产作业，ERP 单号作为来源字段长期保留用于幂等和追溯。
         workOrder.setWorkOrderNo(workOrderNoSequence.nextNo());
         workOrder.setSourceType(WorkOrderSourceTypeEnum.ERP_SYNC.getType());
         workOrder.setSourceSystem(sourceSystem);
         workOrder.setSourceOrderNo(erpOrderNo);
+        // 冗余产品名称、规格和单位，固定同步时主档快照，避免历史工单随产品修改而变化。
         workOrder.setProductId(product.getId());
         workOrder.setProductName(product.getProductName());
         workOrder.setSpec(product.getSpec());
@@ -229,8 +246,10 @@ public class ErpTaskSyncCommandService {
      */
     private void saveWorkOrder(WorkOrderEntity workOrder) {
         try {
+            // flush 将唯一键检查提前到当前方法，便于门面层识别竞争并回查获胜事务的结果。
             workOrderRepository.saveAndFlush(workOrder);
         } catch (DataIntegrityViolationException exception) {
+            // 数据库驱动可能把约束名包装在多层 cause 中，因此沿异常链逐层匹配。
             Throwable cause = exception;
             String expected = EXTERNAL_WORK_ORDER_CONSTRAINT.toLowerCase(Locale.ROOT);
             while (cause != null) {

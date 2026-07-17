@@ -28,6 +28,7 @@ public class ProductRouteReferenceQueryImpl implements ProductRouteReferenceQuer
 
     @Override
     public boolean hasEffectiveRoute(Long productId) {
+        // 将状态条件下推到数据库 exists 查询，不加载完整路线关系和主表实体。
         return routeProductRepository.existsEffectiveRouteByProductId(
                 productId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
     }

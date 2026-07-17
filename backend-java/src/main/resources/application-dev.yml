@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: ${MES_DB_URL:jdbc:mysql://localhost:3306/badminton_mes?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Shanghai}
+    username: ${MES_DB_USERNAME:mes}
+    password: ${MES_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: ${MES_REDIS_HOST:localhost}
+      port: ${MES_REDIS_PORT:6379}
+
+mes:
+  web:
+    cors:
+      allowed-origins: ${MES_CORS_ALLOWED_ORIGINS:http://localhost:5173}

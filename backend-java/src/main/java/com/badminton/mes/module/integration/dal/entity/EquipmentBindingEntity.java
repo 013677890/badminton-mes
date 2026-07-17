@@ -16,7 +16,7 @@ import lombok.Data;
 /**
  * 设备报工绑定配置实体。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Data

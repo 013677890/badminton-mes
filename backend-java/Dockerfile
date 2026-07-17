@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ----------------------------------------------------------------------------
 # 羽毛球 MES 后端镜像(多阶段构建)
 #
@@ -6,25 +5,31 @@
 # 说明：构建阶段使用官方 Gradle 镜像，项目已迁移为 Gradle + JPA。
 # ----------------------------------------------------------------------------
 
+# Docker Hub 代理前缀；Compose 可通过 MES_DOCKER_MIRROR 覆盖。
+ARG DOCKER_MIRROR=docker.m.daocloud.io/library
+ARG GRADLE_MAVEN_MIRROR=https://maven.aliyun.com/repository/public
+
 # ---------- 构建阶段：编译并按 Spring Boot 分层拆解 fat jar ----------
 # 使用 Gradle Wrapper 同版本 + JDK 21，与本地构建保持一致
-FROM gradle:9.3.1-jdk21 AS builder
+FROM ${DOCKER_MIRROR}/gradle:9.3.1-jdk21 AS builder
+ARG GRADLE_MAVEN_MIRROR
 WORKDIR /workspace
+ENV GRADLE_MAVEN_MIRROR=${GRADLE_MAVEN_MIRROR}
 
 # 先复制 Gradle 配置预拉依赖：构建文件未变时命中缓存层，源码改动不触发依赖下载
 COPY settings.gradle build.gradle ./
-RUN --mount=type=cache,target=/home/gradle/.gradle gradle --no-daemon dependencies
+RUN gradle --no-daemon dependencies
 
 COPY src ./src
 # 镜像构建阶段跳过测试，单测在 CI 阶段独立执行并作为准入(TEST-006)
-RUN --mount=type=cache,target=/home/gradle/.gradle gradle --no-daemon bootJar -x test
+RUN gradle --no-daemon bootJar -x test
 
 # Boot 4 tools 模式分层解包：dependencies(变动最少) → loader → snapshot → application(变动最多)，
 # 运行阶段按此顺序 COPY，业务代码改动只重建最薄的应用层
 RUN java -Djarmode=tools -jar build/libs/*.jar extract --layers --launcher --destination extracted
 
 # ---------- 运行阶段：仅含 JRE 与应用分层 ----------
-FROM eclipse-temurin:21-jre AS runtime
+FROM ${DOCKER_MIRROR}/eclipse-temurin:21-jre AS runtime
 
 # 时区统一为业务时区：日志时间戳与 MySQL NOW() 写入的 update_time 对齐
 ENV TZ=Asia/Shanghai

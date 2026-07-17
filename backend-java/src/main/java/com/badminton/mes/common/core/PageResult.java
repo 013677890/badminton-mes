@@ -38,6 +38,7 @@ public class PageResult<T> {
      * @return 分页结果
      */
     public static <T> PageResult<T> of(List<T> list, Long total, Integer pageNo, Integer pageSize) {
+        // 统一在这里组装分页字段，避免各查询服务遗漏 pageNo/pageSize 或返回 null 列表。
         PageResult<T> result = new PageResult<>();
         result.setList(list);
         result.setTotal(total);
@@ -55,6 +56,7 @@ public class PageResult<T> {
      * @return 空分页结果
      */
     public static <T> PageResult<T> empty(Integer pageNo, Integer pageSize) {
+        // 使用不可变空集合表达“无记录”，保持 JSON 为 []，同时避免无意义的数据库分页查询。
         return of(Collections.emptyList(), 0L, pageNo, pageSize);
     }
 }

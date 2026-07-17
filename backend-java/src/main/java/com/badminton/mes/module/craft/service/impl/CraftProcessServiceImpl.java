@@ -24,6 +24,7 @@ import com.badminton.mes.module.craft.controller.vo.CraftProcessUpdateReqVO;
 import com.badminton.mes.module.craft.convert.CraftProcessConvert;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessChangeLogEntity;
 import com.badminton.mes.module.craft.dal.entity.CraftProcessEntity;
+import com.badminton.mes.module.craft.dal.entity.CraftQualityPlanReferenceEntity;
 import com.badminton.mes.module.craft.dal.redis.CraftCache;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessChangeLogRepository;
 import com.badminton.mes.module.craft.dal.repository.CraftProcessDefectReasonRepository;
@@ -131,6 +132,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createProcess(CraftProcessSaveReqVO reqVO) {
+        // 先统一编码大小写与可空文本，再按数据库最终写入值执行长度、唯一性和关联校验。
         normalizeSaveRequest(reqVO);
         validateNormalizedCodeLength(reqVO.getProcessCode());
         validateProcessCode(reqVO.getProcessCode(), null);
@@ -142,10 +144,12 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         process.setStatus(CommonStatusEnum.ENABLED.getStatus());
         process.setCreateBy(operatorId);
         process.setUpdateBy(operatorId);
+        // 主档必须先落库取得主键，后续审计日志才能建立稳定的工序关联。
         saveProcess(process);
         auditService.record(process.getId(), CraftProcessChangeTypeEnum.CREATE,
                 null, CraftProcessConvert.toSnapshotDTO(process),
                 defaultReason(reqVO.getChangeReason(), CREATE_REASON), operatorId);
+        // 缓存失效注册到事务提交后，回滚时继续保留旧缓存，不暴露未提交状态。
         craftCache.evictProcessAfterCommit(process.getId());
         return process.getId();
     }
@@ -153,6 +157,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateProcess(Long id, CraftProcessUpdateReqVO reqVO) {
+        // 悲观写锁与版本号校验共同防止并发修改覆盖，锁还与路线审核引用检查串行化。
         CraftProcessEntity process = requireProcessForUpdate(id);
         CraftVersionValidator.validate(process.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
@@ -164,6 +169,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         validateWageRuleChange(process, reqVO);
         validateEffectiveRouteRuleChange(process, reqVO);
 
+        // 修改前快照必须在实体字段覆盖前生成，供审计日志展示完整前后差异。
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
         CraftProcessConvert.copyToEntity(reqVO, process);
         process.setUpdateBy(SecurityContextHolder.getRequiredLoginUserId());
@@ -183,6 +189,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         validateNoReferences(id);
         validateNoEnabledWageRuleReferences(id);
 
+        // 删除采用软删除并保留删除前快照，历史路线和审计数据仍可追溯。
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
         CraftProcessSnapshotDTO beforeSnapshot = CraftProcessConvert.toSnapshotDTO(process);
         process.setDeleted(true);
@@ -190,6 +197,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         saveProcess(process);
         auditService.record(id, CraftProcessChangeTypeEnum.DELETE,
                 beforeSnapshot, null, DELETE_REASON, operatorId);
+        // 删除会影响主档、SOP、不良原因等聚合缓存，因此按聚合维度统一失效。
         craftCache.evictProcessAggregateAfterCommit(id);
     }
 
@@ -200,12 +208,15 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         CraftVersionValidator.validate(process.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_CONCURRENT_MODIFICATION);
         if (reqVO.getStatus().equals(process.getStatus())) {
+            // 幂等状态请求无需写库、递增版本号或重复生成审计记录。
             return;
         }
         if (CommonStatusEnum.ENABLED.getStatus().equals(reqVO.getStatus())) {
+            // 重新启用时重新确认外部档案仍然有效，避免恢复带有失效关联的工序。
             validateAssociations(process.getQualityRequired(), process.getQualityPlanId(),
                     process.getEquipmentCategoryId());
         } else {
+            // 停用会影响已生效路线执行与计件结算，存在有效引用时必须拒绝。
             validateNoEffectiveRouteReferences(id);
             validateNoEnabledWageRuleReferences(id);
         }
@@ -224,12 +235,14 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Override
     @Transactional(readOnly = true)
     public CraftProcessRespVO getProcess(Long id) {
+        // 详情采用旁路缓存；缓存不可用或未命中时再回源 MySQL。
         CraftProcessRespVO cached = craftCache.getProcess(id).orElse(null);
         if (cached != null) {
             return cached;
         }
 
         CraftProcessRespVO result = CraftProcessConvert.toRespVO(requireProcess(id));
+        // 仅将已通过未删除校验的数据库结果回填缓存，避免缓存无效主档。
         craftCache.putProcess(result);
         return result;
     }
@@ -241,6 +254,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
             return List.of();
         }
 
+        // 过滤非法值并去重，控制 IN 参数规模，同时保留调用方首次出现的顺序。
         List<Long> distinctIds = ids.stream()
                 .filter(id -> id != null && id > 0)
                 .distinct()
@@ -269,6 +283,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Transactional(readOnly = true)
     public PageResult<CraftProcessRespVO> getProcessPage(CraftProcessPageReqVO reqVO) {
         Specification<CraftProcessEntity> specification = CraftProcessSpecifications.page(reqVO);
+        // 先统计总数以便空结果快速返回，并为越界页码修正提供依据。
         long total = processRepository.count(specification);
         if (total == 0) {
             return PageResult.empty(reqVO.getPageNo(), reqVO.getPageSize());
@@ -276,6 +291,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
 
         int pageSize = reqVO.getPageSize();
         int pageNo = normalizePageNo(reqVO.getPageNo(), pageSize, total);
+        // 工序编码作为业务稳定顺序，主键倒序用于编码相同时提供确定性兜底。
         PageRequest pageRequest = PageRequest.of(pageNo - 1, pageSize,
                 Sort.by(Sort.Direction.ASC, "processCode").and(Sort.by(Sort.Direction.DESC, "id")));
         Page<CraftProcessEntity> page = processRepository.findAll(specification, pageRequest);
@@ -286,6 +302,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
     @Transactional(readOnly = true)
     public PageResult<CraftProcessChangeLogRespVO> getProcessChangeLogPage(
             Long id, CraftProcessChangeLogPageReqVO reqVO) {
+        // 审计日志允许查询已软删除工序，因此这里只校验主键物理记录是否存在。
         if (!processRepository.existsById(id)) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_NOT_EXISTS);
         }
@@ -333,6 +350,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      */
     private void validateEffectiveRouteRuleChange(
             CraftProcessEntity process, CraftProcessUpdateReqVO reqVO) {
+        // 名称、备注等展示字段可原地修改；只拦截会改变现场执行语义的控制字段。
         boolean controlRuleChanged = !Objects.equals(process.getProcessType(), reqVO.getProcessType())
                 || !Objects.equals(process.getStandardTimeSeconds(), reqVO.getStandardTimeSeconds())
                 || !Objects.equals(process.getKeyProcess(), reqVO.getKeyProcess())
@@ -377,6 +395,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      * @param processId 工序主键
      */
     private void validateNoEffectiveRouteReferences(Long processId) {
+        // 查询直接下推数据库，仅判断是否存在生效路线，避免加载完整路线明细集合。
         boolean referenced = routeDetailRepository.existsEffectiveRouteByProcessId(
                 processId, CraftRouteStatusEnum.EFFECTIVE.getStatus());
         if (referenced) {
@@ -391,6 +410,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      * @param excludeId   排除的工序主键，创建时为 null
      */
     private void validateProcessCode(String processCode, Long excludeId) {
+        // 应用层查重用于给出友好提示，最终并发唯一性仍由数据库唯一约束兜底。
         boolean exists = excludeId == null
                 ? processRepository.existsByProcessCodeAndDeletedFalse(processCode)
                 : processRepository.existsByProcessCodeAndIdNotAndDeletedFalse(processCode, excludeId);
@@ -411,14 +431,15 @@ public class CraftProcessServiceImpl implements CraftProcessService {
         if (Boolean.TRUE.equals(qualityRequired) && qualityPlanId == null) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_QUALITY_PLAN_REQUIRED);
         }
-        if (qualityPlanId != null && !qualityPlanRepository.existsByIdAndStatusAndDeletedFalse(
-                qualityPlanId, CommonStatusEnum.ENABLED.getStatus())) {
+        if (qualityPlanId != null && !qualityPlanRepository.existsByIdAndPlanStatusAndDeletedFalse(
+                qualityPlanId, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_QUALITY_PLAN_NOT_AVAILABLE);
         }
         if (equipmentCategoryId == null) {
             return;
         }
 
+        // 锁定设备类别记录，使工序保存与类别停用操作串行，避免校验后立即失效。
         EquipmentCategoryEntity category = equipmentCategoryRepository
                 .findByIdAndDeletedFalseForUpdate(equipmentCategoryId)
                 .orElseThrow(() -> new ServiceException(
@@ -434,6 +455,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      * @param processId 工序主键
      */
     private void validateNoReferences(Long processId) {
+        // 路线引用是删除的第一层硬约束，使用 exists 查询避免拉取无关明细。
         if (routeDetailRepository.existsByProcessIdAndDeletedFalse(processId)) {
             throw new ServiceException(CraftErrorCodeConstants.PROCESS_REFERENCED_BY_ROUTE);
         }
@@ -451,6 +473,7 @@ public class CraftProcessServiceImpl implements CraftProcessService {
      */
     private void saveProcess(CraftProcessEntity process) {
         try {
+            // 立即 flush，让唯一约束与乐观锁异常在当前业务方法内抛出并转换。
             processRepository.saveAndFlush(process);
         } catch (DataIntegrityViolationException exception) {
             CraftPersistenceExceptionTranslator.translateUniqueConstraint(exception,

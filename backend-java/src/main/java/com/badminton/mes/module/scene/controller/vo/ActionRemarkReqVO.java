@@ -6,7 +6,7 @@ import lombok.Data;
 /**
  * 审核、作废等动作的备注请求。
  *
- * @author Codex
+ * @author 张竹灏
  * @date 2026/07/13
  */
 @Data

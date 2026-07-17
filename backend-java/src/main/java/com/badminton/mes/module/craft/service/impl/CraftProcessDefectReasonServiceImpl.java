@@ -70,6 +70,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
     @Transactional(rollbackFor = Exception.class)
     public Long createProcessDefectReason(Long processId,
                                           CraftProcessDefectReasonSaveReqVO reqVO) {
+        // 先确认父工序有效，再按规范化后的编码检查同一工序内唯一性。
         requireProcess(processId);
         normalizeRequest(reqVO);
         validateNormalizedCodeLength(reqVO.getReasonCode());
@@ -81,6 +82,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         copyToEntity(reqVO, reason);
         reason.setCreateBy(operatorId);
         reason.setUpdateBy(operatorId);
+        // 立即落库取得关联主键，并让数据库唯一约束在审计记录写入前完成校验。
         saveReason(reason);
         auditService.record(processId, CraftProcessChangeTypeEnum.DEFECT_REASON_BINDING,
                 null, CraftProcessConvert.toDefectReasonRespVO(reason),
@@ -94,6 +96,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
     public void updateProcessDefectReason(Long processId, Long reasonId,
                                           CraftProcessDefectReasonUpdateReqVO reqVO) {
         requireProcess(processId);
+        // 查询条件同时包含父工序 id，防止通过其他工序的关联主键越界修改。
         CraftProcessDefectReasonEntity reason = requireReason(processId, reasonId);
         CraftVersionValidator.validate(reason.getVersion(), reqVO.getVersion(),
                 CraftErrorCodeConstants.PROCESS_DEFECT_REASON_CONCURRENT_MODIFICATION);
@@ -101,6 +104,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         validateNormalizedCodeLength(reqVO.getReasonCode());
         validateReasonCode(processId, reqVO.getReasonCode(), reasonId);
 
+        // 在覆盖业务字段前保留响应形态快照，便于审计日志直接展示前后变化。
         CraftProcessDefectReasonRespVO beforeSnapshot =
                 CraftProcessConvert.toDefectReasonRespVO(reason);
         copyToEntity(reqVO, reason);
@@ -121,6 +125,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         CraftVersionValidator.validate(reason.getVersion(), expectedVersion,
                 CraftErrorCodeConstants.PROCESS_DEFECT_REASON_CONCURRENT_MODIFICATION);
 
+        // 采用软删除保留历史不良原因，并在审计中记录删除前完整内容。
         CraftProcessDefectReasonRespVO beforeSnapshot =
                 CraftProcessConvert.toDefectReasonRespVO(reason);
         Long operatorId = SecurityContextHolder.getRequiredLoginUserId();
@@ -135,6 +140,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
     @Override
     @Transactional(readOnly = true)
     public List<CraftProcessDefectReasonRespVO> getProcessDefectReasons(Long processId) {
+        // 列表按工序维度使用旁路缓存，缓存未命中时才校验父工序并访问数据库。
         List<CraftProcessDefectReasonRespVO> cached =
                 craftCache.getProcessDefectReasons(processId).orElse(null);
         if (cached != null) {
@@ -144,6 +150,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
         requireProcess(processId);
         List<CraftProcessDefectReasonRespVO> result = CraftProcessConvert.toDefectReasonRespVOList(
                 defectReasonRepository.findByProcessIdAndDeletedFalseOrderByIdAsc(processId));
+        // 空列表也写入缓存，避免没有配置不良原因的工序被反复回源查询。
         craftCache.putProcessDefectReasons(processId, result);
         return result;
     }
@@ -180,6 +187,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
      * @param excludeId 排除的关联主键，创建时为 null
      */
     private void validateReasonCode(Long processId, String reasonCode, Long excludeId) {
+        // 应用层预检用于友好提示；并发创建仍由数据库活动编码唯一约束兜底。
         boolean exists = excludeId == null
                 ? defectReasonRepository.existsByProcessIdAndReasonCodeAndDeletedFalse(
                         processId, reasonCode)
@@ -198,6 +206,7 @@ public class CraftProcessDefectReasonServiceImpl implements CraftProcessDefectRe
      */
     private void saveReason(CraftProcessDefectReasonEntity reason) {
         try {
+            // flush 将唯一约束和乐观锁异常限制在当前方法内，便于转换为稳定业务错误。
             defectReasonRepository.saveAndFlush(reason);
         } catch (DataIntegrityViolationException exception) {
             CraftPersistenceExceptionTranslator.translateUniqueConstraint(exception,

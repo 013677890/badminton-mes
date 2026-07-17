@@ -9,8 +9,8 @@ import lombok.Data;
 /**
  * 设备类别响应 VO，类别详情与分页列表共用。
  *
- * <p>只暴露前端需要的展示字段，逻辑删除标记等内部字段不出参；
- * JSON key 均为 lowerCamelCase，时间统一 yyyy-MM-dd HH:mm:ss。
+ * <p>返回类别标识、父子层级、排序和启停状态等业务展示字段，不暴露逻辑删除标记等持久化控制字段；
+ * 时间字段统一序列化到秒，供详情页和分页列表直接复用。
  *
  * @author 角色C
  * @date 2026/07/09
@@ -18,32 +18,32 @@ import lombok.Data;
 @Data
 public class EquipmentCategoryRespVO {
 
-    /** 类别主键 */
+    /** 设备类别主键。 */
     private Long id;
 
-    /** 类别编码 */
+    /** 业务唯一的类别编码。 */
     private String categoryCode;
 
-    /** 类别名称 */
+    /** 面向业务人员展示的类别名称。 */
     private String categoryName;
 
-    /** 父级类别 id */
+    /** 父类别主键；顶级类别为空。 */
     private Long parentId;
 
-    /** 排序号 */
+    /** 同级类别排序号，数值越小展示越靠前。 */
     private Integer sortOrder;
 
-    /** 备注说明 */
+    /** 类别用途或管理约定的补充说明。 */
     private String remark;
 
-    /** 状态：1 启用 0 停用 */
+    /** 启停状态：1 表示启用，0 表示停用。 */
     private Integer status;
 
-    /** 创建时间 */
+    /** 类别创建时间，由数据库维护。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 
-    /** 更新时间 */
+    /** 类别最后更新时间，由数据库维护。 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime updateTime;
 }

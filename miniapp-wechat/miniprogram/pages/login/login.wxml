@@ -1,0 +1,1 @@
+<view class="page login"><view class="card"><view class="title">羽毛球 MES</view><view class="muted">微信登录后绑定现有 MES 工号即可使用</view><button class="primary" bindtap="login">微信登录</button></view></view>

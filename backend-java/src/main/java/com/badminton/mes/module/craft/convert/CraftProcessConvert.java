@@ -70,6 +70,7 @@ public final class CraftProcessConvert {
         respVO.setProcessType(process.getProcessType());
         respVO.setStandardTimeSeconds(process.getStandardTimeSeconds());
         respVO.setKeyProcess(process.getKeyProcess());
+        // 当前模型将关键工序同时视为必须报工、必须配置人员，响应字段由主档规则派生。
         respVO.setReportRequired(process.getKeyProcess());
         respVO.setPersonnelRequired(process.getKeyProcess());
         respVO.setQualityRequired(process.getQualityRequired());
@@ -188,6 +189,7 @@ public final class CraftProcessConvert {
         respVO.setFileUrl(sop.getFileUrl());
         respVO.setStatus(sop.getStatus());
         respVO.setVersion(sop.getVersion());
+        // 已停用 SOP 不能继续被新路线使用，前端以该派生标记提示重新绑定。
         respVO.setRebindRequired(Integer.valueOf(0).equals(sop.getStatus()));
         respVO.setCreateTime(sop.getCreateTime());
         respVO.setUpdateTime(sop.getUpdateTime());

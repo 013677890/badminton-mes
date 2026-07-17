@@ -49,6 +49,6 @@ public class UserRoleEntity {
     private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }

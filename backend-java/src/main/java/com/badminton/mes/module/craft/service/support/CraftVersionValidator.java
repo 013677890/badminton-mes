@@ -21,6 +21,7 @@ public final class CraftVersionValidator {
      * @param errorCode       版本冲突业务错误码
      */
     public static void validate(Integer currentVersion, Integer expectedVersion, ErrorCode errorCode) {
+        // 使用 Objects.equals 同时覆盖空版本，任何不一致都按客户端数据已过期处理。
         if (!Objects.equals(currentVersion, expectedVersion)) {
             throw new ServiceException(errorCode);
         }

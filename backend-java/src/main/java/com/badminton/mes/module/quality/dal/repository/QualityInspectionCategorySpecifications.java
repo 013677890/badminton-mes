@@ -11,9 +11,15 @@ import org.springframework.util.StringUtils;
 
 import jakarta.persistence.criteria.Predicate;
 
-/** 检验分类动态查询条件。 */
+/**
+ * 检验分类分页查询的动态条件构造器。
+ *
+ * <p>查询固定排除逻辑删除数据，并将请求中实际提供的条件以 AND 连接；关键词内部则对分类编码、
+ * 分类名称执行 OR 模糊匹配，启停状态采用精确匹配。
+ */
 public final class QualityInspectionCategorySpecifications {
 
+    /** 根据分页请求按需拼装逻辑删除、关键词和启停状态条件。 */
     public static Specification<QualityInspectionCategoryEntity> page(
             QualityInspectionCategoryPageReqVO request) {
         return (root, query, criteriaBuilder) -> {
@@ -32,6 +38,7 @@ public final class QualityInspectionCategorySpecifications {
         };
     }
 
+    /** 转义 LIKE 元字符，使用户输入的百分号、下划线和反斜杠按普通文本参与匹配。 */
     private static String escapeWildcards(String input) {
         return input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }

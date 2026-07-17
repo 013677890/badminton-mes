@@ -100,6 +100,7 @@ public class CraftCache {
      * @return 缓存命中的 SOP 列表
      */
     public Optional<List<CraftProcessSopRespVO>> getProcessSops(Long processId) {
+        // 数组类型用于 Jackson 保留元素类型，命中后再转换为不可变列表返回业务层。
         Optional<CraftProcessSopRespVO[]> cached = read(
                 CraftRedisKeyConstants.processSopsKey(processId),
                 CraftProcessSopRespVO[].class, "工序 SOP", processId);
@@ -148,6 +149,7 @@ public class CraftCache {
      * @param productIds 产品主键集合
      */
     public void evictDefaultRoutesAfterCommit(Collection<Long> productIds) {
+        // 同一路线可能重复关联输入产品，生成 Key 前去重可减少无效 Redis 删除参数。
         evictAfterCommit(productIds.stream()
                 .distinct()
                 .map(CraftRedisKeyConstants::defaultRouteKey)
@@ -208,10 +210,12 @@ public class CraftCache {
         try {
             String json = stringRedisTemplate.opsForValue().get(key);
             if (!StringUtils.hasText(json)) {
+                // Key 不存在或空字符串都按未命中处理，由调用方回源数据库。
                 return Optional.empty();
             }
             return Optional.of(objectMapper.readValue(json, valueType));
         } catch (RuntimeException exception) {
+            // Redis 与反序列化异常均降级为未命中，缓存损坏不能阻断主业务查询。
             logger.warn("[{}缓存读取失败] businessId: {}, errorMessage: {}",
                     cacheName, businessId, exception.getMessage());
             return Optional.empty();
@@ -230,6 +234,7 @@ public class CraftCache {
     private void write(String key, Object value, Duration ttl,
                        String cacheName, Long businessId) {
         try {
+            // JSON 与 TTL 在一次 SET 中写入，避免先写值后设过期之间留下永久 Key。
             String json = objectMapper.writeValueAsString(value);
             stringRedisTemplate.opsForValue().set(key, json, ttl);
         } catch (RuntimeException exception) {
@@ -244,11 +249,13 @@ public class CraftCache {
      * @param keys 待删除的缓存 Key
      */
     private void evictAfterCommit(Collection<String> keys) {
+        // 复制为不可变集合，避免事务回调执行前调用方修改原集合导致删错 Key。
         List<String> immutableKeys = List.copyOf(keys);
         if (immutableKeys.isEmpty()) {
             return;
         }
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 非事务调用没有提交回调可注册，直接删除以维持缓存一致性。
             evict(immutableKeys);
             return;
         }
@@ -256,6 +263,7 @@ public class CraftCache {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
+                // 只有数据库事务成功提交后才删除旧缓存，回滚时缓存仍与数据库一致。
                 evict(immutableKeys);
             }
         });

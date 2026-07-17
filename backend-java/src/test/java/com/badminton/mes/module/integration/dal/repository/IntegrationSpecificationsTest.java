@@ -7,7 +7,7 @@ import com.badminton.mes.module.integration.controller.vo.CompletionReadLogPageR
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPageReqVO;
 import com.badminton.mes.module.integration.dal.entity.CompletionOrderEntity;
 import com.badminton.mes.module.integration.dal.entity.CompletionReadLogEntity;
-import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
+import com.badminton.mes.module.integration.dal.entity.IntegrationDeviceCountExceptionEntity;
 import com.badminton.mes.module.integration.enums.CompletionAuditStatusEnum;
 
 import org.junit.jupiter.api.DisplayName;
@@ -76,7 +76,7 @@ class IntegrationSpecificationsTest {
         reqVO.setHandleStatus(0);
         reqVO.setStartTime(startTime);
         reqVO.setEndTime(endTime);
-        Root<DeviceCountExceptionEntity> root = mock(Root.class, RETURNS_DEEP_STUBS);
+        Root<IntegrationDeviceCountExceptionEntity> root = mock(Root.class, RETURNS_DEEP_STUBS);
         CriteriaBuilder builder = mock(CriteriaBuilder.class);
 
         DeviceCountExceptionSpecifications.page(reqVO)

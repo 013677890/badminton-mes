@@ -20,9 +20,11 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 
 /**
- * 设备台账 Controller。
+ * 设备台账主数据 HTTP 接口。
  *
- * <p>设备台账是设备管理的主数据入口，路径使用复数资源名 ledgers。
+ * <p>设备台账统一维护设备身份、归属位置、制造信息、运行状态和启停状态，是保养与报修业务引用设备
+ * 的入口。本控制器仅处理参数校验、调用 {@link EquipmentLedgerService} 和统一响应包装；设备编码
+ * 唯一性、类别与制造商有效性、车间和产线归属关系以及删除引用约束由 Service 处理。
  *
  * @author 角色C
  * @date 2026/07/09
@@ -31,6 +33,7 @@ import jakarta.validation.constraints.Positive;
 @RequestMapping("/api/equipment/ledgers")
 public class EquipmentLedgerController {
 
+    /** 设备台账应用服务，负责主数据及跨模块引用的一致性。 */
     private final EquipmentLedgerService ledgerService;
 
     /**
@@ -43,10 +46,10 @@ public class EquipmentLedgerController {
     }
 
     /**
-     * 创建设备台账。
+     * 创建设备台账并校验其类别、制造商及组织归属信息。
      *
-     * @param reqVO 创建请求
-     * @return 新设备主键 id
+     * @param reqVO 已通过字段校验的设备台账创建数据
+     * @return 包含新设备主键的统一成功响应
      */
     @PostMapping
     public CommonResult<Long> createEquipmentLedger(@Valid @RequestBody EquipmentLedgerSaveReqVO reqVO) {
@@ -54,11 +57,11 @@ public class EquipmentLedgerController {
     }
 
     /**
-     * 修改设备台账。
+     * 修改指定设备的基础资料、组织归属、业务状态和启停状态。
      *
-     * @param id    设备主键
-     * @param reqVO 修改请求
-     * @return 空数据成功响应
+     * @param id 设备台账主键，必须为正数
+     * @param reqVO 已通过字段校验的设备台账更新数据
+     * @return 不携带业务数据的统一成功响应
      */
     @PutMapping("/{id}")
     public CommonResult<Void> updateEquipmentLedger(@PathVariable("id") @Positive Long id,
@@ -68,10 +71,10 @@ public class EquipmentLedgerController {
     }
 
     /**
-     * 删除设备台账(逻辑删除)。
+     * 逻辑删除设备台账，保养、报修等业务引用存在时由 Service 拒绝删除。
      *
-     * @param id 设备主键
-     * @return 空数据成功响应
+     * @param id 设备台账主键，必须为正数
+     * @return 不携带业务数据的统一成功响应
      */
     @DeleteMapping("/{id}")
     public CommonResult<Void> deleteEquipmentLedger(@PathVariable("id") @Positive Long id) {
@@ -80,10 +83,10 @@ public class EquipmentLedgerController {
     }
 
     /**
-     * 查询设备台账详情。
+     * 按主键查询未逻辑删除的设备台账详情。
      *
-     * @param id 设备主键
-     * @return 设备台账详情
+     * @param id 设备台账主键，必须为正数
+     * @return 设备台账详情统一响应
      */
     @GetMapping("/{id}")
     public CommonResult<EquipmentLedgerRespVO> getEquipmentLedger(@PathVariable("id") @Positive Long id) {
@@ -91,10 +94,10 @@ public class EquipmentLedgerController {
     }
 
     /**
-     * 分页查询设备台账列表。
+     * 按关键字、类别、制造商、设备状态、组织归属和启停状态分页查询设备。
      *
-     * @param reqVO 分页筛选条件，GET 查询参数绑定
-     * @return 分页结果
+     * @param reqVO 由 GET 查询参数绑定形成的分页筛选条件
+     * @return 设备台账分页结果
      */
     @GetMapping("/page")
     public CommonResult<PageResult<EquipmentLedgerRespVO>> getEquipmentLedgerPage(

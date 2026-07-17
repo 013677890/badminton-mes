@@ -102,6 +102,7 @@ public class CraftRouteReferenceValidator {
     public CraftRouteReferenceContext validateForApproval(
             List<CraftRouteProductEntity> relations,
             List<CraftRouteDetailEntity> details) {
+        // 将已持久化子表转换为统一校验模型，保证保存与审核复用同一套业务规则。
         List<Long> productIds = relations.stream()
                 .map(CraftRouteProductEntity::getProductId)
                 .toList();
@@ -127,12 +128,14 @@ public class CraftRouteReferenceValidator {
             boolean inheritRules,
             boolean approvalRequired,
             boolean lockReferences) {
+        // 先校验纯内存结构，尽早拒绝重复产品和断裂步骤，减少无效数据库查询。
         validateNoDuplicateProducts(productIds);
         validateContinuousSequence(steps);
 
         Map<Long, ProductEntity> productMap = loadAvailableProducts(productIds);
         Map<Long, CraftProcessEntity> processMap = loadAvailableProcesses(steps, lockReferences);
         if (inheritRules) {
+            // 草稿保存允许省略工序默认控制项，由工序主档补齐后再写入路线明细。
             inheritProcessRules(steps, processMap);
         }
         validateWorkstations(steps, lockReferences);
@@ -140,6 +143,7 @@ public class CraftRouteReferenceValidator {
         Map<Long, CraftProcessSopEntity> sopMap = validateSops(steps, lockReferences);
         validateQualityPlans(steps, lockReferences);
         if (approvalRequired) {
+            // 审核阶段不再自动修正数据，只验证持久化配置是否已满足生效条件。
             validateApprovalConfiguration(steps, processMap, sopMap);
         }
         return new CraftRouteReferenceContext(productMap, processMap);
@@ -162,6 +166,7 @@ public class CraftRouteReferenceValidator {
      * @param steps 路线步骤
      */
     private void validateContinuousSequence(List<CraftRouteStepSaveReqVO> steps) {
+        // 请求列表位置就是预期执行顺序，因此第 index 项必须严格对应 index + 1。
         for (int index = 0; index < steps.size(); index++) {
             if (steps.get(index).getSequenceNo() != index + 1) {
                 throw new ServiceException(CraftErrorCodeConstants.ROUTE_SEQUENCE_INVALID);
@@ -176,6 +181,7 @@ public class CraftRouteReferenceValidator {
      * @return 产品映射
      */
     private Map<Long, ProductEntity> loadAvailableProducts(List<Long> productIds) {
+        // 一次 IN 查询只加载启用且未删除产品，数量不一致即说明至少一个引用不可用。
         List<ProductEntity> products = productRepository.findByIdInAndStatusAndDeletedFalse(
                 productIds, CommonStatusEnum.ENABLED.getStatus());
         if (products.size() != productIds.size()) {
@@ -193,9 +199,11 @@ public class CraftRouteReferenceValidator {
      */
     private Map<Long, CraftProcessEntity> loadAvailableProcesses(
             List<CraftRouteStepSaveReqVO> steps, boolean lockReferences) {
+        // 同一工序可出现在多个步骤，先去重以减少 IN 查询与加锁范围。
         Set<Long> processIds = steps.stream()
                 .map(CraftRouteStepSaveReqVO::getProcessId)
                 .collect(Collectors.toSet());
+        // 审核时按主键升序加写锁，防止校验完成到路线生效之间工序被停用或删除。
         List<CraftProcessEntity> processes = lockReferences
                 ? processRepository.findAvailableByIdInForUpdateOrderByIdAsc(
                         processIds, CommonStatusEnum.ENABLED.getStatus())
@@ -219,9 +227,11 @@ public class CraftRouteReferenceValidator {
         for (CraftRouteStepSaveReqVO step : steps) {
             CraftProcessEntity process = processMap.get(step.getProcessId());
             if (step.getEquipmentCategoryId() == null) {
+                // 路线未覆盖设备类别时继承工序默认值，显式配置则保持路线自身选择。
                 step.setEquipmentCategoryId(process.getEquipmentCategoryId());
             }
             if (Boolean.TRUE.equals(process.getQualityRequired())) {
+                // 工序要求质检时，路线步骤必须成为检验节点并继承缺省检验方案。
                 step.setInspectNode(true);
                 if (step.getQualityPlanId() == null) {
                     step.setQualityPlanId(process.getQualityPlanId());
@@ -244,6 +254,7 @@ public class CraftRouteReferenceValidator {
         if (stationIds.isEmpty()) {
             return;
         }
+        // 保存只校验可用性，审核则锁定引用；两条路径都使用批量查询避免 N+1。
         List<CraftWorkstationReferenceEntity> stations = lockReferences
                 ? workstationRepository.findAvailableByIdInForUpdateOrderByIdAsc(
                         stationIds, CommonStatusEnum.ENABLED.getStatus())
@@ -294,6 +305,7 @@ public class CraftRouteReferenceValidator {
         if (sopIds.isEmpty()) {
             return Map.of();
         }
+        // SOP 除了必须启用外，还必须属于当前步骤引用的同一工序。
         List<CraftProcessSopEntity> sops = lockReferences
                 ? sopRepository.findAvailableByIdInForUpdateOrderByIdAsc(
                         sopIds, CommonStatusEnum.ENABLED.getStatus())
@@ -329,9 +341,9 @@ public class CraftRouteReferenceValidator {
         }
         List<CraftQualityPlanReferenceEntity> plans = lockReferences
                 ? qualityPlanRepository.findAvailableByIdInForUpdateOrderByIdAsc(
-                        planIds, CommonStatusEnum.ENABLED.getStatus())
-                : qualityPlanRepository.findByIdInAndStatusAndDeletedFalse(
-                        planIds, CommonStatusEnum.ENABLED.getStatus());
+                        planIds, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE)
+                : qualityPlanRepository.findByIdInAndPlanStatusAndDeletedFalse(
+                        planIds, CraftQualityPlanReferenceEntity.PLAN_STATUS_EFFECTIVE);
         if (plans.size() != planIds.size()) {
             throw new ServiceException(CraftErrorCodeConstants.ROUTE_QUALITY_PLAN_NOT_AVAILABLE);
         }
@@ -351,6 +363,7 @@ public class CraftRouteReferenceValidator {
         for (CraftRouteStepSaveReqVO step : steps) {
             CraftProcessEntity process = processMap.get(step.getProcessId());
             boolean qualityRequired = Boolean.TRUE.equals(process.getQualityRequired());
+            // 关键工序、强制质检工序或显式检验节点均视为控制节点，生效前必须绑定 SOP。
             boolean controlNode = Boolean.TRUE.equals(process.getKeyProcess())
                     || qualityRequired
                     || Boolean.TRUE.equals(step.getInspectNode());
@@ -362,6 +375,7 @@ public class CraftRouteReferenceValidator {
                     || !sopMap.containsKey(step.getSopId()));
             boolean missingQualityPlan = (qualityRequired || Boolean.TRUE.equals(step.getInspectNode()))
                     && step.getQualityPlanId() == null;
+            // 任一控制配置缺失都拒绝整条路线生效，避免现场执行到中途才发现资料不全。
             if (missingEquipment || inspectRuleMismatch || missingSop || missingQualityPlan) {
                 throw new ServiceException(CraftErrorCodeConstants.ROUTE_CONFIGURATION_INCOMPLETE);
             }

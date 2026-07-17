@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import com.badminton.mes.module.integration.controller.vo.DeviceCountExceptionPageReqVO;
-import com.badminton.mes.module.integration.dal.entity.DeviceCountExceptionEntity;
+import com.badminton.mes.module.integration.dal.entity.IntegrationDeviceCountExceptionEntity;
 
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
@@ -25,7 +25,7 @@ public final class DeviceCountExceptionSpecifications {
      * @param reqVO 查询参数
      * @return JPA Specification
      */
-    public static Specification<DeviceCountExceptionEntity> page(
+    public static Specification<IntegrationDeviceCountExceptionEntity> page(
             DeviceCountExceptionPageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             var predicates = new ArrayList<Predicate>();

@@ -31,9 +31,11 @@ public final class CraftRouteSpecifications {
     public static Specification<CraftRouteEntity> page(CraftRoutePageReqVO reqVO) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
+            // 路线列表只展示当前有效记录，历史软删除版本由审计链路负责追溯。
             predicates.add(criteriaBuilder.isFalse(root.get("deleted")));
 
             if (StringUtils.hasText(reqVO.getRoutingCode())) {
+                // 用户输入先按路线编码规则转大写，再转义通配符并进行索引友好的前缀匹配。
                 String codePrefix = escapeLike(reqVO.getRoutingCode().trim().toUpperCase(Locale.ROOT)) + "%";
                 predicates.add(criteriaBuilder.like(root.get("routingCode"), codePrefix, LIKE_ESCAPE));
             }
@@ -63,6 +65,7 @@ public final class CraftRouteSpecifications {
      * @return 可安全用于 LIKE 模式的字面值
      */
     static String escapeLike(String value) {
+        // 必须先转义反斜杠，再处理百分号和下划线，避免后续新增的转义符被重复解释。
         return value.replace("\\", "\\\\")
                 .replace("%", "\\%")
                 .replace("_", "\\_");

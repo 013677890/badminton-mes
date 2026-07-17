@@ -51,6 +51,7 @@ public class CraftRouteAuditService {
      */
     public void record(Long routeId, CraftRouteChangeTypeEnum changeType,
                        Object beforeValue, Object afterValue, String reason, Long operatorId) {
+        // 路线审计保存聚合快照，调用方事务保证主表、子表和日志一起提交。
         CraftRouteChangeLogEntity changeLog = new CraftRouteChangeLogEntity();
         changeLog.setRouteId(routeId);
         changeLog.setChangeType(changeType.getType());
@@ -70,11 +71,13 @@ public class CraftRouteAuditService {
      */
     private String serialize(Object value, Long routeId) {
         if (value == null) {
+            // 创建与删除场景允许快照一侧为空，以区别于序列化得到的空对象。
             return null;
         }
         try {
             return objectMapper.writeValueAsString(value);
         } catch (RuntimeException exception) {
+            // 不允许在缺少可追溯快照时提交路线变更，异常交由外层事务回滚。
             logger.error("[路线快照生成失败] routeId: {}, errorMessage: {}",
                     routeId, exception.getMessage(), exception);
             throw new ServiceException(GlobalErrorCodeConstants.SYSTEM_ERROR, "工艺路线变更快照生成失败");

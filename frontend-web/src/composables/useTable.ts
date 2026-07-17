@@ -30,6 +30,9 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
 
   const searchParams = computed(() => ({ ...activeParams }))
 
+  /**
+   * 按当前筛选条件和分页状态加载列表，并同步 loading、数据和总条数。
+   */
   async function load() {
     loading.value = true
     try {
@@ -46,6 +49,9 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
   }
 
   /** 新条件查询：回到第 1 页 */
+  /**
+   * 使用新筛选条件查询；查询条件变化时必须回到第一页。
+   */
   function query(params?: Params) {
     if (params) activeParams = { ...params }
     pagination.value.pageNo = 1
@@ -53,6 +59,9 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
   }
 
   /** 重置：恢复默认条件并回到第 1 页 */
+  /**
+   * 恢复初始化筛选条件，并重新加载第一页数据。
+   */
   function reset() {
     activeParams = { ...defaultParams }
     pagination.value.pageNo = 1
@@ -60,10 +69,16 @@ export function useTable<Row, Params extends Record<string, any> = Record<string
   }
 
   /** 保持当前条件与页码刷新（增删改后局部刷新用） */
+  /**
+   * 保留当前条件和页码刷新列表，适用于增删改操作完成后更新页面。
+   */
   function refresh() {
     return load()
   }
 
+  /**
+   * 接收表格分页事件，更新分页状态后重新请求列表。
+   */
   function onPageChange(page: { pageNo: number; pageSize: number }) {
     pagination.value.pageNo = page.pageNo
     pagination.value.pageSize = page.pageSize

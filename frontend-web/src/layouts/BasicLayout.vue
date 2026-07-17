@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { ArrowDown, Expand, Fold } from '@element-plus/icons-vue'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
@@ -37,9 +39,69 @@ const asideWidth = computed(() =>
     : 'var(--mes-sidebar-width)',
 )
 
-function handleUserCommand(command: string | number | object) {
+// ---------- 修改密码 ----------
+
+const passwordVisible = ref(false)
+const passwordLoading = ref(false)
+const passwordFormRef = ref<FormInstance>()
+const passwordForm = reactive({ oldPassword: '', newPassword: '', confirmPassword: '' })
+
+const passwordRules: FormRules = {
+  oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, max: 32, message: '长度 6 到 32 个字符', trigger: 'blur' },
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (_rule, value: string, callback) => {
+        if (value !== passwordForm.newPassword) callback(new Error('两次输入的密码不一致'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
+
+function openPasswordDialog() {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirmPassword = ''
+  passwordVisible.value = true
+}
+
+async function handleChangePassword() {
+  try {
+    await passwordFormRef.value?.validate()
+  } catch {
+    return
+  }
+  passwordLoading.value = true
+  try {
+    // 成功后后端使会话失效，本地态已由 store 清空
+    await userStore.changePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword,
+    })
+    passwordVisible.value = false
+    appStore.clearTabs()
+    ElMessage.success('密码已修改，请重新登录')
+    router.push('/login')
+  } catch {
+    // 错误提示由 request 拦截器统一弹出
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
+async function handleUserCommand(command: string | number | object) {
+  if (command === 'password') {
+    openPasswordDialog()
+    return
+  }
   if (command === 'logout') {
-    userStore.logout()
+    await userStore.logout()
     appStore.clearTabs()
     router.push('/login')
   }
@@ -90,9 +152,13 @@ function handleUserCommand(command: string | number | object) {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item disabled>
+                工号：{{ userStore.userNo || '-' }}
+              </el-dropdown-item>
+              <el-dropdown-item disabled>
                 角色：{{ userStore.roleCodes.join(' / ') || '-' }}
               </el-dropdown-item>
-              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item divided command="password">修改密码</el-dropdown-item>
+              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -109,6 +175,37 @@ function handleUserCommand(command: string | number | object) {
         </router-view>
       </el-main>
     </el-container>
+
+    <el-dialog
+      v-model="passwordVisible"
+      title="修改密码"
+      width="440px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <el-form
+        ref="passwordFormRef"
+        :model="passwordForm"
+        :rules="passwordRules"
+        label-width="90px"
+      >
+        <el-form-item label="旧密码" prop="oldPassword">
+          <el-input v-model="passwordForm.oldPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="passwordForm.newPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="确认新密码" prop="confirmPassword">
+          <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="passwordVisible = false">取消</el-button>
+        <el-button type="primary" :loading="passwordLoading" @click="handleChangePassword">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 

@@ -48,7 +48,7 @@ public class MaterialEntity {
     private String spec;
 
     /** 物料类型：1 球头 2 羽片 3 胶水 4 线圈 5 包装材料 9 其他 */
-    @Column(name = "material_type")
+    @Column(name = "material_type", columnDefinition = "tinyint unsigned")
     private Integer materialType;
 
     /** 计量单位 id */
@@ -60,7 +60,7 @@ public class MaterialEntity {
     private Boolean keyMaterial;
 
     /** 状态：1 启用 0 停用 */
-    @Column(name = "status")
+    @Column(name = "status", columnDefinition = "tinyint unsigned")
     private Integer status;
 
     /** 创建人 */
@@ -85,6 +85,6 @@ public class MaterialEntity {
     private LocalDateTime updateTime;
 
     /** 逻辑删除标记，映射列 is_deleted */
-    @Column(name = "is_deleted")
+    @Column(name = "is_deleted", columnDefinition = "tinyint unsigned")
     private Boolean deleted;
 }
