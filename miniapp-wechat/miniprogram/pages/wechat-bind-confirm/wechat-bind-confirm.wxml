@@ -1,0 +1,9 @@
+<view class="confirm-page">
+  <view class="top-bar"><view class="placeholder"></view><text>确认绑定微信</text><view class="placeholder"></view></view>
+  <view class="confirm-content">
+    <view wx:if="{{state === 'loading'}}" class="state-card">正在校验绑定码…</view>
+    <view wx:elif="{{state === 'error'}}" class="result-card"><view class="result-icon result-icon--error">!</view><view class="result-title">绑定码不可用</view><view class="result-desc">{{error}}</view><button bindtap="goHome">返回小程序</button></view>
+    <view wx:elif="{{state === 'success'}}" class="result-card"><view class="result-icon result-icon--success">✓</view><view class="result-title">微信绑定成功</view><view class="result-desc">以后可使用微信快捷登录进入 {{preview.userName}} 的 MES 账号。</view><button bindtap="goHome">完成</button></view>
+    <view wx:else class="result-card"><view class="wechat-logo"><view></view><view></view></view><view class="result-title">绑定当前微信</view><view class="result-desc">请确认要绑定的 MES 账户，绑定后当前微信将用于快捷登录。</view><view class="account-box"><view><text>真实姓名</text><text class="account-value">{{preview.userName}}</text></view><view><text>工号</text><text class="account-value">{{preview.maskedUserNo}}</text></view></view><view wx:if="{{error}}" class="form-error">{{error}}</view><button loading="{{loading}}" disabled="{{loading}}" bindtap="confirm">确认绑定当前微信</button><view class="security-tip">请勿绑定他人的 MES 账号。绑定码仅在短时间内有效且只能使用一次。</view></view>
+  </view>
+</view>

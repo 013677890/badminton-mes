@@ -1,25 +1,45 @@
 package com.badminton.mes.module.report.config;
 
-import com.badminton.mes.common.security.*;
+import com.badminton.mes.common.security.LoginSessionReader;
+import com.badminton.mes.common.security.LoginUser;
+import com.badminton.mes.common.security.RoleCodeConstants;
 import java.security.Principal;
+import java.util.List;
 import java.util.Map;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.messaging.*;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.messaging.simp.stomp.*;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
-import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
-/** 看板 STOMP WebSocket 配置及订阅鉴权。 @author 刘涵 */
+/**
+ * 看板 STOMP WebSocket 配置及订阅鉴权。
+ *
+ * @author 刘涵
+ */
 @Configuration
 @EnableWebSocketMessageBroker
 public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
     private static final String LOGIN_USER_ATTRIBUTE = "kanbanLoginUser";
+    private static final String BEARER_PREFIX = "Bearer ";
+    private static final String KANBAN_TOPIC_PREFIX = "/topic/report/kanban";
+    private static final String MINI_APP_TOPIC_PREFIX = "/topic/report/mini_app";
+    private static final String MINI_APP_REALTIME_TOPIC_PREFIX = MINI_APP_TOPIC_PREFIX + "/realtime/";
+
     private final LoginSessionReader sessionReader;
 
-    public KanbanWebSocketConfig(LoginSessionReader sessionReader) { this.sessionReader = sessionReader; }
+    public KanbanWebSocketConfig(LoginSessionReader sessionReader) {
+        this.sessionReader = sessionReader;
+    }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
@@ -29,7 +49,7 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic/report/kanban");
+        registry.enableSimpleBroker(KANBAN_TOPIC_PREFIX, MINI_APP_TOPIC_PREFIX);
         registry.setApplicationDestinationPrefixes("/app");
     }
 
@@ -38,10 +58,17 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
-                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                if (accessor == null) return message;
-                if (StompCommand.CONNECT.equals(accessor.getCommand())) authenticate(accessor);
-                if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) authorizeSubscription(accessor);
+                StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(
+                        message, StompHeaderAccessor.class);
+                if (accessor == null) {
+                    return message;
+                }
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                    authenticate(accessor);
+                }
+                if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    authorizeSubscription(accessor);
+                }
                 return message;
             }
         });
@@ -49,32 +76,63 @@ public class KanbanWebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private void authenticate(StompHeaderAccessor accessor) {
         String authorization = accessor.getFirstNativeHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")) throw new MessagingException("WebSocket 未认证");
-        String token = authorization.substring(7).trim();
-        LoginUser user = sessionReader.resolve(token).orElseThrow(() -> new MessagingException("WebSocket 会话已失效"));
+        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
+            throw new MessagingException("WebSocket 未认证");
+        }
+
+        String token = authorization.substring(BEARER_PREFIX.length()).trim();
+        LoginUser user = sessionReader.resolve(token)
+                .orElseThrow(() -> new MessagingException("WebSocket 会话已失效"));
         Map<String, Object> attributes = accessor.getSessionAttributes();
-        if (attributes != null) attributes.put(LOGIN_USER_ATTRIBUTE, user);
-        Principal principal = () -> user.getUserNo(); accessor.setUser(principal);
+        if (attributes != null) {
+            attributes.put(LOGIN_USER_ATTRIBUTE, user);
+        }
+        Principal principal = user::getUserNo;
+        accessor.setUser(principal);
     }
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {
         Map<String, Object> attributes = accessor.getSessionAttributes();
         LoginUser user = attributes == null ? null : (LoginUser) attributes.get(LOGIN_USER_ATTRIBUTE);
-        if (user == null) throw new MessagingException("WebSocket 未认证");
+        if (user == null) {
+            throw new MessagingException("WebSocket 未认证");
+        }
+
         String destination = accessor.getDestination();
-        if (destination == null) throw new MessagingException("非法订阅主题");
-        boolean kanbanTopic = destination.startsWith("/topic/report/kanban/");
-        boolean miniAppTopic = destination.startsWith("/topic/report/mini_app/realtime/");
-        if (!kanbanTopic && !miniAppTopic) throw new MessagingException("非法订阅主题");
-        if (user.getRoleCodes().contains(RoleCodeConstants.ADMIN) || user.getRoleCodes().contains(RoleCodeConstants.PMC)) return;
+        if (destination == null) {
+            throw new MessagingException("非法订阅主题");
+        }
+
+        boolean kanbanTopic = destination.startsWith(KANBAN_TOPIC_PREFIX + "/");
+        boolean miniAppTopic = destination.startsWith(MINI_APP_REALTIME_TOPIC_PREFIX);
+        if (!kanbanTopic && !miniAppTopic) {
+            throw new MessagingException("非法订阅主题");
+        }
+
+        List<String> roleCodes = user.getRoleCodes() == null ? List.of() : user.getRoleCodes();
+        if (roleCodes.contains(RoleCodeConstants.ADMIN) || roleCodes.contains(RoleCodeConstants.PMC)) {
+            return;
+        }
+
         String[] parts = destination.split("/");
-        int scopeTypeIndex = miniAppTopic ? 5 : 5;
-        int scopeIdIndex = miniAppTopic ? 6 : 6;
-        if (parts.length <= scopeIdIndex) throw new MessagingException("非法订阅主题");
-        String scopeType = parts[scopeTypeIndex]; Long scopeId;
-        try { scopeId = Long.valueOf(parts[scopeIdIndex]); } catch (NumberFormatException exception) { throw new MessagingException("非法订阅范围", exception); }
+        int scopeTypeIndex = miniAppTopic ? 5 : 4;
+        int scopeIdIndex = miniAppTopic ? 6 : 5;
+        if (parts.length <= scopeIdIndex) {
+            throw new MessagingException("非法订阅主题");
+        }
+
+        String scopeType = parts[scopeTypeIndex];
+        Long scopeId;
+        try {
+            scopeId = Long.valueOf(parts[scopeIdIndex]);
+        } catch (NumberFormatException exception) {
+            throw new MessagingException("非法订阅范围", exception);
+        }
+
         boolean allowed = "workshop".equals(scopeType) ? scopeId.equals(user.getWorkshopId())
                 : "line".equals(scopeType) && scopeId.equals(user.getLineId());
-        if (!allowed) throw new MessagingException("无权订阅该看板范围");
+        if (!allowed) {
+            throw new MessagingException("无权订阅该看板范围");
+        }
     }
 }

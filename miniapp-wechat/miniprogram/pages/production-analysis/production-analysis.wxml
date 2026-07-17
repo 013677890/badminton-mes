@@ -1,2 +1,20 @@
 <!-- 生产分析指标由后端按时间区间聚合，页面不自行计算百分比。 -->
-<view class="page"><view class="title">生产分析</view><view class="card"><view>统计周期：{{period}}</view><view class="metrics"><view>完成率 {{summary.completionRate}}</view><view>不良率 {{summary.defectRate}}</view><view>完成量 {{summary.finishQuantity}}</view></view></view></view>
+<view class="analysis-page">
+  <view class="page-top"><image class="title-icon" src="/assets/tabbar/analysis-selected.png" mode="aspectFit"/><text>生产分析</text><view class="refresh-touch" bindtap="retry"><image src="/assets/icons/refresh.svg" mode="aspectFit"/></view></view>
+  <view class="analysis-content">
+    <view class="periods"><view wx:for="{{periods}}" wx:key="*this" class="period {{item === period ? 'period--active' : ''}}" data-period="{{item}}" bindtap="selectPeriod">{{item}}</view></view>
+    <view class="time-range"><view class="clock-icon"></view>{{timeRange}}</view>
+    <view wx:if="{{state === 'loading'}}" class="state-card"><app-state state="loading" title="数据加载中..." description="正在汇总生产数据"/></view>
+    <view wx:elif="{{state === 'sessionExpired'}}"><app-state state="sessionExpired" title="登录状态已失效" description="为了账号安全，请重新登录" actionText="重新登录" bind:action="loginAgain"/></view>
+    <view wx:elif="{{state === 'error'}}" class="state-card"><app-state state="error" title="数据加载失败" description="{{error}}" actionText="重新加载" bind:action="retry"/></view>
+    <view wx:elif="{{state === 'empty'}}" class="state-card"><app-state state="empty" title="暂无分析数据" description="当前周期没有生产记录"/></view>
+    <block wx:else>
+      <view class="compact-grid">
+        <view class="compact-metric"><text>计划量</text><view>{{summary.planQuantity}}</view></view><view class="compact-metric"><text>投入量</text><view>{{summary.inputQuantity}}</view></view><view class="compact-metric"><text>良品量</text><view>{{summary.goodQuantity}}</view></view>
+        <view class="compact-metric compact-metric--warning"><text>不良量</text><view>{{summary.defectQuantity}}</view><small>△ 预警</small></view><view class="compact-metric"><text>返工量</text><view>{{summary.reworkQuantity}}</view></view><view class="compact-metric compact-metric--primary"><text>完成率</text><view>{{summary.completionRate}}%</view></view>
+      </view>
+      <view class="defect-card"><view><text>不良率</text><view class="defect-value">{{summary.defectRate}}% <small>{{defectNormal ? '正常' : '关注'}}</small></view></view><view class="check-circle">✓</view><view class="safe-line">{{defectNormal ? '处于安全范围（低于 1.5%）' : '处于预警范围，请关注质量趋势'}}</view></view>
+      <view class="trend-card"><view class="trend-head"><text>生产趋势分析</text><view class="trend-mark"></view></view><view class="chart"><view wx:for="{{trendBars}}" wx:key="index" class="chart-column" style="height: {{item.outer}}%"><view style="height: {{item.inner}}%"></view></view></view><view class="chart-labels"><text>08:00</text><text>10:00</text><text>12:00</text><text>14:00</text><text>16:00</text><text>18:00</text></view></view>
+    </block>
+  </view>
+</view>

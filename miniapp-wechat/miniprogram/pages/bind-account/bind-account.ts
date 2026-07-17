@@ -1,3 +1,5 @@
-import { bindAccount } from '../../services/auth'
-// 绑定页接收微信临时票据，只有表单字段齐全才向后端提交账号绑定请求。
-Page({ data: { ticket: '', userNo: '', password: '' }, onLoad(query: { ticket?: string }) { /* 从登录跳转参数恢复一次性绑定票据。 */ this.setData({ ticket: query.ticket || '' }) }, input(event: WechatMiniprogram.Input) { /* 按控件 data-key 更新对应表单字段。 */ this.setData({ [event.currentTarget.dataset.key]: event.detail.value }) }, bind() { /* 前端只做非空校验，账号密码和票据有效性由后端最终确认。 */ const { ticket, userNo, password } = this.data; if (!ticket || !userNo || !password) { wx.showToast({ title: '请填写完整', icon: 'none' }); return } wx.showLoading({ title: '绑定中' }); bindAccount(ticket, userNo, password).then(() => wx.reLaunch({ url: '/pages/dashboard/dashboard' })).catch(error => wx.showToast({ title: error.message, icon: 'none' })).finally(() => wx.hideLoading()) } })
+// 旧的“微信票据 + 账号密码”绑定入口已停用，本页仅引导用户进入更安全的绑定码流程。
+Page({
+  accountLogin() { wx.redirectTo({ url: '/pages/account-login/account-login' }) },
+  back() { wx.navigateBack({ fail: () => wx.reLaunch({ url: '/pages/login/login' }) }) }
+})

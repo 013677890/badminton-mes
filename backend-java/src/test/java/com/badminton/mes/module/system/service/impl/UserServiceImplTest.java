@@ -1,6 +1,7 @@
 package com.badminton.mes.module.system.service.impl;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -11,6 +12,7 @@ import com.badminton.mes.common.security.LoginUser;
 import com.badminton.mes.common.security.SecurityContextHolder;
 import com.badminton.mes.module.production.service.ProductionOrganizationReferenceQuery;
 import com.badminton.mes.module.system.constants.SystemErrorCodeConstants;
+import com.badminton.mes.module.system.controller.vo.UserAssignmentReqVO;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
 import com.badminton.mes.module.system.controller.vo.UserSaveReqVO;
@@ -21,6 +23,7 @@ import com.badminton.mes.module.system.dal.redis.LoginSessionRedisDAO;
 import com.badminton.mes.module.system.dal.repository.RoleRepository;
 import com.badminton.mes.module.system.dal.repository.UserRepository;
 import com.badminton.mes.module.system.dal.repository.UserRoleRepository;
+import com.badminton.mes.module.system.service.WechatUserBindingService;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,12 +84,19 @@ class UserServiceImplTest {
     @Mock
     private ProductionOrganizationReferenceQuery organizationReferenceQuery;
 
+    @Mock
+    private WechatUserBindingService wechatUserBindingService;
+
     private UserServiceImpl userService;
 
     @BeforeEach
     void setUp() {
         userService = new UserServiceImpl(userRepository, userRoleRepository, roleRepository,
-                loginSessionRedisDAO, passwordEncoder, organizationReferenceQuery);
+                loginSessionRedisDAO, passwordEncoder, organizationReferenceQuery,
+                wechatUserBindingService);
+        lenient().when(wechatUserBindingService.findActiveByUserId(any())).thenReturn(Optional.empty());
+        lenient().when(wechatUserBindingService.findActiveByUserIds(anyCollection())).thenReturn(Map.of());
+        lenient().when(wechatUserBindingService.findActiveUserIds()).thenReturn(Set.of());
         LoginUser loginUser = new LoginUser();
         loginUser.setUserId(OPERATOR_ID);
         loginUser.setUserNo("admin");
@@ -201,6 +212,59 @@ class UserServiceImplTest {
         userService.updateUser(USER_ID, reqVO);
 
         verify(loginSessionRedisDAO).removeSessionByUserId(USER_ID);
+    }
+
+    @Test
+    @DisplayName("职位分配：既有 ADMIN 在请求职位为空时仍被保留，并允许只调组织")
+    void updateAssignmentPreservesExistingAdminWhenRequestedRolesEmpty() {
+        UserAssignmentReqVO reqVO = new UserAssignmentReqVO();
+        reqVO.setRoleIds(List.of());
+        reqVO.setWorkshopId(10L);
+        reqVO.setLineId(20L);
+        UserRoleEntity adminRelation = buildRelation(1L, false);
+        when(userRepository.findByIdAndDeletedFalse(USER_ID)).thenReturn(Optional.of(buildUser(1)));
+        when(organizationReferenceQuery.lockAndCheckAssignment(10L, 20L)).thenReturn(true);
+        when(userRoleRepository.findByUserIdAndDeletedFalse(USER_ID)).thenReturn(List.of(adminRelation));
+        lenient().when(roleRepository.findByIdInAndDeletedFalse(Set.of(1L)))
+                .thenReturn(List.of(buildRole(1L, "ADMIN", 1)));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of(adminRelation));
+
+        userService.updateUserAssignment(USER_ID, reqVO);
+
+        verify(userRepository).save(any(UserEntity.class));
+        verify(userRoleRepository, never()).saveAll(any());
+        verify(loginSessionRedisDAO).removeSessionByUserId(USER_ID);
+    }
+
+    @Test
+    @DisplayName("职位分配：请求中出现 ADMIN 时拒绝")
+    void updateAssignmentRejectsRequestedAdminRole() {
+        UserAssignmentReqVO reqVO = new UserAssignmentReqVO();
+        reqVO.setRoleIds(List.of(1L));
+        when(userRepository.findByIdAndDeletedFalse(USER_ID)).thenReturn(Optional.of(buildUser(1)));
+        when(roleRepository.findByIdInAndDeletedFalse(Set.of(1L)))
+                .thenReturn(List.of(buildRole(1L, "ADMIN", 1)));
+
+        assertThatThrownBy(() -> userService.updateUserAssignment(USER_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(SystemErrorCodeConstants.USER_ADMIN_ROLE_PROTECTED));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("职位分配：非 ADMIN 用户不能清空全部职位")
+    void updateAssignmentRejectsEmptyRolesForNonAdmin() {
+        UserAssignmentReqVO reqVO = new UserAssignmentReqVO();
+        reqVO.setRoleIds(List.of());
+        when(userRepository.findByIdAndDeletedFalse(USER_ID)).thenReturn(Optional.of(buildUser(1)));
+        when(userRoleRepository.findByUserIdAndDeletedFalse(USER_ID)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> userService.updateUserAssignment(USER_ID, reqVO))
+                .isInstanceOfSatisfying(ServiceException.class, exception ->
+                        assertThat(exception.getErrorCode())
+                                .isEqualTo(SystemErrorCodeConstants.USER_ROLE_REQUIRED));
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -377,6 +441,22 @@ class UserServiceImplTest {
 
         assertThat(result.getTotal()).isZero();
         assertThat(result.getList()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("分页查询：筛选已绑定但当前无绑定用户时直接返回空页")
+    void getUserPageReturnsEmptyWhenWechatBoundFilterHasNoMatches() {
+        UserPageReqVO reqVO = new UserPageReqVO();
+        reqVO.setPageNo(1);
+        reqVO.setPageSize(10);
+        reqVO.setWechatBound(true);
+        when(wechatUserBindingService.findActiveUserIds()).thenReturn(Set.of());
+
+        PageResult<UserRespVO> result = userService.getUserPage(reqVO);
+
+        assertThat(result.getTotal()).isZero();
+        assertThat(result.getList()).isEmpty();
+        verify(userRepository, never()).count(any(Specification.class));
     }
 
     @Test

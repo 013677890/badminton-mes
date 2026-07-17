@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>06 个人中心｜默认</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;family=Source+Sans+3:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "surface-tint": "#006a63",
+                "primary": "#005c55",
+                "on-secondary-fixed": "#00201e",
+                "on-secondary": "#ffffff",
+                "on-secondary-container": "#266d68",
+                "on-tertiary-container": "#ffe6da",
+                "inverse-on-surface": "#eaf1ff",
+                "primary-container": "#0f766e",
+                "on-primary": "#ffffff",
+                "surface-container-high": "#dce9ff",
+                "on-background": "#0b1c30",
+                "on-primary-fixed-variant": "#00504a",
+                "outline": "#6e7977",
+                "outline-variant": "#bdc9c6",
+                "surface-dim": "#cbdbf5",
+                "error-container": "#ffdad6",
+                "secondary-container": "#a8ece5",
+                "secondary": "#216963",
+                "on-error": "#ffffff",
+                "on-tertiary-fixed-variant": "#783200",
+                "inverse-primary": "#80d5cb",
+                "secondary-fixed-dim": "#8fd3cc",
+                "on-primary-container": "#a3faef",
+                "surface-bright": "#f8f9ff",
+                "surface": "#f8f9ff",
+                "surface-container-low": "#eff4ff",
+                "background": "#f8f9ff",
+                "tertiary-fixed": "#ffdbca",
+                "surface-container-highest": "#d3e4fe",
+                "on-tertiary": "#ffffff",
+                "inverse-surface": "#213145",
+                "surface-container": "#e5eeff",
+                "on-primary-fixed": "#00201d",
+                "tertiary-container": "#af4c00",
+                "surface-variant": "#d3e4fe",
+                "primary-fixed": "#9cf2e8",
+                "on-error-container": "#93000a",
+                "tertiary-fixed-dim": "#ffb690",
+                "primary-fixed-dim": "#80d5cb",
+                "on-surface-variant": "#3e4947",
+                "on-surface": "#0b1c30",
+                "tertiary": "#893a00",
+                "error": "#ba1a1a",
+                "secondary-fixed": "#abefe8",
+                "on-tertiary-fixed": "#341100",
+                "on-secondary-fixed-variant": "#00504b",
+                "surface-container-lowest": "#ffffff",
+                "mes-bg": "#F8FAFC",
+                "mes-card": "#FFFFFF",
+                "mes-text-primary": "#172033",
+                "mes-text-secondary": "#64748B",
+                "mes-border": "#E2E8F0",
+                "mes-danger": "#B42318",
+                "mes-success": "#15803D"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "2xl": "1rem",
+                "full": "9999px"
+            },
+            "fontFamily": {
+                "headline": ["'Noto Sans SC'", "sans-serif"],
+                "display": ["'Noto Sans SC'", "sans-serif"],
+                "body": ["'Noto Sans SC'", "sans-serif"],
+                "label": ["'Noto Sans SC'", "sans-serif"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { font-family: 'Noto Sans SC', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-mes-bg text-mes-text-primary min-h-screen flex flex-col items-center select-none">
+<!-- TopAppBar -->
+<header class="w-full sticky top-0 z-[100] bg-background border-b border-outline-variant flex items-center justify-between px-4 h-12 shadow-none">
+<button aria-label="Settings" class="flex items-center justify-center w-10 h-10 active:bg-surface-container-high transition-colors rounded-full">
+<span class="material-symbols-outlined text-on-surface" data-icon="settings">settings</span>
+</button>
+<h1 class="font-headline font-bold text-lg text-on-surface">我的</h1>
+<button aria-label="Notifications" class="flex items-center justify-center w-10 h-10 active:bg-surface-container-high transition-colors rounded-full">
+<span class="material-symbols-outlined text-on-surface" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="w-full max-w-[375px] px-4 py-4 pb-24">
+<!-- User Info Card -->
+<section class="bg-mes-card p-4 rounded-2xl shadow-sm border border-mes-border mb-4">
+<div class="flex items-start justify-between">
+<div class="flex gap-4">
+<!-- Avatar Placeholder -->
+<div class="w-14 h-14 rounded-full bg-primary-container/10 flex items-center justify-center border border-primary/20 overflow-hidden">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="account_circle" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+</div>
+<div class="flex flex-col gap-1">
+<div class="flex items-center gap-2">
+<span class="font-bold text-lg text-mes-text-primary leading-none">张工</span>
+<span class="px-2 py-0.5 bg-primary-container text-white text-[10px] font-medium rounded-full">产线管理员</span>
+</div>
+<span class="text-mes-text-secondary text-sm">工号：MES10086</span>
+</div>
+</div>
+<div class="flex items-center gap-1 bg-mes-success/10 px-2 py-1 rounded-lg">
+<span class="material-symbols-outlined text-mes-success text-xs" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="text-mes-success text-[11px] font-medium">微信已绑定</span>
+</div>
+</div>
+<!-- Bottom Row: Production Info -->
+<div class="mt-6 pt-4 border-t border-mes-border grid grid-cols-2 gap-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-mes-text-secondary text-base" data-icon="factory">factory</span>
+<span class="text-mes-text-secondary text-sm">羽毛球一车间</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-mes-text-secondary text-base" data-icon="precision_manufacturing">precision_manufacturing</span>
+<span class="text-mes-text-secondary text-sm">1号产线</span>
+</div>
+</div>
+</section>
+<!-- Settings List -->
+<section class="bg-mes-card rounded-2xl shadow-sm border border-mes-border overflow-hidden">
+<!-- Item 1 -->
+<button class="w-full px-4 py-4 flex items-center justify-between active:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="security">security</span>
+<span class="text-mes-text-primary text-base">账号与安全</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-active:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</button>
+<div class="h-px bg-mes-border mx-4"></div>
+<!-- Item 2 -->
+<button class="w-full px-4 py-4 flex items-center justify-between active:bg-surface-container-low transition-colors group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="info">info</span>
+<span class="text-mes-text-primary text-base">关于系统</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-active:text-primary transition-colors" data-icon="chevron_right">chevron_right</span>
+</button>
+</section>
+<!-- Bottom Actions -->
+<section class="mt-8 flex flex-col gap-3">
+<button class="w-full h-12 rounded-xl border border-mes-border text-mes-text-primary font-medium active:bg-mes-border transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="logout">logout</span>
+                退出登录
+            </button>
+<button class="w-full h-12 rounded-xl border border-mes-danger text-mes-danger font-medium active:bg-mes-danger/10 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xl" data-icon="link_off">link_off</span>
+                解除账号绑定
+            </button>
+<p class="text-center text-mes-text-secondary text-xs mt-1">
+                提示：解绑会使下次登录重新绑定
+            </p>
+</section>
+<!-- App Info Footnote -->
+<footer class="mt-12 mb-8 flex flex-col items-center gap-1">
+<div class="text-outline-variant text-[10px] tracking-widest font-mono uppercase">MES Mobile v2.4.0</div>
+<div class="text-outline-variant text-[10px]">© 2024 Industrial Intelligent Manufacturing</div>
+</footer>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-sm safe-bottom">
+<button class="flex-1 flex flex-col items-center justify-center text-on-surface-variant transition-colors active:bg-surface-container-low h-[56px]">
+<span class="material-symbols-outlined text-2xl" data-icon="dashboard">dashboard</span>
+<span class="text-xs mt-1">看板</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center text-on-surface-variant transition-colors active:bg-surface-container-low h-[56px]">
+<span class="material-symbols-outlined text-2xl" data-icon="analytics">analytics</span>
+<span class="text-xs mt-1">分析</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center text-on-surface-variant transition-colors active:bg-surface-container-low h-[56px]">
+<span class="material-symbols-outlined text-2xl" data-icon="history">history</span>
+<span class="text-xs mt-1">追溯</span>
+</button>
+<button class="flex-1 flex flex-col items-center justify-center text-primary font-bold transition-colors active:bg-surface-container-low h-[56px]">
+<span class="material-symbols-outlined text-2xl" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span class="text-xs mt-1">我的</span>
+</button>
+</nav>
+<script>
+        // Simple micro-interactions for the industrial UI
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('touchstart', function() {
+                this.classList.add('scale-[0.98]');
+            });
+            button.addEventListener('touchend', function() {
+                this.classList.remove('scale-[0.98]');
+            });
+        });
+    </script>
+</body></html>

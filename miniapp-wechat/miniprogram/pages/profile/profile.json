@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "我的" }
+{ "navigationStyle": "custom", "usingComponents": { "confirm-dialog": "/components/confirm-dialog/confirm-dialog" } }

@@ -1,0 +1,1 @@
+<view class="chip chip--{{tone}}"><view class="chip__dot"></view>{{text}}</view>

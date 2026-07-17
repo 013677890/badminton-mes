@@ -1,6 +1,9 @@
 package com.badminton.mes.module.system.controller.vo;
 
+import java.time.LocalDateTime;
 import java.util.List;
+
+import com.fasterxml.jackson.annotation.JsonFormat;
 
 import lombok.Data;
 
@@ -39,4 +42,15 @@ public class AuthProfileRespVO {
 
     /** 角色名称列表，与 roleCodes 顺序一致，供展示 */
     private List<String> roleNames;
+
+    /** 当前账号是否已绑定微信。 */
+    private boolean wechatBound;
+
+    /** 微信绑定时间。 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime wechatBindingTime;
+
+    /** 微信最近登录时间。 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    private LocalDateTime wechatLastLoginTime;
 }

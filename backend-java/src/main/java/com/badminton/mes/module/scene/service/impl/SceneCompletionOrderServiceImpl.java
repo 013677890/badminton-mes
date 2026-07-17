@@ -29,6 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 完工创建、草稿修改、审核和人工同步实现。
  *
+ * <p>Controller 调用创建、修改、提交和审核；审核通过后同步更新生产任务完成数、
+ * 工单执行汇总并发布完工事件。{@code sync} 使用目标系统幂等键和重试上限，避免重复推送。
+ *
  * @author 刘涵
  * @date 2026/07/13
  */
@@ -71,6 +74,7 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
         this.completionOrderPublishService = completionOrderPublishService;
     }
 
+    /** 创建一张与生产任务一一对应的完工单草稿；重复请求返回已有单据。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long create(SceneCompletionCreateReqVO reqVO) {
@@ -97,6 +101,7 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
         return orderRepository.saveAndFlush(order).getId();
     }
 
+    /** 修改草稿或驳回状态的完工数量，数量必须受生产任务可完工数约束。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void update(Long id, SceneCompletionSaveReqVO reqVO) {
@@ -112,6 +117,7 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
         orderRepository.save(order);
     }
 
+    /** 提交完工单进入待审核状态，提交后不再允许直接修改数量。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void submit(Long id) {
@@ -124,6 +130,7 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
         orderRepository.save(order);
     }
 
+    /** 审核完工单；通过时同步任务、工单汇总并发布下游事件。 */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void audit(Long id, SceneCompletionAuditReqVO reqVO) {
@@ -152,6 +159,9 @@ public class SceneCompletionOrderServiceImpl implements SceneCompletionOrderServ
         orderRepository.save(order);
     }
 
+    /**
+     * 将审核通过的完工单幂等同步到 ERP；成功记录后再次调用直接返回，失败按次数限制重试。
+     */
     @Override
     public void sync(Long id) {
         SceneCompletionOrderEntity order = requireOrder(id);

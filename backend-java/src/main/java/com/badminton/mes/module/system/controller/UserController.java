@@ -6,6 +6,7 @@ import com.badminton.mes.common.security.RequiresRoles;
 import com.badminton.mes.common.security.RoleCodeConstants;
 import com.badminton.mes.module.system.controller.vo.UserPageReqVO;
 import com.badminton.mes.module.system.controller.vo.UserPasswordResetReqVO;
+import com.badminton.mes.module.system.controller.vo.UserAssignmentReqVO;
 import com.badminton.mes.module.system.controller.vo.UserRespVO;
 import com.badminton.mes.module.system.controller.vo.UserSaveReqVO;
 import com.badminton.mes.module.system.controller.vo.UserStatusReqVO;
@@ -71,6 +72,20 @@ public class UserController {
     public CommonResult<Void> updateUser(@PathVariable("id") @Positive Long id,
                                          @Valid @RequestBody UserSaveReqVO reqVO) {
         userService.updateUser(id, reqVO);
+        return CommonResult.success(null);
+    }
+
+    /**
+     * 调整用户职位、车间和产线。
+     *
+     * <p>该接口不允许授予或撤销 ADMIN；目标用户已有 ADMIN 关系会被保留。
+     * 修改成功后目标用户全部会话失效，重新登录后新权限生效。
+     */
+    @PutMapping("/{id}/assignment")
+    public CommonResult<Void> updateUserAssignment(
+            @PathVariable("id") @Positive Long id,
+            @Valid @RequestBody UserAssignmentReqVO reqVO) {
+        userService.updateUserAssignment(id, reqVO);
         return CommonResult.success(null);
     }
 

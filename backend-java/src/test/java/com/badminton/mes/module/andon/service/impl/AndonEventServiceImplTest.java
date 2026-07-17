@@ -199,9 +199,12 @@ class AndonEventServiceImplTest {
     @DisplayName("开始处理安灯事件：非指派人且无指派角色时拒绝操作")
     void startProcessingRejectsUnauthorizedOperator() {
         // 使用普通角色的其他用户，刻意同时绕开“本人”和“指派角色”两条授权路径。
-        setLoginUser(999L, List.of("INSPECTOR"));
+        // 当前用户既不是事件指派人，也不具备事件要求的 TEAM_LEADER 角色。
+        setLoginUser(999L, List.of("OPERATOR"));
+        AndonEventEntity event = buildEvent("CONFIRMED");
+        event.setAssignedRoleCode("TEAM_LEADER");
         when(eventRepository.findByIdAndDeletedFalseForUpdate(EVENT_ID))
-                .thenReturn(Optional.of(buildEvent("CONFIRMED")));
+                .thenReturn(Optional.of(event));
 
         // 权限拒绝必须发生在持久化之前，防止未授权用户推进事件状态。
         assertThatThrownBy(() -> eventService.startProcessing(

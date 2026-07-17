@@ -1,2 +1,13 @@
-<!-- 绑定页通过 data-key 将两个输入框映射到页面模型，提交按钮触发服务端绑定。 -->
-<view class="page"><view class="card"><view class="title">绑定 MES 工号</view><input placeholder="工号" data-key="userNo" bindinput="input"/><input password placeholder="密码" data-key="password" bindinput="input"/><button class="primary" bindtap="bind">确认绑定</button></view></view>
+<!-- 绑定页不再收集账号密码，只说明绑定码流程并跳转到账号登录入口。 -->
+<view class="page bind-page">
+  <view class="eyebrow">WECHAT BINDING</view>
+  <view class="page-title">绑定方式已升级</view>
+  <view class="muted intro">为避免账号密码被他人用于绑定，微信绑定只允许通过本人账号生成的小程序码完成。</view>
+  <view class="card form-card">
+    <image class="binding-icon" src="/assets/icons/qr-scan.svg" mode="aspectFit"/>
+    <view class="binding-title">请先登录 MES 账号</view>
+    <view class="binding-steps">登录后进入“我的 → 账号与安全”，生成微信绑定码，再长按识别或使用另一台微信扫码确认。</view>
+    <button class="primary submit" bindtap="accountLogin">前往账户密码登录</button>
+    <button class="back-button" bindtap="back">返回</button>
+  </view>
+</view>

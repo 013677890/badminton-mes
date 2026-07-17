@@ -1,0 +1,19 @@
+<view class="security-page">
+  <view class="top-bar"><view class="back" bindtap="back"><view></view></view><text>账号与安全</text><view class="placeholder"></view></view>
+  <view class="security-content">
+    <view class="section-label">当前账号</view>
+    <view class="info-card"><view class="account-avatar"><image src="/assets/tabbar/profile-selected.png" mode="aspectFit"/></view><view class="account-main"><view>{{user.userName || 'MES 用户'}}</view><text>工号 {{user.userNo || '未读取'}}</text></view><view class="bound"><view></view>正常</view><view class="info-line"></view><view class="info-row"><text>所属职位</text><view>{{roleText}}</view></view><view class="info-row"><text>登录方式</text><view>MES 账号密码</view></view></view>
+    <view class="section-label bind-title">微信绑定</view>
+    <view class="wechat-card">
+      <view class="wechat-head"><view class="wechat-mark"><view></view><view></view></view><view class="wechat-copy"><text>{{user.wechatBound ? '微信已绑定' : '微信未绑定'}}</text><small>{{user.wechatBound ? '可使用微信快捷登录进入 MES' : '生成小程序码后，长按识别或使用另一台微信扫码'}}</small></view><view class="binding-chip {{user.wechatBound ? 'binding-chip--success' : 'binding-chip--warning'}}">{{user.wechatBound ? '已绑定' : '未绑定'}}</view></view>
+      <view wx:if="{{user.wechatBound}}" class="binding-details"><view><text>绑定时间</text><view>{{user.wechatBindingTime || '已完成绑定'}}</view></view><view><text>最近微信登录</text><view>{{user.wechatLastLoginTime || '暂无记录'}}</view></view></view>
+      <block wx:else>
+        <view class="code-kind {{mode === 'mock' ? 'code-kind--mock' : 'code-kind--official'}}"><image src="/assets/icons/qr-scan.svg" mode="aspectFit"/><view><text>{{mode === 'mock' ? '模拟绑定码' : '微信官方小程序码'}}</text><small>{{mode === 'mock' ? '仅用于演示，不可绑定真实微信' : '开发版 · 绑定当前微信的真实 OpenID'}}</small></view></view>
+        <button wx:if="{{!bindingImage || bindingStatus === 'EXPIRED'}}" class="bind-button" loading="{{bindingLoading}}" disabled="{{bindingLoading}}" bindtap="generateBindingCode">{{bindingStatus === 'EXPIRED' ? (mode === 'mock' ? '重新生成模拟绑定码' : '重新生成官方小程序码') : (mode === 'mock' ? '生成模拟绑定码' : '生成微信官方小程序码')}}</button>
+        <view wx:else class="qr-panel"><image class="qr-image" src="{{bindingImage}}" mode="aspectFit" show-menu-by-longpress bindtap="previewCode"/><view class="qr-status">{{bindingStatus === 'BOUND' ? '绑定成功' : '等待扫码 · ' + countdown + ' 秒后过期'}}</view><view wx:if="{{mode === 'api'}}" class="qr-tip">长按识别或让另一台手机微信扫码。扫码微信需为该小程序的项目成员或体验成员，手机与开发电脑需连接同一 Wi‑Fi；绑定码 5 分钟有效且只能使用一次。</view><view wx:else class="qr-tip qr-tip--mock">当前图片是界面演示码，不会读取或绑定真实微信账号。点击下方按钮可模拟绑定成功状态。</view><button wx:if="{{mode === 'mock' && bindingStatus !== 'BOUND'}}" class="mock-bind" bindtap="mockConfirmBinding">模拟扫码成功</button></view>
+      </block>
+    </view>
+    <view class="section-label password-title">修改密码</view>
+    <view class="password-card"><view class="field-label">当前密码</view><input password="{{!showPassword}}" value="{{oldPassword}}" data-key="oldPassword" bindinput="input" placeholder="请输入当前密码"/><view class="field-label">新密码</view><input password="{{!showPassword}}" value="{{newPassword}}" data-key="newPassword" bindinput="input" placeholder="6–32 位新密码"/><view class="field-label">确认新密码</view><input password="{{!showPassword}}" value="{{confirmPassword}}" data-key="confirmPassword" bindinput="input" placeholder="再次输入新密码"/><view class="show-password" bindtap="togglePassword"><view class="check {{showPassword ? 'checked' : ''}}"></view>显示密码</view><view wx:if="{{error}}" class="error">{{error}}</view><button loading="{{loading}}" disabled="{{loading}}" bindtap="submit">确认修改密码</button><view class="password-tip">密码修改成功后，当前登录会话将失效，需要使用新密码重新登录。</view></view>
+  </view>
+</view>

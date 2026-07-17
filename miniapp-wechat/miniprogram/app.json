@@ -1,26 +1,5 @@
 {
-  "pages": [
-    "pages/login/login",
-    "pages/bind-account/bind-account",
-    "pages/dashboard/dashboard",
-    "pages/production-analysis/production-analysis",
-    "pages/product-trace/product-trace",
-    "pages/profile/profile"
-  ],
-  "window": {
-    "navigationBarTitleText": "羽毛球 MES",
-    "navigationBarBackgroundColor": "#0f766e",
-    "navigationBarTextStyle": "white",
-    "backgroundColor": "#f5f7fa"
-  },
-  "tabBar": {
-    "color": "#64748b",
-    "selectedColor": "#0f766e",
-    "list": [
-      { "pagePath": "pages/dashboard/dashboard", "text": "看板" },
-      { "pagePath": "pages/production-analysis/production-analysis", "text": "分析" },
-      { "pagePath": "pages/product-trace/product-trace", "text": "追溯" },
-      { "pagePath": "pages/profile/profile", "text": "我的" }
-    ]
-  }
+  "pages": ["pages/login/login", "pages/account-login/account-login", "pages/register/register", "pages/bind-account/bind-account", "pages/dashboard/dashboard", "pages/production-analysis/production-analysis", "pages/product-trace/product-trace", "pages/profile/profile", "pages/account-security/account-security", "pages/wechat-bind-confirm/wechat-bind-confirm", "pages/user-management/user-management", "pages/user-assignment/user-assignment"],
+  "window": { "navigationBarTitleText": "羽毛球 MES", "navigationBarBackgroundColor": "#0f766e", "navigationBarTextStyle": "white", "backgroundColor": "#f8fafc" },
+  "tabBar": { "custom": true, "color": "#64748b", "selectedColor": "#0f766e", "backgroundColor": "#ffffff", "borderStyle": "white", "list": [ { "pagePath": "pages/dashboard/dashboard", "text": "看板", "iconPath": "assets/tabbar/dashboard.png", "selectedIconPath": "assets/tabbar/dashboard-selected.png" }, { "pagePath": "pages/production-analysis/production-analysis", "text": "分析", "iconPath": "assets/tabbar/analysis.png", "selectedIconPath": "assets/tabbar/analysis-selected.png" }, { "pagePath": "pages/product-trace/product-trace", "text": "追溯", "iconPath": "assets/tabbar/trace.png", "selectedIconPath": "assets/tabbar/trace-selected.png" }, { "pagePath": "pages/profile/profile", "text": "我的", "iconPath": "assets/tabbar/profile.png", "selectedIconPath": "assets/tabbar/profile-selected.png" } ] }
 }

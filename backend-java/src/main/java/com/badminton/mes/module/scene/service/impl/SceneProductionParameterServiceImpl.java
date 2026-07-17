@@ -20,7 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import jakarta.persistence.criteria.Predicate;
 
-/** 生产参数 Service 实现。 @author 刘涵 */
+/**
+ * 生产参数 Service 实现。
+ *
+ * <p>Controller 负责档案 CRUD 和启停操作，工序作业通过有效参数查询方法读取配置。
+ * 有效参数按车间、产线、产品范围计算 specificity，范围越精确优先级越高；没有配置时
+ * 返回系统默认值，确保现场作业不会因缺少可选参数而中断。
+ *
+ * @author 刘涵
+ * @date 2026/07/16
+ */
 @Service
 public class SceneProductionParameterServiceImpl implements SceneProductionParameterService {
     private final SceneProductionParameterRepository parameterRepository;
@@ -31,6 +40,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         this.parameterRepository = parameterRepository; this.logRepository = logRepository;
     }
 
+    /** 创建启用状态的生产参数，并写入初始变更日志。 */
     @Override @Transactional(rollbackFor = Exception.class)
     public Long createParameter(SceneProductionParameterSaveReqVO reqVO) {
         validateValue(reqVO.getValueType(), reqVO.getParamValue());
@@ -49,6 +59,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         return entity.getId();
     }
 
+    /** 修改参数值和适用范围，同时保留修改前后的日志。 */
     @Override @Transactional(rollbackFor = Exception.class)
     public void updateParameter(Long id, SceneProductionParameterSaveReqVO reqVO) {
         validateValue(reqVO.getValueType(), reqVO.getParamValue());
@@ -66,8 +77,10 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         insertLog(entity, beforeValue, entity.getParamValue(), beforeStatus, entity.getStatus(), reqVO.getChangeReason());
     }
 
+    /** 启用参数并记录启用原因。 */
     @Override @Transactional(rollbackFor = Exception.class)
     public void enableParameter(Long id, String reason) { changeStatus(id, CommonStatusEnum.ENABLED.getStatus(), reason); }
+    /** 停用参数并记录停用原因。 */
     @Override @Transactional(rollbackFor = Exception.class)
     public void disableParameter(Long id, String reason) { changeStatus(id, CommonStatusEnum.DISABLED.getStatus(), reason); }
 
@@ -77,9 +90,11 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         insertLog(entity, entity.getParamValue(), entity.getParamValue(), before, status, reason);
     }
 
+    /** 查询单条生产参数详情。 */
     @Override @Transactional(readOnly = true)
     public SceneProductionParameterRespVO getParameter(Long id) { return toResp(requireParameter(id)); }
 
+    /** 分页查询生产参数档案。 */
     @Override @Transactional(readOnly = true)
     public PageResult<SceneProductionParameterRespVO> getParameterPage(SceneProductionParameterPageReqVO reqVO) {
         Specification<SceneProductionParameterEntity> spec = (root, query, cb) -> {
@@ -100,6 +115,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         return PageResult.of(page.getContent().stream().map(this::toResp).toList(),total,pageNo,reqVO.getPageSize());
     }
 
+    /** 按适用范围解析当前最精确的有效参数；无匹配时返回默认值。 */
     @Override @Transactional(readOnly = true)
     public SceneProductionParameterRespVO getEffectiveParameter(SceneEffectiveParameterReqVO reqVO) {
         return parameterRepository.findByParamCodeAndStatusAndDeletedFalse(
@@ -111,6 +127,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
                 .orElseGet(() -> defaultParameter(reqVO.getParamCode()));
     }
 
+    /** 查询参数值和启停状态的变更日志。 */
     @Override @Transactional(readOnly = true)
     public List<SceneParameterChangeLogRespVO> getChangeLogs(Long id) {
         requireParameter(id);
@@ -123,6 +140,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         }).toList();
     }
 
+    /** 按值类型校验参数值格式，例如开关类型只能是 0 或 1。 */
     private void validateValue(Integer type,String value) {
         if (SceneParameterValueTypeEnum.SWITCH.getType().equals(type) && !Set.of("0","1").contains(value)
                 || SceneParameterValueTypeEnum.QUANTITY.getType().equals(type) && !value.matches("\\d+")) {
@@ -130,6 +148,7 @@ public class SceneProductionParameterServiceImpl implements SceneProductionParam
         }
     }
     private boolean matches(Long configured,Long requested){return configured==null||Objects.equals(configured,requested);}
+    /** 计算适用范围精确度，产品 > 产线 > 车间的组合获得更高优先级。 */
     private int specificity(SceneProductionParameterEntity e){return(e.getWorkshopId()!=null?1:0)+(e.getLineId()!=null?2:0)+(e.getProductId()!=null?4:0);}
     private SceneProductionParameterEntity requireParameter(Long id){return parameterRepository.findByIdAndDeletedFalse(id).orElseThrow(()->new ServiceException(SceneErrorCodeConstants.PARAM_NOT_EXISTS));}
     private SceneProductionParameterEntity toEntity(SceneProductionParameterSaveReqVO r){SceneProductionParameterEntity e=new SceneProductionParameterEntity();e.setParamCode(r.getParamCode());e.setParamName(r.getParamName());e.setParamValue(r.getParamValue());e.setValueType(r.getValueType());e.setWorkshopId(r.getWorkshopId());e.setLineId(r.getLineId());e.setProductId(r.getProductId());e.setRemark(r.getRemark());return e;}

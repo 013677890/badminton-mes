@@ -1,0 +1,22 @@
+<view class="assignment-page">
+  <view class="top-bar"><view class="back" bindtap="back"><view></view></view><text>分配职位与组织</text><view class="placeholder"></view></view>
+  <view class="assignment-content">
+    <view wx:if="{{state === 'loading'}}" class="page-state">正在加载用户资料…</view>
+    <view wx:elif="{{state === 'error'}}" class="page-state"><text>{{error}}</text><button bindtap="load">重新加载</button></view>
+    <block wx:else>
+      <view class="user-card"><view class="avatar">{{userInitial}}</view><view class="user-copy"><text>{{user.userName}}</text><small>工号 {{user.userNo}}</small></view><view class="binding-chip {{user.wechatBound ? 'bound' : ''}}">{{user.wechatBound ? '微信已绑定' : '微信未绑定'}}</view></view>
+      <view wx:if="{{isAdminTarget}}" class="admin-notice"><image src="/assets/icons/lock.svg" mode="aspectFit"/><view><text>管理员身份受保护</text><small>本页不会授予或撤销管理员权限，只调整其他职位和所属组织。</small></view></view>
+      <view class="form-card">
+        <view class="section-head"><view><text>职位分配</text><small>可多选，决定用户可访问的业务功能</small></view><image src="/assets/icons/user.svg" mode="aspectFit"/></view>
+        <checkbox-group class="role-grid" bindchange="chooseRoles"><label wx:for="{{roleChoices}}" wx:key="id" class="role-item {{item.checked ? 'role-item--checked' : ''}}"><checkbox value="{{item.id}}" checked="{{item.checked}}" color="#0f766e"/><view><text>{{item.roleName}}</text><small>{{item.remark || item.roleCode}}</small></view></label></checkbox-group>
+      </view>
+      <view class="form-card org-card">
+        <view class="section-head"><view><text>所属组织</text><small>生产线会根据所选车间自动筛选</small></view><image src="/assets/icons/factory.svg" mode="aspectFit"/></view>
+        <view class="field-label">所属车间</view><picker range="{{workshops}}" range-key="workshopName" value="{{workshopIndex}}" bindchange="chooseWorkshop"><view class="picker-field"><text>{{workshopText}}</text><view class="picker-arrow"></view></view></picker>
+        <view class="field-label">所属产线</view><picker range="{{lines}}" range-key="lineName" value="{{lineIndex}}" bindchange="chooseLine" disabled="{{workshopIndex < 0}}"><view class="picker-field {{workshopIndex < 0 ? 'picker-field--disabled' : ''}}"><text>{{lineText}}</text><view class="picker-arrow"></view></view></picker>
+      </view>
+      <button class="save-button" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存分配</button>
+      <view class="save-tip">保存后目标用户的现有登录会话将失效，需要重新登录以加载最新权限。</view>
+    </block>
+  </view>
+</view>

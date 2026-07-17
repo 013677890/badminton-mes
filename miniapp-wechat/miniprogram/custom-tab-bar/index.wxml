@@ -1,0 +1,1 @@
+<view class="tab-bar safe-bottom"><view wx:for="{{tabs}}" wx:key="pagePath" class="tab-item {{selected === index ? 'tab-item--active' : ''}}" data-index="{{index}}" bindtap="switchTab"><image class="tab-icon" src="/assets/tabbar/{{item.icon}}{{selected === index ? '-selected' : ''}}.png" mode="aspectFit"/><text>{{item.text}}</text></view></view>

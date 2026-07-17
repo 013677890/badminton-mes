@@ -10,7 +10,16 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-/** HTTP JSON 完工同步客户端，使用稳定幂等请求头。 @author 刘涵 */
+/**
+ * HTTP JSON 完工同步客户端。
+ *
+ * <p>{@link ConditionalOnProperty} 表示只有配置了同步 URL 才创建该 Bean；构造器中的
+ * {@code connectTimeout}/{@code readTimeout} 防止外部 ERP 不可用时长期占用业务线程，
+ * {@code Idempotency-Key} 请求头与完工单同步记录共同保证重试安全。
+ *
+ * @author 刘涵
+ * @date 2026/07/16
+ */
 @Component
 @ConditionalOnProperty(name = "mes.scene.completion-sync.url")
 public class HttpCompletionSyncClient implements CompletionSyncClient {
@@ -28,6 +37,7 @@ public class HttpCompletionSyncClient implements CompletionSyncClient {
         this.url = url;
     }
 
+    /** 将完工单序列化为 JSON POST 请求发送到配置的同步地址。 */
     @Override
     public void sync(SceneCompletionOrderEntity order, String targetSystem, String idempotencyKey) {
         restClient.post().uri(url)

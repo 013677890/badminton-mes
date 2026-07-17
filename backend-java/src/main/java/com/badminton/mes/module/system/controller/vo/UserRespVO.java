@@ -49,6 +49,9 @@ public class UserRespVO {
     /** 角色名称列表，与 roleIds 顺序一致，供展示 */
     private List<String> roleNames;
 
+    /** 是否已绑定当前微信小程序。 */
+    private boolean wechatBound;
+
     /** 创建时间 */
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;

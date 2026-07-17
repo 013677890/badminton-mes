@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>05 产品追溯｜默认</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-secondary-fixed-variant": "#00504b",
+                        "on-tertiary-fixed": "#341100",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed": "#abefe8",
+                        "tertiary": "#893a00",
+                        "error": "#ba1a1a",
+                        "on-error-container": "#93000a",
+                        "on-surface": "#172033",
+                        "tertiary-fixed-dim": "#ffb690",
+                        "primary-fixed-dim": "#80d5cb",
+                        "on-surface-variant": "#64748B",
+                        "primary-fixed": "#9cf2e8",
+                        "surface-variant": "#d3e4fe",
+                        "tertiary-container": "#af4c00",
+                        "surface-container": "#e5eeff",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "on-primary-fixed": "#00201d",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container-low": "#eff4ff",
+                        "background": "#F8FAFC",
+                        "tertiary-fixed": "#ffdbca",
+                        "secondary-fixed-dim": "#8fd3cc",
+                        "on-primary-container": "#a3faef",
+                        "surface-bright": "#f8f9ff",
+                        "surface": "#f8f9ff",
+                        "secondary-container": "#a8ece5",
+                        "secondary": "#216963",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#80d5cb",
+                        "on-tertiary-fixed-variant": "#783200",
+                        "outline-variant": "#E2E8F0",
+                        "error-container": "#ffdad6",
+                        "surface-dim": "#cbdbf5",
+                        "on-primary-fixed-variant": "#00504a",
+                        "outline": "#6e7977",
+                        "surface-container-high": "#dce9ff",
+                        "on-background": "#0b1c30",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#0f766e",
+                        "on-tertiary-container": "#ffe6da",
+                        "on-secondary-container": "#266d68",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-fixed": "#00201e",
+                        "surface-tint": "#006a63",
+                        "primary": "#005c55",
+                        "on-secondary": "#ffffff",
+                        "industrial-teal": "#0F766E",
+                        "safety-orange": "#F97316"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "12px",
+                        "2xl": "16px",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "headline": ["'Noto Sans SC'", "sans-serif"],
+                        "display": ["'Noto Sans SC'", "sans-serif"],
+                        "body": ["'Noto Sans SC'", "sans-serif"],
+                        "label": ["'Noto Sans SC'", "sans-serif"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #F8FAFC;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        .active-tab-indicator {
+            position: relative;
+        }
+        .active-tab-indicator::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 3px;
+            background-color: currentColor;
+            border-radius: 2px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-4 h-14 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-industrial-teal" style="font-size: 24px;">factory</span>
+<h1 class="font-headline text-on-surface font-bold text-lg">产品追溯</h1>
+</div>
+<button class="w-11 h-11 flex items-center justify-center active:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant">refresh</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-20 pb-24 px-4 space-y-6">
+<!-- Search Area Card -->
+<section class="bg-white p-5 rounded-2xl shadow-sm border border-outline-variant">
+<div class="space-y-4">
+<div class="space-y-2">
+<label class="text-on-surface font-medium text-sm block">批次码</label>
+<div class="relative">
+<input class="w-full h-[48px] px-4 bg-background border border-outline-variant rounded-xl focus:outline-none focus:border-industrial-teal transition-all text-on-surface placeholder:text-on-surface-variant/50" placeholder="请输入或扫描批次码" type="text"/>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<button class="w-full h-[48px] bg-industrial-teal text-white font-bold rounded-xl active:scale-95 transition-transform flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 20px;">search</span>
+                        查询
+                    </button>
+<button class="w-full h-[48px] border border-industrial-teal text-industrial-teal font-medium rounded-xl active:bg-industrial-teal/5 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-size: 20px;">qr_code_scanner</span>
+                        扫码查询
+                    </button>
+</div>
+</div>
+</section>
+<!-- Recently Queried List -->
+<section class="space-y-3">
+<div class="flex justify-between items-center">
+<h2 class="text-on-surface font-bold text-base px-1">最近查询</h2>
+<button class="text-xs text-industrial-teal font-medium">清空历史</button>
+</div>
+<div class="space-y-3">
+<!-- Item 1 -->
+<div class="bg-white p-4 rounded-xl border border-outline-variant flex items-center gap-4 active:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-industrial-teal">
+<span class="material-symbols-outlined">inventory_2</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<span class="text-on-surface font-bold text-sm tracking-tight">B20260715001</span>
+<span class="text-[11px] text-on-surface-variant">09:30</span>
+</div>
+<div class="flex justify-between items-center mt-1">
+<p class="text-xs text-on-surface-variant">高端训练级羽毛球</p>
+<p class="text-[11px] text-on-surface-variant">2026-07-15</p>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-white p-4 rounded-xl border border-outline-variant flex items-center gap-4 active:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-industrial-teal">
+<span class="material-symbols-outlined">inventory_2</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<span class="text-on-surface font-bold text-sm tracking-tight">B20260714088</span>
+<span class="text-[11px] text-on-surface-variant">16:45</span>
+</div>
+<div class="flex justify-between items-center mt-1">
+<p class="text-xs text-on-surface-variant">专业比赛级羽毛球</p>
+<p class="text-[11px] text-on-surface-variant">2026-07-14</p>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="bg-white p-4 rounded-xl border border-outline-variant flex items-center gap-4 active:bg-surface-container-low transition-colors">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center text-industrial-teal">
+<span class="material-symbols-outlined">inventory_2</span>
+</div>
+<div class="flex-grow">
+<div class="flex justify-between items-start">
+<span class="text-on-surface font-bold text-sm tracking-tight">B20260714012</span>
+<span class="text-[11px] text-on-surface-variant">10:20</span>
+</div>
+<div class="flex justify-between items-center mt-1">
+<p class="text-xs text-on-surface-variant">练习级羽毛球</p>
+<p class="text-[11px] text-on-surface-variant">2026-07-14</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Traceability Capability Card -->
+<section class="bg-white p-5 rounded-2xl border border-outline-variant">
+<h2 class="text-on-surface font-bold text-base mb-4">追溯能力</h2>
+<div class="grid grid-cols-3 gap-2">
+<div class="flex flex-col items-center justify-center p-3 rounded-xl bg-background border border-outline-variant/50">
+<span class="material-symbols-outlined text-industrial-teal mb-2" style="font-size: 28px;">precision_manufacturing</span>
+<span class="text-xs font-medium text-on-surface">工序记录</span>
+</div>
+<div class="flex flex-col items-center justify-center p-3 rounded-xl bg-background border border-outline-variant/50">
+<span class="material-symbols-outlined text-industrial-teal mb-2" style="font-size: 28px;">assignment_turned_in</span>
+<span class="text-xs font-medium text-on-surface">报工记录</span>
+</div>
+<div class="flex flex-col items-center justify-center p-3 rounded-xl bg-background border border-outline-variant/50">
+<span class="material-symbols-outlined text-industrial-teal mb-2" style="font-size: 28px;">build_circle</span>
+<span class="text-xs font-medium text-on-surface">维修记录</span>
+</div>
+</div>
+<p class="text-[11px] text-on-surface-variant mt-4 text-center">全流程数字化链路监控，确保每一批次品质可溯</p>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 pb-2 pt-1 h-16 bg-surface border-t border-outline-variant shadow-sm">
+<!-- Dashboard -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">dashboard</span>
+<span class="font-label text-xs mt-0.5">看板</span>
+</a>
+<!-- Analysis -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">analytics</span>
+<span class="font-label text-xs mt-0.5">分析</span>
+</a>
+<!-- Traceability (Active) -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-xl px-3 py-1 scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px; font-variation-settings: 'FILL' 1;">history_edu</span>
+<span class="font-label text-xs mt-0.5 font-bold">追溯</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-3 py-1 scale-95 transition-transform duration-150 active:opacity-70" href="#">
+<span class="material-symbols-outlined" style="font-size: 24px;">person</span>
+<span class="font-label text-xs mt-0.5">我的</span>
+</a>
+</nav>
+<script>
+        // Simple touch feedback and micro-interactions
+        document.querySelectorAll('button, .active\\:bg-surface-container-low').forEach(el => {
+            el.addEventListener('touchstart', function() {
+                this.style.opacity = '0.7';
+            });
+            el.addEventListener('touchend', function() {
+                this.style.opacity = '1';
+            });
+        });
+
+        // Prevention of pull-to-refresh on certain mobile browsers for better 'App' feel
+        document.body.addEventListener('touchmove', function(e) {
+            if (window.scrollY === 0 && e.touches[0].pageY > 0) {
+                // Potential check for top of page pull
+            }
+        }, { passive: false });
+    </script>
+</body></html>

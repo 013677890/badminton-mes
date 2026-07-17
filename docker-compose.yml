@@ -70,8 +70,11 @@ services:
       MES_REDIS_HOST: redis
       MES_REDIS_PORT: "6379"
       MES_CORS_ALLOWED_ORIGINS: ${MES_CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-      MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:-}
-      MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:-}
+      # 真实微信联调必须显式提供 AppID 和密钥，缺失时让 Compose 在启动前直接报错。
+      MES_WECHAT_MINI_APP_ID: ${MES_WECHAT_MINI_APP_ID:?请在 .env 中设置 MES_WECHAT_MINI_APP_ID}
+      MES_WECHAT_MINI_APP_SECRET: ${MES_WECHAT_MINI_APP_SECRET:?请在 .env 中设置 MES_WECHAT_MINI_APP_SECRET}
+      # develop/trial/release 决定后端生成的小程序码指向哪个微信版本。
+      MES_WECHAT_CODE_ENV_VERSION: ${MES_WECHAT_CODE_ENV_VERSION:-develop}
       # 微信小程序联调必须启用认证，才能从 Bearer token 建立用户和数据范围上下文。
       MES_SECURITY_AUTH_DISABLED: "false"
       # 测试数据仅从开发专用位置加载，生产环境使用默认 db/migration

@@ -1,4 +1,44 @@
 import { getTrace } from '../../services/report'
+import { handleSessionExpired } from '../../services/session'
 import { Trace } from '../../types/api'
-// 批次码既可手工输入也可扫码；查询前校验非空，结果由后端一次返回完整追溯链路。
-Page({ data: { batchCode: '', trace: { processHistories: [], workReports: [], repairRecords: [], warnings: [], dataCompleteness: '' } as Trace }, input(event: WechatMiniprogram.Input) { /* 输入框只同步批次码，不在输入过程中请求接口。 */ this.setData({ batchCode: event.detail.value }) }, scan() { /* 扫码成功后复用同一查询入口，保持手工输入和扫码口径一致。 */ wx.scanCode({ success: result => { this.setData({ batchCode: result.result }); this.query() } }) }, query() { /* 空批次码直接提示，避免向后端发送无效追溯请求。 */ if (!this.data.batchCode) { wx.showToast({ title: '请输入批次码', icon: 'none' }); return } getTrace(this.data.batchCode).then(trace => this.setData({ trace })).catch(error => wx.showToast({ title: error.message, icon: 'none' })) } })
+
+const HISTORY_KEY = 'mes_trace_history'
+const emptyTrace = (): Trace => ({ dataCompleteness: '', warnings: [], processHistories: [], workReports: [], repairRecords: [] })
+interface TraceHistory { batchCode: string; productName: string; time: string; date: string }
+
+// 手工输入、历史记录和扫码最终复用同一查询入口，并保存最近三条成功追溯记录。
+Page({
+  data: { batchCode: '', trace: emptyTrace(), state: 'idle', error: '', loading: false, history: [] as TraceHistory[] },
+  onShow() { this.getTabBar?.()?.setData({ selected: 2 }); this.setData({ history: (wx.getStorageSync(HISTORY_KEY) || []) as TraceHistory[] }) },
+  input(event: WechatMiniprogram.Input) { this.setData({ batchCode: event.detail.value, state: 'idle', error: '' }) },
+  clear() { this.setData({ batchCode: '', trace: emptyTrace(), state: 'idle', error: '' }) },
+  clearHistory() { wx.removeStorageSync(HISTORY_KEY); this.setData({ history: [] }) },
+  useHistory(event: WechatMiniprogram.TouchEvent) { this.setData({ batchCode: event.currentTarget.dataset.code }, () => void this.query()) },
+  scan() {
+    // 扫码成功后写入批次码并复用 query，保证扫码和手工查询的校验及错误处理一致。
+    if (this.data.loading) return
+    wx.scanCode({ scanType: ['barCode', 'qrCode'], success: result => this.setData({ batchCode: result.result }, () => void this.query()), fail: error => { if (!error.errMsg.includes('cancel')) this.setData({ error: '无法读取二维码，请手动输入批次码' }) } })
+  },
+  async query() {
+    // 空值和重复提交在客户端拦截，批次有效性及追溯链路完整性由后端判定。
+    const batchCode = this.data.batchCode.trim()
+    if (!batchCode) { this.setData({ error: '请输入批次码后再查询' }); return }
+    if (this.data.loading) return
+    this.setData({ loading: true, state: 'loading', error: '' })
+    try {
+      const trace = await getTrace(batchCode)
+      if (trace.task) this.saveHistory(batchCode, trace.task.productName)
+      this.setData({ trace, state: trace.task ? 'ready' : 'empty' })
+    } catch (error) {
+      const message = (error as Error).message || '追溯查询失败'
+      this.setData({ state: message.includes('登录已失效') ? 'sessionExpired' : 'error', error: message })
+    } finally { this.setData({ loading: false }) }
+  },
+  saveHistory(batchCode: string, productName: string) {
+    const now = new Date(); const pad = (value: number) => String(value).padStart(2, '0')
+    const next = [{ batchCode, productName, time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` }, ...this.data.history.filter(item => item.batchCode !== batchCode)].slice(0, 3)
+    wx.setStorageSync(HISTORY_KEY, next); this.setData({ history: next })
+  },
+  retry() { void this.query() },
+  loginAgain() { handleSessionExpired() }
+})
